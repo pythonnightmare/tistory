@@ -1,33 +1,104 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>대출 상환 계산기</title>
+<style>
+  :root{--gap:12px;--radius:14px}
+  body{font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:24px;background:#f6f7f9}
+  .card{max-width:680px;margin:0 auto;background:#fff;border-radius:var(--radius);box-shadow:0 6px 22px rgba(0,0,0,.06);padding:24px}
+  h1{font-size:20px;margin:0 0 18px}
+  .grid{display:grid;gap:var(--gap)}
+  @media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
+  label{font-size:13px;color:#333}
+  input,select{width:100%;box-sizing:border-box;border:1px solid #e1e4e8;border-radius:10px;padding:10px 12px;font-size:14px;background:#fff}
+  .row{display:flex;gap:var(--gap);align-items:end}
+  button{cursor:pointer;border:0;padding:12px 16px;border-radius:10px;background:#111;color:#fff;font-weight:600}
+  .muted{color:#6b7280;font-size:12px}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th,td{border-bottom:1px solid #eee;text-align:right;padding:10px;font-variant-numeric:tabular-nums}
+  th:first-child,td:first-child{text-align:left}
+  .total{font-weight:700}
+</style>
+<div class="card">
+  <h1>대출 상환 계산기</h1>
+  <div class="grid">
+    <div>
+      <label>대출금(원)</label>
+      <input id="principal" type="number" inputmode="numeric" placeholder="예: 50,000,000">
+    </div>
+    <div>
+      <label>연이자율(%)</label>
+      <input id="apr" type="number" step="0.01" placeholder="예: 5.2">
+    </div>
+    <div>
+      <label>기간(년)</label>
+      <input id="years" type="number" step="1" placeholder="예: 10">
+    </div>
+    <div>
+      <label>상환주기</label>
+      <select id="freq">
+        <option value="12">매월</option>
+        <option value="4">분기</option>
+        <option value="2">반기</option>
+        <option value="1">연간</option>
+      </select>
+    </div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <button id="calc">계산하기</button>
+    <span class="muted">원리금균등 방식</span>
+  </div>
 
-<head>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3904711345057805"
-crossorigin="anonymous"></script>
-  <title>[##_page_title_##]</title>
-  <meta name="title" content="[##_page_title_##] :: [##_title_##]" />
-  <meta charset="utf-8" />
-  <meta name="viewport"
-    content="width=device-width, height=device-height, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
-  <link rel="alternate" type="application/rss+xml" title="[##_title_##]" href="[##_rss_url_##]" />
-  <link rel="stylesheet" href="https://t1.daumcdn.net/tistory_admin/static/font/SpoqaHanSans/SpoqaHanSans.css" />
-  <link rel="stylesheet" href="https://t1.daumcdn.net/tistory_admin/static/font/icomoon/icomoon.css" />
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="stylesheet" href="./images/slick.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.js"></script>
-  <script src="./images/slick.js"></script>
-  <script src="./images/common.js"></script>
-  <script src="https://unpkg.com/vh-check/dist/vh-check.min.js"></script>
-  <script>
-    (function () {
-      // initialize the test
-      var test = vhCheck();
-    }());
-  </script>
-</head>
+  <div id="result" style="margin-top:18px; display:none">
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div><label>주기별 상환액</label><div id="pmt" style="font-weight:700"></div></div>
+      <div><label>총이자</label><div id="interest" style="font-weight:700"></div></div>
+    </div>
+    <table id="schedule">
+      <thead>
+        <tr><th>회차</th><th>상환액</th><th>이자</th><th>원금</th><th>잔액</th></tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr class="total"><td>합계</td><td id="tPay"></td><td id="tInt"></td><td id="tPrin"></td><td></td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
 
-<body id="[##_body_id_##]" class="[##_var_colorSet_##]">
-  <s_t3>
-    <!-- warp / 테마 변경시 theme_pink / theme_blue / theme_green / theme_gray-->
-    <div id="wrap">
+<script>
+function fmt(n){return Number(n).toLocaleString('ko-KR')}
+function calc() {
+  const P = +document.getElementById('principal').value || 0
+  const apr = (+document.getElementById('apr').value || 0)/100
+  const freq = +document.getElementById('freq').value
+  const years = +document.getElementById('years').value || 0
+  const n = years * freq
+  const r = apr / freq
+  if(!P || !apr || !years){ alert('대출금/이자율/기간을 모두 입력하세요.'); return }
+
+  const pmt = r===0 ? P/n : P * (r*Math.pow(1+r,n)) / (Math.pow(1+r,n)-1)
+
+  const tbody = document.querySelector('#schedule tbody')
+  tbody.innerHTML = ''
+  let bal = P, totalPay=0, totalInt=0, totalPrin=0
+  for(let k=1;k<=n;k++){
+    const interest = bal * r
+    const principal = pmt - interest
+    bal = Math.max(0, bal - principal)
+    totalPay += pmt; totalInt += interest; totalPrin += principal
+    const tr = document.createElement('tr')
+    tr.innerHTML = `<td>${k}</td><td>${fmt(pmt.toFixed(0))}</td><td>${fmt(interest.toFixed(0))}</td><td>${fmt(principal.toFixed(0))}</td><td>${fmt(bal.toFixed(0))}</td>`
+    tbody.appendChild(tr)
+  }
+  document.getElementById('pmt').textContent = fmt(pmt.toFixed(0)) + ' 원'
+  document.getElementById('interest').textContent = fmt(totalInt.toFixed(0)) + ' 원'
+  document.getElementById('tPay').textContent = fmt(totalPay.toFixed(0))
+  document.getElementById('tInt').textContent = fmt(totalInt.toFixed(0))
+  document.getElementById('tPrin').textContent = fmt(totalPrin.toFixed(0))
+  document.getElementById('result').style.display = ''
+}
+document.getElementById('calc').addEventListener('click', calc)
+</script>
+</html>
