@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>2048 for Tistory (no-conflict)</title>
+<title>2048 for Tistory (no-conflict, focus-safe)</title>
 <style>
   :root{
     --g2048-board-size: 4;
@@ -13,7 +13,6 @@
     --g2048-bg: #faf8ef;
     --g2048-panel: #ffffff;
     --g2048-text: #776e65;
-    --g2048-accent: #8f7a66;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -23,98 +22,76 @@
     display:flex; align-items:center; justify-content:center; padding:24px;
   }
 
-  /* ===== App Scope ===== */
-  .g2048-wrap{ width:min(420px, 96vw); }
+  .g2048-wrap{ width:min(420px, 96vw); outline:none }
   .g2048-header{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px}
-  .g2048-title{font-size:38px; font-weight:900; letter-spacing:.5px}
+  .g2048-title{font-size:38px; font-weight:900}
   .g2048-scores{display:flex; gap:8px}
-  .g2048-badge{
-    background:#bbada0; color:#fff; padding:8px 12px; border-radius:10px; text-align:center; min-width:92px;
-  }
+  .g2048-badge{background:#bbada0; color:#fff; padding:8px 12px; border-radius:10px; text-align:center; min-width:92px}
   .g2048-badge b{display:block; font-size:12px; opacity:.9}
   .g2048-badge i{display:block; font-style:normal; font-size:18px; font-weight:800}
   .g2048-ctrls{display:flex; gap:8px; margin:12px 0 18px}
-  .g2048-btn{
-    appearance:none; border:0; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer;
-    background:#8f7a66; color:#fff; box-shadow:0 1px 0 rgba(0,0,0,.15);
-  }
+  .g2048-btn{appearance:none; border:0; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer; background:#8f7a66; color:#fff}
   .g2048-btn.secondary{background:#a69b94}
   .g2048-btn:active{transform:translateY(1px)}
 
   .g2048-board{
-    position:relative;
-    background:#bbada0; border-radius:var(--g2048-radius);
+    position:relative; background:#bbada0; border-radius:var(--g2048-radius);
     padding:var(--g2048-gap);
     width: calc(var(--g2048-board-size) * var(--g2048-tile-size) + (var(--g2048-board-size) + 1)*var(--g2048-gap));
     height: calc(var(--g2048-board-size) * var(--g2048-tile-size) + (var(--g2048-board-size) + 1)*var(--g2048-gap));
-    margin:0 auto;
-    touch-action:none; /* we handle swipes */
-    isolation:isolate;
+    margin:0 auto; touch-action:none; isolation:isolate;
   }
-  .g2048-grid{
-    display:grid; gap:var(--g2048-gap);
-    grid-template-columns: repeat(var(--g2048-board-size), var(--g2048-tile-size));
-    grid-template-rows: repeat(var(--g2048-board-size), var(--g2048-tile-size));
-  }
-  .g2048-cell{
-    width:var(--g2048-tile-size); height:var(--g2048-tile-size);
-    background:#cdc1b4; border-radius:var(--g2048-radius);
-  }
-  .g2048-tiles{
-    position:absolute; inset:var(--g2048-gap); display:grid; gap:var(--g2048-gap);
-    grid-template-columns: repeat(var(--g2048-board-size), var(--g2048-tile-size));
-    grid-template-rows: repeat(var(--g2048-board-size), var(--g2048-tile-size));
-    pointer-events:none;
-  }
+  .g2048-grid{display:grid; gap:var(--g2048-gap); grid-template-columns:repeat(var(--g2048-board-size), var(--g2048-tile-size)); grid-template-rows:repeat(var(--g2048-board-size), var(--g2048-tile-size))}
+  .g2048-cell{width:var(--g2048-tile-size); height:var(--g2048-tile-size); background:#cdc1b4; border-radius:var(--g2048-radius)}
+  .g2048-tiles{position:absolute; inset:var(--g2048-gap); display:grid; gap:var(--g2048-gap); grid-template-columns:repeat(var(--g2048-board-size), var(--g2048-tile-size)); grid-template-rows:repeat(var(--g2048-board-size), var(--g2048-tile-size)); pointer-events:none}
+
   .g2048-tile{
-    display:flex; align-items:center; justify-content:center;
-    border-radius:var(--g2048-radius); font-weight:900; font-size:32px; user-select:none;
-    transition:transform .12s ease;
-    /* 보호막: 스킨 충돌 방지 */
-    text-indent:0 !important; letter-spacing:normal !important; color:inherit !important;
-    overflow:visible !important; background-clip:padding-box !important;
+    display:flex; align-items:center; justify-content:center; border-radius:var(--g2048-radius);
+    font-weight:900; font-size:32px; user-select:none; transition:transform .12s ease;
+    text-indent:0 !important; letter-spacing:normal !important; color:inherit !important; overflow:visible !important;
   }
   .g2048-tile.g2048-spawn{animation:g2048-pop .15s ease-out}
   .g2048-tile.g2048-merge{animation:g2048-bump .12s ease-out}
   @keyframes g2048-pop{from{transform:scale(.6)} to{transform:scale(1)}}
   @keyframes g2048-bump{0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)}}
 
-  /* Tile colors */
-  .g2048-v2   {background:#eee4da; color:#776e65}
-  .g2048-v4   {background:#ede0c8; color:#776e65}
-  .g2048-v8   {background:#f2b179; color:#f9f6f2}
-  .g2048-v16  {background:#f59563; color:#f9f6f2}
-  .g2048-v32  {background:#f67c5f; color:#f9f6f2}
-  .g2048-v64  {background:#f65e3b; color:#f9f6f2}
-  .g2048-v128 {background:#edcf72; color:#f9f6f2; font-size:28px}
-  .g2048-v256 {background:#edcc61; color:#f9f6f2; font-size:28px}
-  .g2048-v512 {background:#edc850; color:#f9f6f2; font-size:28px}
-  .g2048-v1024{background:#edc53f; color:#f9f6f2; font-size:24px}
-  .g2048-v2048{background:#edc22e; color:#f9f6f2; font-size:24px}
+  .g2048-v2{background:#eee4da; color:#776e65}
+  .g2048-v4{background:#ede0c8; color:#776e65}
+  .g2048-v8{background:#f2b179; color:#f9f6f2}
+  .g2048-v16{background:#f59563; color:#f9f6f2}
+  .g2048-v32{background:#f67c5f; color:#f9f6f2}
+  .g2048-v64{background:#f65e3b; color:#f9f6f2}
+  .g2048-v128,.g2048-v256,.g2048-v512{color:#f9f6f2; font-size:28px}
+  .g2048-v128{background:#edcf72}
+  .g2048-v256{background:#edcc61}
+  .g2048-v512{background:#edc850}
+  .g2048-v1024,.g2048-v2048{color:#f9f6f2; font-size:24px}
+  .g2048-v1024{background:#edc53f}
+  .g2048-v2048{background:#edc22e}
   .g2048-v4096,.g2048-v8192{background:#3c3a32; color:#f9f6f2; font-size:22px}
 
   .g2048-hint{font-size:13px; opacity:.8; margin-top:8px}
 
+  /* 오버레이: 기본은 완전 비활성 */
   .g2048-overlay{
-    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    position:absolute; inset:0; display:none !important; pointer-events:none; align-items:center; justify-content:center;
     background:rgba(238,228,218,.73); border-radius:var(--g2048-radius); z-index:2; text-align:center; padding:16px;
   }
-  .g2048-overlay.g2048-show{display:flex}
-  .g2048-overlay .g2048-box{
-    background:var(--g2048-panel); padding:18px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.12);
-  }
+  .g2048-overlay.g2048-show{display:flex !important; pointer-events:auto}
+  .g2048-overlay .g2048-box{background:var(--g2048-panel); padding:18px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.12)}
   .g2048-overlay h2{margin:0 0 6px; font-size:22px}
   .g2048-overlay p{margin:0 0 12px}
   .g2048-overlay .g2048-actions{display:flex; gap:8px; justify-content:center}
 
   @media (max-width:420px){
-    :root{ --g2048-tile-size: clamp(60px, 21vw, 90px); }
+    :root{ --g2048-tile-size: clamp(60px, 21vw, 90px) }
     .g2048-title{font-size:32px}
   }
 </style>
 </head>
 <body>
-  <div class="g2048-wrap" id="g2048-root">
+  <!-- tabindex로 포커스 가능 + 로드시 자동포커스 -->
+  <div class="g2048-wrap" id="g2048-root" tabindex="0" aria-label="2048 게임 영역">
     <div class="g2048-header">
       <div class="g2048-title">2048</div>
       <div class="g2048-scores">
@@ -128,7 +105,7 @@
       <button id="g2048-undo" class="g2048-btn secondary" title="한 수 되돌리기 (1스텝)">되돌리기</button>
     </div>
 
-    <div class="g2048-board" id="g2048-board" aria-label="2048 보드">
+    <div class="g2048-board" id="g2048-board">
       <div class="g2048-overlay" id="g2048-overlay" role="dialog" aria-live="polite" aria-modal="true">
         <div class="g2048-box">
           <h2 id="g2048-ol-title">게임 종료</h2>
@@ -150,7 +127,7 @@
 <script>
 (function(){
   const SIZE = 4;
-  const PROB_4 = 0.1; // 10% 확률로 4 생성
+  const PROB_4 = 0.1;
   const bestKey = 'tistory-2048-best';
 
   const $ = sel => document.querySelector(sel);
@@ -161,35 +138,46 @@
   const overlay = $('#g2048-overlay');
   const olTitle = $('#g2048-ol-title');
   const olDesc = $('#g2048-ol-desc');
+  const rootEl = $('#g2048-root');
+  const boardEl = $('#g2048-board');
 
   let board = makeEmptyBoard();
   let score = 0;
   let best = Number(localStorage.getItem(bestKey) || 0);
-  let lastSpawn = null; // {r,c}
-  let mergedSpots = new Set(); // "r,c"
-  let undoState = null; // {board, score}
+  let lastSpawn = null;
+  let mergedSpots = new Set();
+  let undoState = null;
 
   buildBaseGrid();
   bestEl.textContent = String(best);
   startNew();
 
+  // 자동 포커스 (아이프레임/모바일 대응)
+  setTimeout(()=>{ try{ rootEl.focus(); }catch(e){} }, 0);
+
+  // 버튼
   $('#g2048-restart').addEventListener('click', startNew);
   $('#g2048-ol-restart').addEventListener('click', ()=>{ hideOverlay(); startNew(); });
   $('#g2048-ol-close').addEventListener('click', hideOverlay);
   $('#g2048-undo').addEventListener('click', undoOne);
 
-  // 키보드
-  window.addEventListener('keydown', (e)=>{
-    const key = e.key.toLowerCase();
-    if(['arrowup','w'].includes(key)) return tryMove('up');
-    if(['arrowdown','s'].includes(key)) return tryMove('down');
-    if(['arrowleft','a'].includes(key)) return tryMove('left');
-    if(['arrowright','d'].includes(key)) return tryMove('right');
-  });
+  // 키보드: document + root 둘 다 (포커스 이슈 방지)
+  function keyHandler(e){
+    const k = e.key.toLowerCase();
+    // 방향키는 스크롤 방지
+    if (k.startsWith('arrow')) e.preventDefault();
+    if(['arrowup','w'].includes(k)) return tryMove('up');
+    if(['arrowdown','s'].includes(k)) return tryMove('down');
+    if(['arrowleft','a'].includes(k)) return tryMove('left');
+    if(['arrowright','d'].includes(k)) return tryMove('right');
+  }
+  document.addEventListener('keydown', keyHandler, {passive:false});
+  rootEl.addEventListener('keydown', keyHandler, {passive:false});
+  // 클릭 시 포커스 확보
+  rootEl.addEventListener('pointerdown', ()=>rootEl.focus(), {passive:true});
 
   // 터치 스와이프
   let startX=0,startY=0,startT=0;
-  const boardEl = $('#g2048-board');
   boardEl.addEventListener('touchstart', (e)=>{
     const t = e.changedTouches[0];
     startX = t.clientX; startY = t.clientY; startT = Date.now();
@@ -228,7 +216,6 @@
 
   function tryMove(dir){
     undoState = { board: deepClone(board), score };
-
     const before = serialize(board);
     const result = moveBoard(board, dir);
     board = result.board;
@@ -239,7 +226,7 @@
     const after = serialize(board);
     if (before !== after){
       spawnRandom();
-      render(false, result);
+      render(false);
       if (has2048(board)){
         showOverlay('축하합니다! 2048 달성', '계속 플레이하거나 새 게임을 시작할 수 있어요.');
       } else if(!canMove(board)){
@@ -269,12 +256,10 @@
         t.className = 'g2048-tile g2048-v'+v + ' ' + tileSizeClass(v);
         t.style.gridRowStart = r+1;
         t.style.gridColumnStart = c+1;
-        t.textContent = v;                 // 숫자 그리기
-        tilesEl.appendChild(t);
-
-        // 등장/합체 효과
+        t.textContent = v;
         if (!initial && lastSpawn && lastSpawn.r===r && lastSpawn.c===c) t.classList.add('g2048-spawn');
         if (mergedSpots.has(keyOf(r,c))) t.classList.add('g2048-merge');
+        tilesEl.appendChild(t);
       }
     }
   }
@@ -297,17 +282,14 @@
   }
   function hideOverlay(){ overlay.classList.remove('g2048-show'); }
 
-  /* ===== 게임 로직 ===== */
-
-  function makeEmptyBoard(){
-    return Array.from({length:SIZE}, ()=> Array.from({length:SIZE}, ()=>0));
-  }
-  function deepClone(b){ return b.map(row=>row.slice()); }
-  function serialize(b){ return b.flat().join(','); }
+  // === 게임 로직 ===
+  function makeEmptyBoard(){ return Array.from({length:SIZE}, ()=> Array.from({length:SIZE}, ()=>0)) }
+  function deepClone(b){ return b.map(row=>row.slice()) }
+  function serialize(b){ return b.flat().join(',') }
+  function keyOf(r,c){ return r+','+c }
 
   function getEmptyCells(b){
-    const out=[];
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if(!b[r][c]) out.push({r,c});
+    const out=[]; for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if(!b[r][c]) out.push({r,c});
     return out;
   }
   function spawnRandom(){
@@ -338,16 +320,10 @@
 
   function mergeLineLeft(arr){
     const compact = arr.filter(v=>v);
-    const out = [];
-    const mergedIdx = [];
-    let gain = 0;
+    const out = []; const mergedIdx = []; let gain = 0;
     for (let i=0;i<compact.length;i++){
       if (i<compact.length-1 && compact[i]===compact[i+1]){
-        const val = compact[i]*2;
-        out.push(val);
-        gain += val;
-        mergedIdx.push(out.length-1);
-        i++;
+        const val = compact[i]*2; out.push(val); gain += val; mergedIdx.push(out.length-1); i++;
       } else {
         out.push(compact[i]);
       }
@@ -390,9 +366,7 @@
     if (dir==='up') return {R:c, C:r};
     if (dir==='down') return {R: SIZE-1-c, C: SIZE-1-r};
   }
-  const keyOf = (r,c)=> `${r},${c}`;
-
-  function has2048(b){ return b.flat().some(v=>v>=2048); }
+  function has2048(b){ return b.flat().some(v=>v>=2048) }
   function canMove(b){
     if (getEmptyCells(b).length) return true;
     for (let r=0;r<SIZE;r++){
