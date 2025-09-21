@@ -1,0 +1,37 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>두더지 잡기</title>
+<style>
+body{margin:0;background:#0b1220;color:#e5e7eb;font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto}
+.wrap{max-width:680px;margin:30px auto;background:#111827;border-radius:16px;box-shadow:0 10px 28px rgba(0,0,0,.35);padding:16px}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.btn{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.hole{background:#0f172a;border:1px solid #1f2937;border-radius:12px;aspect-ratio:1/1;position:relative;overflow:hidden}
+.mole{position:absolute;left:50%;bottom:-40%;transform:translateX(-50%);width:68%;height:68%;background:#9333ea;border-radius:12px;transition:bottom .15s}
+.hole.up .mole{bottom:6%}
+.stats{display:flex;gap:10px;margin-top:10px}
+.tag{background:#0f172a;border:1px solid #1f2937;border-radius:10px;padding:6px 10px;font-variant-numeric:tabular-nums}
+</style>
+<div class="wrap">
+  <div class="head"><h2 style="margin:0;font-size:18px">두더지 잡기</h2><button class="btn" id="start">시작</button></div>
+  <div class="grid" id="grid"></div>
+  <div class="stats"><div class="tag">점수: <b id="score">0</b></div><div class="tag">남은시간: <b id="time">30</b>s</div></div>
+</div>
+<script>
+const grid=document.getElementById('grid'); let holes=[], score=0, time=30, tInt=null, mInt=null, playing=false
+for(let i=0;i<9;i++){ const h=document.createElement('div'); h.className='hole'; h.innerHTML='<div class="mole"></div>'; grid.appendChild(h); holes.push(h) }
+grid.addEventListener('click',e=>{
+  if(!playing) return
+  const h=e.target.closest('.hole'); if(!h) return
+  if(h.classList.contains('up')){ score++; document.getElementById('score').textContent=score; h.classList.remove('up') }
+})
+function pop(){ holes.forEach(h=>h.classList.remove('up')); const idx=Math.floor(Math.random()*holes.length); holes[idx].classList.add('up') }
+function start(){
+  if(playing) return; playing=true; score=0; time=30
+  document.getElementById('score').textContent=0; document.getElementById('time').textContent=time
+  pop(); mInt=setInterval(pop,600)
+  tInt=setInterval(()=>{ time--; document.getElementById('time').textContent=time; if(time<=0){ stop() } },1000)
+}
+function stop(){ playing=false; clearInterval(mInt); clearInterval(tInt); holes.forEach(h=>h.classList.remove('up')); alert(`끝! 점수: ${score}`) }
+start.onclick=start
+</script></html>
