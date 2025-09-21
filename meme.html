@@ -1,0 +1,70 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>밈 메이커</title>
+<style>
+body{margin:0;background:#0b1220;color:#e5e7eb;font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto}
+.wrap{max-width:900px;margin:24px auto;padding:16px}
+.panel{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:12px}
+input[type="text"],input[type="number"],input[type="file"],select{background:#0f172a;border:1px solid #334155;color:#e5e7eb;border-radius:8px;padding:8px}
+.btn{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
+.canvasWrap{position:relative; background:#0f172a;border:1px dashed #334155;border-radius:12px;overflow:hidden}
+#c{display:block;max-width:100%;height:auto}
+.drag{position:absolute;left:50%;top:8%;transform:translateX(-50%);cursor:move;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.35)}
+.drag input{width:360px;max-width:70vw}
+small{color:#93c5fd}
+</style>
+<div class="wrap">
+  <div class="panel">
+    <label class="card">이미지 <input id="file" type="file" accept="image/*"></label>
+    <label class="card">폰트 <select id="font"><option>Impact</option><option>Pretendard</option><option>Arial</option></select></label>
+    <label class="card">크기(px) <input id="size" type="number" value="56"></label>
+    <label class="card">굵기 <select id="weight"><option>700</option><option>900</option><option>600</option></select></label>
+    <button class="btn" id="save">이미지 저장</button>
+  </div>
+
+  <div class="canvasWrap card">
+    <img id="c" alt="preview">
+    <div class="drag" id="tbox"><input id="text" type="text" value="여기에 텍스트"><br><small>드래그해서 위치 이동</small></div>
+  </div>
+</div>
+<script>
+const img=c, box=tbox, input=text
+let dragging=false, dx=0, dy=0, pos={x:.5,y:.1}
+file.onchange=e=>{
+  const f=e.target.files[0]; if(!f) return
+  const r=new FileReader(); r.onload=ev=>{img.src=ev.target.result}; r.readAsDataURL(f)
+}
+function updateBoxPos(){
+  const rect=img.getBoundingClientRect()
+  box.style.left = (rect.left + rect.width*pos.x) + 'px'
+  box.style.top  = (rect.top  + rect.height*pos.y) + 'px'
+  box.style.transform='translate(-50%,-50%)'
+}
+window.addEventListener('resize', updateBoxPos)
+img.onload=updateBoxPos
+box.addEventListener('mousedown',e=>{dragging=true; dx=e.clientX; dy=e.clientY; e.preventDefault()})
+window.addEventListener('mousemove',e=>{
+  if(!dragging) return
+  const rect=img.getBoundingClientRect()
+  const nx = ((e.clientX - rect.left)/rect.width)
+  const ny = ((e.clientY - rect.top)/rect.height)
+  pos.x=Math.min(0.98,Math.max(0.02,nx)); pos.y=Math.min(0.98,Math.max(0.02,ny))
+  updateBoxPos()
+})
+window.addEventListener('mouseup',()=>dragging=false)
+save.onclick=()=>{
+  if(!img.src) return alert('이미지를 먼저 올려주세요.')
+  const cnv=document.createElement('canvas'), ctx=cnv.getContext('2d')
+  const w=img.naturalWidth, h=img.naturalHeight; cnv.width=w; cnv.height=h
+  ctx.drawImage(img,0,0,w,h)
+  const fontSize=+size.value||56, fw=weight.value||'700', ff=font.value||'Impact'
+  ctx.font = `${fw} ${fontSize}px "${ff}"`
+  ctx.fillStyle='white'; ctx.strokeStyle='black'; ctx.lineWidth= Math.max(4, Math.round(fontSize/10))
+  ctx.textAlign='center'; ctx.textBaseline='middle'
+  const text=input.value||''
+  const x=w*pos.x, y=h*pos.y
+  ctx.strokeText(text,x,y)
+  ctx.fillText(text,x,y)
+  const a=document.createElement('a'); a.href=cnv.toDataURL('image/png'); a.download='meme.png'; a.click()
+}
+</script></html>
