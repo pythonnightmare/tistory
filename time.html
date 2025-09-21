@@ -1,0 +1,44 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pomodoro Timer</title>
+<style>
+body{font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial;margin:0;background:#0f172a;color:#e5e7eb}
+.wrap{max-width:520px;margin:40px auto;padding:24px;background:#111827;border-radius:16px;box-shadow:0 10px 28px rgba(0,0,0,.35)}
+h1{margin:0 0 12px;font-size:22px}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
+input{width:100%;border:1px solid #374151;background:#0b1220;color:#e5e7eb;border-radius:10px;padding:10px 12px;font-size:14px}
+button{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:12px 16px;font-weight:700;cursor:pointer}
+.time{font-size:56px;text-align:center;margin:14px 0 6px;font-variant-numeric:tabular-nums}
+.state{text-align:center;color:#93c5fd}
+.row{display:flex;gap:10px;justify-content:center;margin-top:8px}
+</style>
+<div class="wrap">
+  <h1>Pomodoro Timer</h1>
+  <div class="controls">
+    <div><label>작업(분)</label><input id="w" type="number" value="25"></div>
+    <div><label>휴식(분)</label><input id="b" type="number" value="5"></div>
+    <div><label>라운드</label><input id="rounds" type="number" value="4"></div>
+  </div>
+  <div class="time" id="t">25:00</div>
+  <div class="state" id="s">대기중</div>
+  <div class="row">
+    <button id="start">시작</button><button id="pause">일시정지</button><button id="reset">리셋</button>
+  </div>
+</div>
+<script>
+let left=0,mode='work',rid=null,remainRounds=0
+const fmt = x=>String(x).padStart(2,'0')
+function draw(){const m=Math.floor(left/60),sec=left%60;t.textContent=`${fmt(m)}:${fmt(sec)}`}
+function tick(){if(left>0){left--;draw()}else{nextPhase()}}
+function nextPhase(){
+ if(mode==='work'){mode='break';left=(+b.value||5)*60;s.textContent=`휴식 시작 (${remainRounds}회 남음)`;}
+ else{remainRounds--; if(remainRounds<=0){s.textContent='완료! 수고했어요';cancelAnimationFrame(rid);rid=null;return}
+      mode='work';left=(+w.value||25)*60;s.textContent=`작업 시작 (${remainRounds}회 남음)`}
+ draw(); beep(); run()
+}
+function run(){if(rid)cancelAnimationFrame(rid);const loop=()=>{tick();rid=requestAnimationFrame(()=>setTimeout(loop,1000))};loop()}
+function beep(){try{navigator.vibrate&&navigator.vibrate(200)}catch(e){} alert(mode==='work'?'작업 시작!':'휴식 시작!')}
+start.onclick=()=>{remainRounds=+rounds.value||1;mode='work';left=(+w.value||25)*60;s.textContent=`작업 시작 (${remainRounds}회)`;draw();run()}
+pause.onclick=()=>{if(rid){cancelAnimationFrame(rid);rid=null;s.textContent='일시정지'}}
+reset.onclick=()=>{if(rid){cancelAnimationFrame(rid);rid=null}s.textContent='대기중';left=(+w.value||25)*60;draw()}
+draw()
+</script></html>
