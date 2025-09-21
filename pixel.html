@@ -1,0 +1,42 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>픽셀아트 에디터</title>
+<style>
+body{margin:0;background:#0b1220;color:#e5e7eb;font-family:system-ui,Apple SD Gothic Neo}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+.card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px}
+h1{margin:0 0 8px;font-size:18px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.badge{padding:6px 10px;border:1px solid #334155;border-radius:999px;background:#0f172a}
+.btn{border:0;background:#22c55e;color:#0b1220;font-weight:800;border-radius:10px;padding:10px 14px;cursor:pointer}
+canvas{background:#0f172a;border:1px solid #243042;border-radius:12px;image-rendering:pixelated}
+</style>
+<div class="wrap"><div class="card">
+  <h1>픽셀아트</h1>
+  <div class="row">
+    <label class="badge">사이즈:
+      <select id="size"><option>16</option><option selected>32</option><option>48</option></select>
+    </label>
+    <input type="color" id="color" value="#ff3b3b">
+    <button class="btn" id="clear">지우기</button>
+    <button class="btn" id="save">PNG 저장</button>
+  </div>
+  <canvas id="cv" width="512" height="512"></canvas>
+</div></div>
+<script>
+let N=32, col='#ff3b3b', down=false;
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+function grid(){ ctx.clearRect(0,0,512,512); ctx.fillStyle='#0f172a'; ctx.fillRect(0,0,512,512); const s=512/N; ctx.strokeStyle='#1f2a3a'; for(let i=0;i<=N;i++){ ctx.beginPath(); ctx.moveTo(0,i*s); ctx.lineTo(512,i*s); ctx.stroke(); ctx.beginPath(); ctx.moveTo(i*s,0); ctx.lineTo(i*s,512); ctx.stroke(); } }
+function draw(e){ if(!down&&e.type!=='click') return; const r=cv.getBoundingClientRect(); const x=((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width*512; const y=((e.touches?e.touches[0].clientY:e.clientY)-r.top)/r.height*512; const s=512/N; const gx=Math.floor(x/s), gy=Math.floor(y/s); ctx.fillStyle=col; ctx.fillRect(gx*s+1,gy*s+1,s-2,s-2); }
+size.onchange=()=>{ N=+size.value; grid(); };
+color.oninput=()=>col=color.value;
+cv.addEventListener('mousedown',()=>down=true); addEventListener('mouseup',()=>down=false);
+cv.addEventListener('mousemove',draw); cv.addEventListener('click',draw);
+cv.addEventListener('touchstart',e=>{down=true;draw(e)},{passive:true}); cv.addEventListener('touchmove',draw,{passive:true}); addEventListener('touchend',()=>down=false,{passive:true});
+clear.onclick=grid;
+save.onclick=()=>{ const a=document.createElement('a'); a.download='pixel.png'; a.href=cv.toDataURL('image/png'); a.click(); };
+grid();
+</script>
+<script>
+(function(){function r(){const h=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);parent?.postMessage({type:'EMBED_SIZE',h},'*');}
+addEventListener('load',r);addEventListener('resize',()=>setTimeout(r,0));setTimeout(r,50);})();
+</script>
