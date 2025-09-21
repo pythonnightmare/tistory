@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mini Age-of-War (한 파일)</title>
+<style>
+  :root{
+    --bg1:#0b1020; --bg2:#141b2e; --lane:#1f2842; --hp:#ff6b6b; --ally:#52e0a1; --enemy:#86a6ff; --gold:#ffd166;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#eaf1ff;
+       font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,"Noto Sans KR",sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:10px 12px}
+  h1{font-size:18px;margin:6px 0 8px}
+  .hud{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pill{border:1px solid #2e3b60;border-radius:999px;padding:6px 10px;background:#0f1730;display:flex;gap:8px;align-items:center}
+  .btn{cursor:pointer;border:1px solid #2e3b60;background:#0f1730;color:#eaf1ff;border-radius:10px;padding:8px 12px;font-weight:700}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(180deg,#587bff,#3f5ce6);border:none}
+  .gold{color:var(--gold);font-weight:800}
+  canvas{width:100%;height:auto;background:
+    linear-gradient(180deg,#0b1320,#0b1320 50%, #09101e 50.1%, #0b1320 100%);
+    border:1px solid #233156;border-radius:14px}
+  .mobilebar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;padding:10px;
+             background:#0c1326cc;backdrop-filter:blur(6px);border-top:1px solid #233156}
+  .hint{font-size:12px;color:#9fb3d9;margin-top:6px}
+  .hpbar{height:10px;background:#20305a;border-radius:999px;overflow:hidden;border:1px solid #2e3b60}
+  .hpfill{height:100%;background:linear-gradient(90deg,#ff7a7a,#ff3f3f)}
+  .row{display:grid;gap:8px}
+  @media(min-width:760px){ .row{grid-template-columns:1fr 1fr 1fr 1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mini Age-of-War</h1>
+  <div class="hud">
+    <div class="pill">내 HP
+      <div style="width:160px" class="hpbar"><div id="hpA" class="hpfill" style="width:100%"></div></div>
+    </div>
+    <div class="pill">적 HP
+      <div style="width:160px" class="hpbar"><div id="hpB" class="hpfill" style="width:100%"></div></div>
+    </div>
+    <div class="pill">골드: <span id="gold" class="gold">100</span></div>
+    <button id="spawnM" class="btn">① 근접(25)</button>
+    <button id="spawnR" class="btn">② 원거리(40)</button>
+    <button id="pause" class="btn primary">⏯ 일시정지</button>
+  </div>
+  <p class="hint">PC: 1=근접, 2=원거리, Space=일시정지 · 유닛이 기지에 닿으면 대미지. 원거리는 사거리 내에서 자동 사격.</p>
+  <canvas id="cv" width="1100" height="420" aria-label="전장"></canvas>
+</div>
+
+<!-- 모바일 하단 -->
+<div class="mobilebar">
+  <button id="m1" class="btn">① 근접(25)</button>
+  <button id="m2" class="btn">② 원거리(40)</button>
+  <button id="mP" class="btn primary">⏯</button>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const UI = {
+    hpA: document.getElementById('hpA'),
+    hpB: document.getElementById('hpB'),
+    gold: document.getElementById('gold'),
+    spawnM: document.getElementById('spawnM'),
+    spawnR: document.getElementById('spawnR'),
+    pause: document.getElementById('pause'),
+    m1: document.getElementById('m1'),
+    m2: document.getElementById('m2'),
+    mP: document.getElementById('mP'),
+  };
+
+  /* ====== 게임 상수 ====== */
+  const G = {
+    laneY: cv.height * 0.62,
+    groundH: 80,
+    baseA: { x: 60,  hp: 100, max:100 },
+    baseB: { x: cv.width-60, hp: 100, max:100 },
+    gold: 100,
+    t: 0,
+    paused: false,
+    wave: 1,
+  };
+
+  /* ====== SVG 스킨(내장 이미지) ====== */
+  const svgUnitAlly = (w=40,h=26,color='#52e0a1') =>
+    `data:image/svg+xml;utf8,` + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <rect x="1" y="${h-10}" width="${w-2}" height="8" rx="3" fill="${color}" opacity="0.6"/>
+      <circle cx="${w*0.28}" cy="${h-12}" r="8" fill="${color}"/>
+      <rect x="${w*0.28}" y="${h-14}" width="${w*0.45}" height="6" rx="3" fill="${color}"/>
+      <circle cx="${w*0.75}" cy="${h-11}" r="5" fill="${color}" opacity="0.85"/>
+    </svg>`);
+
+  const svgUnitEnemy = (w=40,h=26,color='#86a6ff') =>
+    `data:image/svg+xml;utf8,` + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <rect x="1" y="${h-10}" width="${w-2}" height="8" rx="3" fill="${color}" opacity="0.5"/>
+      <polygon points="${w*0.2},${h-6} ${w*0.35},${h-14} ${w*0.5},${h-6}" fill="${color}"/>
+      <rect x="${w*0.5}" y="${h-14}" width="${w*0.35}" height="6" rx="3" fill="${color}"/>
+      <circle cx="${w*0.9}" cy="${h-11}" r="4.5" fill="${color}" opacity="0.85"/>
+    </svg>`);
+
+  const svgArrow = (w=18,h=5,color='#eaf1ff') =>
+    `data:image/svg+xml;utf8,`+encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <rect x="0" y="${h/2-1}" width="${w-4}" height="2" fill="${color}"/>
+      <polygon points="${w-4},${h/2} ${w},0 ${w},${h}" fill="${color}"/>
+    </svg>`);
+
+  const svgBase = (w=60,h=60,color='#6b7bff') =>
+    `data:image/svg+xml;utf8,`+encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <rect x="4" y="${h-18}" width="${w-8}" height="14" rx="4" fill="${color}" opacity="0.9"/>
+      <rect x="${w/2-10}" y="${h-36}" width="20" height="18" rx="4" fill="${color}"/>
+      <path d="M ${w/2} 6 L ${w-8} ${h-38} L 8 ${h-38} Z" fill="${color}" opacity="0.75"/>
+    </svg>`);
+
+  const img = {};
+  function loadImg(key, src){
+    return new Promise(res=>{
+      const i = new Image();
+      i.onload = ()=>{ img[key]=i; res(); };
+      i.src = src;
+    });
+  }
+
+  /* ====== 유닛 정의 ====== */
+  function makeUnit(side, type){
+    // type: 'M' 근접, 'R' 원거리
+    const ally = side==='A';
+    const spd = type==='M' ? 0.7 : 0.55;
+    const range = type==='M' ? 12 : 140;
+    const dps = type==='M' ? 12 : 9; // 초당 대미지(원거리는 투사체로 분리)
+    const cost = type==='M' ? 25 : 40;
+    const hpMax = type==='M' ? 55 : 40;
+    return {
+      side, type,
+      x: ally ? G.baseA.x+30 : G.baseB.x-30,
+      y: G.laneY, vx: ally ? spd : -spd,
+      hp: hpMax, hpMax,
+      range, dps, cost, cd: 0, cool: (type==='M'? 0.5: 0.8), // 공격 쿨다운
+      w: 40, h: 26,
+      dead:false
+    };
+  }
+
+  const bullets = [];
+  function shoot(u, target){
+    const speed = 2.2;
+    const dir = Math.sign(target.x - u.x) || (u.side==='A'?1:-1);
+    bullets.push({
+      x: u.x + (u.side==='A'?10:-10), y: u.y-12,
+      vx: dir*speed, vy: 0, dmg: 10, side: u.side,
+      life: 3
+    });
+  }
+
+  const units = [];
+
+  /* ====== 입력/소환 ====== */
+  function canAfford(cost){ return G.gold >= cost; }
+  function spawn(side, type){
+    const proto = makeUnit(side, type);
+    if(side==='A'){
+      if(!canAfford(proto.cost)) return false;
+      G.gold -= proto.cost;
+      UI.gold.textContent = G.gold;
+    }
+    units.push(proto);
+    return true;
+  }
+
+  /* ====== 적 AI(웨이브) ====== */
+  let lastWave = 0;
+  function enemyAI(dt){
+    if(G.paused) return;
+    // 8초마다 웨이브, 웨이브가 증가할수록 강해짐
+    const waveInterval = 8;
+    if(G.t - lastWave > waveInterval){
+      lastWave = G.t;
+      G.wave++;
+      // 근접 1~2, 가끔 원거리 1
+      const nM = 1 + Math.min(2, Math.floor(G.wave/3));
+      for(let i=0;i<nM;i++) setTimeout(()=>spawn('B','M'), i*600);
+      if(Math.random()<0.6) setTimeout(()=>spawn('B','R'), 900);
+    }
+  }
+
+  /* ====== 충돌/전투 ====== */
+  function distance(a,b){ return Math.abs(a.x - b.x); }
+
+  function stepUnits(dt){
+    // 정렬(앞유닛 우선 처리)
+    units.sort((a,b)=>a.x-b.x);
+
+    for(const u of units){
+      if(u.dead) continue;
+
+      // 타겟 탐색(가장 가까운 적)
+      const enemies = units.filter(v => v.side!==u.side && !v.dead);
+      let target = null, minD = Infinity;
+      for(const e of enemies){
+        const d = distance(u,e);
+        if(d < minD){ minD = d; target = e; }
+      }
+
+      // 사거리 밖이면 전진(앞유닛 간격 유지)
+      const dir = u.vx>0?1:-1;
+      let blocked = false;
+      for(const f of units){
+        if(f===u || f.side!==u.side || f.dead) continue;
+        const wantGap = 24;
+        if(dir>0 && f.x > u.x && (f.x - u.x) < wantGap){ blocked = true; break; }
+        if(dir<0 && f.x < u.x && (u.x - f.x) < wantGap){ blocked = true; break; }
+      }
+
+      const inRange = target ? (distance(u,target) <= u.range) : false;
+      if(!inRange && !blocked){
+        u.x += u.vx * (60*dt);
+      }
+
+      // 공격
+      u.cd -= dt;
+      if(target && inRange && u.cd<=0){
+        if(u.type==='M'){
+          target.hp -= u.dps * u.cool; // 한 번에 일정량
+          u.cd = u.cool;
+        }else{
+          shoot(u,target);
+          u.cd = u.cool;
+        }
+      }
+
+      // 기지 충돌
+      if(u.side==='A' && u.x >= G.baseB.x-18){
+        G.baseB.hp -= 8; u.dead=true;
+      }
+      if(u.side==='B' && u.x <= G.baseA.x+18){
+        G.baseA.hp -= 8; u.dead=true;
+      }
+
+      // 사망 체크
+      if(u.hp<=0){ u.dead=true; }
+    }
+
+    // 탄환
+    for(const b of bullets){
+      b.x += b.vx * (60*dt);
+      b.life -= dt;
+      // 유닛 피격
+      for(const u of units){
+        if(u.side===b.side || u.dead) continue;
+        if(Math.abs(u.x - b.x) < 12 && Math.abs(u.y-12 - b.y) < 16){
+          u.hp -= b.dmg; b.life=0; break;
+        }
+      }
+    }
+    // 정리
+    for(let i=units.length-1;i>=0;i--) if(units[i].dead) units.splice(i,1);
+    for(let i=bullets.length-1;i>=0;i--) if(bullets[i].life<=0) bullets.splice(i,1);
+  }
+
+  /* ====== 렌더 ====== */
+  function drawGround(){
+    // 레인
+    ctx.fillStyle = '#0a1122';
+    ctx.fillRect(0, G.laneY, cv.width, 2);
+    // 데코 라인
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.beginPath();
+    for(let x=0;x<cv.width;x+=22){
+      ctx.moveTo(x, G.laneY+12);
+      ctx.lineTo(x+12, G.laneY+12);
+    }
+    ctx.stroke();
+  }
+
+  function drawBase(){
+    ctx.drawImage(img.baseA, G.baseA.x-30, G.laneY-70);
+    ctx.save(); // 적 기지는 좌우 반전
+    ctx.translate(G.baseB.x+30, G.laneY-70);
+    ctx.scale(-1,1);
+    ctx.drawImage(img.baseB, 0-60, 0);
+    ctx.restore();
+  }
+
+  function drawUnits(){
+    for(const u of units){
+      const im = (u.side==='A') ? (u.type==='M'? img.allyM : img.allyR)
+                                : (u.type==='M'? img.enemyM: img.enemyR);
+      const y = u.y - (u.h);
+      ctx.drawImage(im, u.x - (u.w/2), y);
+      // HP바
+      const w=34, h=4;
+      const rate = Math.max(0, u.hp/u.hpMax);
+      ctx.fillStyle = 'rgba(0,0,0,.35)';
+      ctx.fillRect(u.x-w/2, y-10, w, h);
+      ctx.fillStyle = (u.side==='A')? '#52e0a1' : '#86a6ff';
+      ctx.fillRect(u.x-w/2, y-10, w*rate, h);
+    }
+    // 탄환
+    for(const b of bullets){
+      ctx.drawImage(img.arrow, b.x-9, b.y-2);
+    }
+  }
+
+  function updateHPBars(){
+    UI.hpA.style.width = Math.max(0, (G.baseA.hp/G.baseA.max)*100) + '%';
+    UI.hpB.style.width = Math.max(0, (G.baseB.hp/G.baseB.max)*100) + '%';
+  }
+
+  function drawOverlay(){
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    ctx.fillRect(0,0,cv.width,40);
+    ctx.fillStyle='#cfe0ff';
+    ctx.font='14px system-ui, Arial';
+    ctx.fillText(`Wave ${G.wave}`, 14, 26);
+    ctx.fillText(`Gold ${G.gold}`, cv.width-120, 26);
+  }
+
+  /* ====== 루프 ====== */
+  let last=0;
+  function loop(ts){
+    const dt = Math.min(0.033, (ts-last)/1000 || 0);
+    last = ts;
+    if(!G.paused){
+      G.t += dt;
+      // 패배/승리 체크
+      if(G.baseA.hp<=0 || G.baseB.hp<=0){
+        G.paused = true;
+        setTimeout(()=>alert(G.baseA.hp<=0 ? '패배! 다시 도전!' : '승리!'), 10);
+      }
+      // 시간당 골드 수급
+      if(Math.floor(G.t)%2===0 && Math.floor((G.t-dt))%2!==0){
+        G.gold += 8 + Math.floor(G.wave/2);
+        UI.gold.textContent = G.gold;
+      }
+      enemyAI(dt);
+      stepUnits(dt);
+    }
+
+    // 렌더
+    ctx.clearRect(0,0,cv.width,cv.height);
+    drawGround();
+    drawBase();
+    drawUnits();
+    drawOverlay();
+    updateHPBars();
+
+    requestAnimationFrame(loop);
+  }
+
+  /* ====== 바인딩 ====== */
+  function bind(){
+    const trySpawnM = ()=>spawn('A','M');
+    const trySpawnR = ()=>spawn('A','R');
+    UI.spawnM.onclick = trySpawnM;
+    UI.spawnR.onclick = trySpawnR;
+    UI.m1.onclick = trySpawnM;
+    UI.m2.onclick = trySpawnR;
+
+    function togglePause(){
+      G.paused = !G.paused;
+      UI.pause.textContent = G.paused? '▶ 재개' : '⏯ 일시정지';
+      UI.mP.textContent = G.paused? '▶' : '⏯';
+    }
+    UI.pause.onclick = togglePause;
+    UI.mP.onclick = togglePause;
+
+    addEventListener('keydown',(e)=>{
+      if(e.repeat) return;
+      if(e.key==='1') trySpawnM();
+      if(e.key==='2') trySpawnR();
+      if(e.code==='Space'){ e.preventDefault(); togglePause(); }
+    }, {passive:false});
+  }
+
+  /* ====== 시작 ====== */
+  Promise.all([
+    loadImg('allyM', svgUnitAlly(40,26,'#52e0a1')),
+    loadImg('allyR', svgUnitAlly(40,26,'#2ce6d2')),
+    loadImg('enemyM', svgUnitEnemy(40,26,'#86a6ff')),
+    loadImg('enemyR', svgUnitEnemy(40,26,'#b08bff')),
+    loadImg('arrow',  svgArrow(18,5,'#eaf1ff')),
+    loadImg('baseA',  svgBase(60,60,'#4dd2a8')),
+    loadImg('baseB',  svgBase(60,60,'#6b7bff')),
+  ]).then(()=>{
+    bind();
+    requestAnimationFrame(loop);
+  });
+})();
+</script>
+</body>
+</html>
