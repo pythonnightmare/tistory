@@ -1,0 +1,53 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>단위 변환기</title>
+<style>
+body{font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial;margin:0;background:#f5f6fa}
+.card{max-width:760px;margin:24px auto;background:#fff;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.07);padding:22px}
+h1{margin:0 0 14px;font-size:20px}.grid{display:grid;gap:12px}@media(min-width:700px){.grid{grid-template-columns:1fr 1fr 1fr}}
+label{font-size:13px;color:#333}input,select{width:100%;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:14px}
+.out{margin-top:12px;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:12px}
+</style>
+<div class="card">
+  <h1>단위 변환기</h1>
+  <div class="grid">
+    <div><label>종류</label>
+      <select id="kind">
+        <option value="len">길이</option><option value="mass">무게</option><option value="temp">온도</option>
+      </select>
+    </div>
+    <div><label>값</label><input id="val" type="number" step="any" placeholder="숫자"></div>
+    <div><label>단위</label>
+      <select id="unit">
+        <option>m</option><option>km</option><option>cm</option><option>inch</option><option>ft</option>
+      </select>
+    </div>
+  </div>
+  <button id="go" style="margin-top:12px;border:0;border-radius:10px;background:#111;color:#fff;padding:12px 16px;font-weight:700;cursor:pointer">변환</button>
+  <div class="out" id="out"></div>
+</div>
+<script>
+const K={len:['m','km','cm','inch','ft'],mass:['kg','g','lb'],temp:['C','F','K']}
+function lenToM(v,u){return {m:v,km:v/1000,cm:v*100,inch:v/0.0254,ft:v/0.3048}[u==='m'?'m':u]??v}
+go.onclick=()=>{
+  const k=kind.value, v=+val.value, u=unit.value; if(isNaN(v)){out.textContent='값을 입력하세요';return}
+  let res={}
+  if(k==='len'){
+    const m = (u==='m')?v:u==='km'?v*1000:u==='cm'?v/100:u==='inch'?v*0.0254:u==='ft'?v*0.3048:NaN
+    res = {m, km:m/1000, cm:m*100, inch:m/0.0254, ft:m/0.3048}
+    unit.innerHTML=K.len.map(x=>`<option ${x===u?'selected':''}>${x}</option>`).join('')
+  }else if(k==='mass'){
+    const kg = (u==='kg')?v:u==='g'?v/1000:u==='lb'?v*0.45359237:NaN
+    res = {kg, g:kg*1000, lb:kg/0.45359237}
+    unit.innerHTML=K.mass.map(x=>`<option ${x===u?'selected':''}>${x}</option>`).join('')
+  }else{
+    // temperature
+    let C = u==='C'?v: u==='F'? (v-32)*5/9 : v-273.15
+    res = {C, F:C*9/5+32, K:C+273.15}
+    unit.innerHTML=K.temp.map(x=>`<option ${x===u?'selected':''}>${x}</option>`).join('')
+  }
+  out.innerHTML = Object.entries(res).map(([k,v])=>`${k}: <b>${(Math.round(v*1000)/1000)||0}</b>`).join('<br>')
+}
+kind.onchange=()=>{
+  unit.innerHTML=K[kind.value].map(x=>`<option>${x}</option>`).join('')
+}
+</script></html>
