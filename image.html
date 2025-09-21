@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>오프라인 스타일 변환기 (WebGL)</title>
+<style>
+  :root{--bg:#0b0f16;--panel:#101522;--ink:#e7ecff;--mut:#8ea0d8;--acc:#6c7bff;--radius:14px}
+  *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui}
+  .wrap{max-width:1040px;margin:0 auto;padding:20px}
+  .title{display:flex;gap:10px;align-items:center;font-weight:900;font-size:22px}
+  .badge{background:#182044;border:1px solid #23305a;color:#cfe0ff;border-radius:999px;padding:4px 10px;font-size:12px}
+  .card{background:linear-gradient(180deg,#0f1423,#0f1420);border:1px solid #1b2443;border-radius:var(--radius);box-shadow:0 10px 30px rgba(0,0,0,.25);padding:14px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  input[type=file]{display:none}
+  label.btn,input[type=range]+span{user-select:none}
+  .btn{appearance:none;border:1px solid #2a355e;background:#151c2f;color:#dbe4ff;border-radius:12px;padding:10px 14px;cursor:pointer}
+  .btn.primary{background:var(--acc);border:0;color:#fff;font-weight:800;box-shadow:0 6px 18px rgba(108,123,255,.25)}
+  select, input[type=range]{background:#11172a;color:#e7ecff;border:1px solid #263055;border-radius:10px;padding:8px 10px}
+  .stage{display:grid;gap:14px;grid-template-columns:1fr 1fr;margin-top:14px}
+  @media (max-width:960px){.stage{grid-template-columns:1fr}}
+  .pane{background:#0d1220;border:1px solid #1b2443;border-radius:12px;padding:8px;display:grid;place-items:center;min-height:360px;position:relative}
+  canvas, img{max-width:100%;height:auto;border-radius:10px}
+  .hint{font-size:12px;color:var(--mut)}
+  .drop{position:absolute;inset:8px;border:2px dashed #2a355e;border-radius:10px;display:none;place-items:center;color:#9fb0ff;background:rgba(28,36,70,.25)}
+  .drop.show{display:grid}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">오프라인 스타일 변환기 <span class="badge">만화풍 · 오일페인팅 · 픽셀아트</span></div>
+
+  <div class="card">
+    <div class="row">
+      <label for="file" class="btn primary">이미지 업로드</label>
+      <input id="file" type="file" accept="image/*">
+      <button id="demo" class="btn">데모 이미지</button>
+      <span class="hint">또는 이미지를 이 영역 위로 끌어다 놓기</span>
+    </div>
+    <div class="toolbar">
+      <label>효과
+        <select id="mode">
+          <option value="cartoon">만화풍(토운+엣지)</option>
+          <option value="kuwahara">오일페인팅(쿠와하라)</option>
+          <option value="pixelate">픽셀아트</option>
+        </select>
+      </label>
+      <label>강도 <input id="amount" type="range" min="0" max="1" step="0.01" value="0.7"></label>
+      <span id="amountVal"></span>
+      <label id="pxWrap" class="hidden">픽셀 크기 <input id="px" type="range" min="2" max="24" step="1" value="8"></label>
+      <button id="download" class="btn">결과 저장(.png)</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="pane" id="paneIn">
+      <img id="in" alt="원본 미리보기"/>
+      <div class="drop" id="dropIn">이미지 놓기</div>
+    </div>
+    <div class="pane">
+      <canvas id="out"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+// ---------- 작은 유틸 ----------
+const $=s=>document.querySelector(s);
+const imgEl=$('#in'), cvs=$('#out'), gl= cvs.getContext('webgl',{preserveDrawingBuffer:true});
+const amountEl=$('#amount'), amountVal=$('#amountVal'), modeEl=$('#mode'), pxEl=$('#px'), pxWrap=$('#pxWrap');
+amountVal.textContent=(+amountEl.value).toFixed(2);
+
+// drag&drop
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault(); $('#dropIn').classList.add('show');}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault(); $('#dropIn').classList.remove('show');}));
+document.addEventListener('drop', e=>{
+  const f=e.dataTransfer.files?.[0]; if(f) loadFile(f);
+});
+
+// file
+$('#file').addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f); });
+$('#demo').addEventListener('click', ()=>{
+  // 임베드된 아주 작은 데모 이미지 (dataURL, 완전 오프라인)
+  const demo='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEA8QDxAQDw8QDw8QDw8QEA8PDw8QFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGxAQGy0mICUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAKABNwMBIgACEQEDEQH/xAAcAAABBQEBAQAAAAAAAAAAAAAEAAECAwUGBwj/xABCEAACAQIEAwUGBAQHAQAAAAABAgADEQQSITEFQVEGImFxgZGhEzKhsULB0RQjYnKS8CQzcoOSorPC4RUWNIOj/8QAGgEAAwEBAQEAAAAAAAAAAAAAAAECAwQFBv/EAC8RAAICAQQABAcAAAAAAAAAAAABAgMRBBIhMUFRExQiMmFxgZGxodH/2gAMAwEAAhEDEQA/APoQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlKq2sS8m1Zt0c9s4e4y2bJc7Zyqjv4g8y6yY0Zy0m1V1m9q4q0K3Vv4qj1q1w5Jc9p0Y9m6c7nqZb3z8m4m3bqfU6H0oWQq3q2kzq3V3c6m3iVvKq1bqVb3H2nYq5m7W9SSb8p0mK3mOtvX4mAAAAAAAAABw5N7k3c1xZ5w7u1bF3Gm1bdr6fS3rYv8AONwq8V0qW3c9m3q3XbTt1v9b0+v5b2vQm4o6WJq2mU3VZb1bS6bV7X9M8h3lH2mZ1bGq1d3JfY9P6b0oAAAAAAAAAAABXpxi8b2f1cKXwXbqv5vCq/1q8H1a6e6eZ7v2b1Jf6b9Q3XnY3e8sflbuvk1uQ8m9AAAAAAAAAABgq9u2l3Z9b3q9zq7eKk0uTVyVdS1c1ZrWtYz6xWlGx1qzWcHV5nqfG7Wc7e9P0qAAAAAAAAAAAQ9kqj6fYvJz3n9H9m1+1q9cJ3t5b2p9Q2y3p3l7m6AAAAAAAAAAAAAAAB//Z';
+  imgEl.src=demo;
+});
+$('#download').addEventListener('click', ()=>{ const a=document.createElement('a'); a.href=cvs.toDataURL('image/png'); a.download='stylized.png'; a.click(); });
+amountEl.addEventListener('input', ()=>{ amountVal.textContent=(+amountEl.value).toFixed(2); render(); });
+modeEl.addEventListener('change', ()=>{ pxWrap.classList.toggle('hidden', modeEl.value!=='pixelate'); render(); });
+pxEl.addEventListener('input', render);
+
+// ---------- WebGL 셋업 ----------
+if(!gl){ alert('이 브라우저는 WebGL을 지원하지 않습니다.'); }
+let progCartoon, progKuwahara, progPixel, texIn, fb, quad, imgW=0, imgH=0;
+
+function createShader(type, src){ const sh=gl.createShader(type); gl.shaderSource(sh,src); gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(sh); return sh;}
+function createProgram(vs,fs){ const p=gl.createProgram(); gl.attachShader(p, createShader(gl.VERTEX_SHADER,vs)); gl.attachShader(p, createShader(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw gl.getProgramInfoLog(p); return p; }
+function createTex(){ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE); return t; }
+function createQuad(){ const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1, 1,-1, -1,1, 1,1]),gl.STATIC_DRAW); return b; }
+
+const VS=`attribute vec2 p; varying vec2 uv; void main(){ uv=(p+1.)*.5; gl_Position=vec4(p,0.,1.); }`;
+// Cartoon: sobel edge + posterize
+const FS_CARTOON=`precision mediump float; varying vec2 uv; uniform sampler2D t; uniform vec2 res; uniform float amt;
+vec3 rgb2ycbcr(vec3 c){float y=0.299*c.r+0.587*c.g+0.114*c.b;return vec3(y,0.5*(c.b-y)/(1.-0.114),0.5*(c.r-y)/(1.-0.299));}
+vec3 posterize(vec3 c, float n){return floor(c*n)/n;}
+void main(){
+  vec2 px=1.0/res;
+  vec3 s0=texture2D(t, uv+px*vec2(-1.,-1.)).rgb;
+  vec3 s1=texture2D(t, uv+px*vec2( 0.,-1.)).rgb;
+  vec3 s2=texture2D(t, uv+px*vec2( 1.,-1.)).rgb;
+  vec3 s3=texture2D(t, uv+px*vec2(-1., 0.)).rgb;
+  vec3 s4=texture2D(t, uv).rgb;
+  vec3 s5=texture2D(t, uv+px*vec2( 1., 0.)).rgb;
+  vec3 s6=texture2D(t, uv+px*vec2(-1., 1.)).rgb;
+  vec3 s7=texture2D(t, uv+px*vec2( 0., 1.)).rgb;
+  vec3 s8=texture2D(t, uv+px*vec2( 1., 1.)).rgb;
+  float kx = -1.*dot(s0,vec3(.299,.587,.114)) + 0.*dot(s1,vec3(.299,.587,.114)) + 1.*dot(s2,vec3(.299,.587,.114))
+            -2.*dot(s3,vec3(.299,.587,.114)) + 0.*dot(s4,vec3(.299,.587,.114)) + 2.*dot(s5,vec3(.299,.587,.114))
+            -1.*dot(s6,vec3(.299,.587,.114)) + 0.*dot(s7,vec3(.299,.587,.114)) + 1.*dot(s8,vec3(.299,.587,.114));
+  float ky = -1.*dot(s0,vec3(.299,.587,.114)) -2.*dot(s1,vec3(.299,.587,.114)) -1.*dot(s2,vec3(.299,.587,.114))
+             +1.*dot(s6,vec3(.299,.587,.114)) +2.*dot(s7,vec3(.299,.587,.114)) +1.*dot(s8,vec3(.299,.587,.114));
+  float edge = 1.0 - smoothstep(0.1, 0.3, length(vec2(kx,ky)));
+  float levels = mix(6.0, 14.0, 1.0-amt);
+  vec3 base = posterize(s4, levels);
+  vec3 col = mix(base, base*0.95, 0.15) * (0.8 + 0.2*edge);
+  col = mix(col, vec3(0.0), 0.6*(1.0-edge)); // edge 라인 짙게
+  gl_FragColor=vec4(col,1.0);
+}`;
+// Kuwahara(빠른 근사)
+const FS_KUWAHARA=`precision mediump float; varying vec2 uv; uniform sampler2D t; uniform vec2 res; uniform float amt;
+void main(){
+  vec2 px=1.0/res;
+  float r = mix(2.0, 8.0, amt); // 반경
+  vec3 m[4]; vec3 s[4];
+  for(int i=0;i<4;i++){ m[i]=vec3(0.0); s[i]=vec3(0.0); }
+  float c=0.0;
+  for(float y=0.0;y<=8.0;y++){
+    for(float x=0.0;x<=8.0;x++){
+      if(x>r||y>r) continue;
+      vec2 o=px*vec2(x,y);
+      vec3 c0=texture2D(t, uv+vec2(-o.x,-o.y)).rgb;
+      vec3 c1=texture2D(t, uv+vec2( o.x,-o.y)).rgb;
+      vec3 c2=texture2D(t, uv+vec2(-o.x, o.y)).rgb;
+      vec3 c3=texture2D(t, uv+vec2( o.x, o.y)).rgb;
+      m[0]+=c0; s[0]+=c0*c0;
+      m[1]+=c1; s[1]+=c1*c1;
+      m[2]+=c2; s[2]+=c2*c2;
+      m[3]+=c3; s[3]+=c3*c3;
+      c+=1.0;
+    }
+  }
+  float minVar=1e9; vec3 best=texture2D(t,uv).rgb;
+  for(int i=0;i<4;i++){
+    vec3 mean = m[i]/c;
+    vec3 varc = s[i]/c - mean*mean;
+    float v = (varc.r+varc.g+varc.b);
+    if(v<minVar){ minVar=v; best=mean; }
+  }
+  gl_FragColor=vec4(best,1.0);
+}`;
+// Pixelate + posterize
+const FS_PIXEL=`precision mediump float; varying vec2 uv; uniform sampler2D t; uniform vec2 res; uniform float amt; uniform float psize;
+vec3 posterize(vec3 c, float n){return floor(c*n)/n;}
+void main(){
+  vec2 grid = vec2(psize);
+  vec2 suv = (floor(uv*res/grid)+0.5)*grid/res;
+  vec3 col = texture2D(t, suv).rgb;
+  col = posterize(col, mix(4.0,12.0,1.0-amt));
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+function initGL(){
+  progCartoon=createProgram(VS,FS_CARTOON);
+  progKuwahara=createProgram(VS,FS_KUWAHARA);
+  progPixel=createProgram(VS,FS_PIXEL);
+  quad=createQuad(); fb=gl.createFramebuffer(); texIn=createTex();
+}
+initGL();
+
+function setViewport(w,h){ cvs.width=w; cvs.height=h; gl.viewport(0,0,w,h); }
+function render(){
+  if(!imgW||!imgH) return;
+  setViewport(imgW,imgH);
+  gl.bindTexture(gl.TEXTURE_2D, texIn);
+  const mode=modeEl.value, amt=parseFloat(amountEl.value);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  let prog=progCartoon;
+  if(mode==='kuwahara') prog=progKuwahara;
+  else if(mode==='pixelate') prog=progPixel;
+  gl.useProgram(prog);
+  const locP=gl.getAttribLocation(prog,'p'); gl.enableVertexAttribArray(locP); gl.vertexAttribPointer(locP,2,gl.FLOAT,false,0,0);
+  const locT=gl.getUniformLocation(prog,'t'); gl.uniform1i(locT,0);
+  const locR=gl.getUniformLocation(prog,'res'); gl.uniform2f(locR,imgW,imgH);
+  const locA=gl.getUniformLocation(prog,'amt'); if(locA) gl.uniform1f(locA, amt);
+  const locPx=gl.getUniformLocation(prog,'psize'); if(locPx) gl.uniform1f(locPx, parseFloat(pxEl.value));
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+
+function uploadImage(image){
+  // 원본 미리보기
+  imgEl.src = image.src;
+  // 텍스처 업로드
+  imgW = image.naturalWidth; imgH = image.naturalHeight;
+  gl.bindTexture(gl.TEXTURE_2D, texIn);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+  render();
+}
+
+function loadFile(file){
+  const r=new FileReader();
+  r.onload=()=>{ const im=new Image(); im.onload=()=>uploadImage(im); im.src=r.result; };
+  r.readAsDataURL(file);
+}
+
+// 초기 상태 안내 캔버스
+(function drawPlaceholder(){
+  setViewport(800,480);
+  const ctx=cvs.getContext('2d');
+  ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,cvs.width,cvs.height);
+  ctx.fillStyle='#a9b4ff'; ctx.font='700 26px system-ui'; ctx.fillText('왼쪽에서 이미지를 업로드하세요', 30, 60);
+  ctx.font='14px system-ui'; ctx.fillStyle='#c9d6ff'; ctx.fillText('만화풍 / 오일페인팅 / 픽셀아트 효과를 오프라인으로 적용합니다.', 30, 92);
+})();
+
+window.addEventListener('resize', ()=>{ if(imgW) render(); });
+
+})();
+</script>
+</body>
+</html>
