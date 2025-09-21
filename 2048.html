@@ -3,143 +3,148 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>2048 for Tistory</title>
+<title>2048 for Tistory (no-conflict)</title>
 <style>
   :root{
-    --board-size: 4;
-    --gap: 10px;
-    --tile-size: 90px;
-    --radius: 12px;
-    --bg: #faf8ef;
-    --panel: #ffffff;
-    --text: #776e65;
-    --accent: #8f7a66;
+    --g2048-board-size: 4;
+    --g2048-gap: 10px;
+    --g2048-tile-size: 90px;
+    --g2048-radius: 12px;
+    --g2048-bg: #faf8ef;
+    --g2048-panel: #ffffff;
+    --g2048-text: #776e65;
+    --g2048-accent: #8f7a66;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
-    margin:0; background:var(--bg); color:var(--text);
+    margin:0; background:var(--g2048-bg); color:var(--g2048-text);
     font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     display:flex; align-items:center; justify-content:center; padding:24px;
   }
-  .wrap{
-    width:min(420px, 96vw);
-  }
-  .header{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px}
-  .title{font-size:38px; font-weight:900; letter-spacing:.5px}
-  .scores{display:flex; gap:8px}
-  .badge{
+
+  /* ===== App Scope ===== */
+  .g2048-wrap{ width:min(420px, 96vw); }
+  .g2048-header{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px}
+  .g2048-title{font-size:38px; font-weight:900; letter-spacing:.5px}
+  .g2048-scores{display:flex; gap:8px}
+  .g2048-badge{
     background:#bbada0; color:#fff; padding:8px 12px; border-radius:10px; text-align:center; min-width:92px;
   }
-  .badge b{display:block; font-size:12px; opacity:.9}
-  .badge i{display:block; font-style:normal; font-size:18px; font-weight:800}
-  .ctrls{display:flex; gap:8px; margin:12px 0 18px}
-  button{
+  .g2048-badge b{display:block; font-size:12px; opacity:.9}
+  .g2048-badge i{display:block; font-style:normal; font-size:18px; font-weight:800}
+  .g2048-ctrls{display:flex; gap:8px; margin:12px 0 18px}
+  .g2048-btn{
     appearance:none; border:0; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer;
     background:#8f7a66; color:#fff; box-shadow:0 1px 0 rgba(0,0,0,.15);
   }
-  button.secondary{background:#a69b94}
-  button:active{transform:translateY(1px)}
+  .g2048-btn.secondary{background:#a69b94}
+  .g2048-btn:active{transform:translateY(1px)}
 
-  .board{
+  .g2048-board{
     position:relative;
-    background:#bbada0; border-radius:var(--radius);
-    padding:var(--gap);
-    width: calc(var(--board-size) * var(--tile-size) + (var(--board-size) + 1)*var(--gap));
-    height: calc(var(--board-size) * var(--tile-size) + (var(--board-size) + 1)*var(--gap));
+    background:#bbada0; border-radius:var(--g2048-radius);
+    padding:var(--g2048-gap);
+    width: calc(var(--g2048-board-size) * var(--g2048-tile-size) + (var(--g2048-board-size) + 1)*var(--g2048-gap));
+    height: calc(var(--g2048-board-size) * var(--g2048-tile-size) + (var(--g2048-board-size) + 1)*var(--g2048-gap));
     margin:0 auto;
     touch-action:none; /* we handle swipes */
+    isolation:isolate;
   }
-  .grid{
-    display:grid; gap:var(--gap);
-    grid-template-columns: repeat(var(--board-size), var(--tile-size));
-    grid-template-rows: repeat(var(--board-size), var(--tile-size));
+  .g2048-grid{
+    display:grid; gap:var(--g2048-gap);
+    grid-template-columns: repeat(var(--g2048-board-size), var(--g2048-tile-size));
+    grid-template-rows: repeat(var(--g2048-board-size), var(--g2048-tile-size));
   }
-  .cell{
-    width:var(--tile-size); height:var(--tile-size);
-    background:#cdc1b4; border-radius:var(--radius);
+  .g2048-cell{
+    width:var(--g2048-tile-size); height:var(--g2048-tile-size);
+    background:#cdc1b4; border-radius:var(--g2048-radius);
   }
-  .tiles{
-    position:absolute; inset:var(--gap); display:grid; gap:var(--gap);
-    grid-template-columns: repeat(var(--board-size), var(--tile-size));
-    grid-template-rows: repeat(var(--board-size), var(--tile-size));
+  .g2048-tiles{
+    position:absolute; inset:var(--g2048-gap); display:grid; gap:var(--g2048-gap);
+    grid-template-columns: repeat(var(--g2048-board-size), var(--g2048-tile-size));
+    grid-template-rows: repeat(var(--g2048-board-size), var(--g2048-tile-size));
     pointer-events:none;
   }
-  .tile{
+  .g2048-tile{
     display:flex; align-items:center; justify-content:center;
-    border-radius:var(--radius); font-weight:900; font-size:32px; user-select:none;
+    border-radius:var(--g2048-radius); font-weight:900; font-size:32px; user-select:none;
     transition:transform .12s ease;
+    /* 보호막: 스킨 충돌 방지 */
+    text-indent:0 !important; letter-spacing:normal !important; color:inherit !important;
+    overflow:visible !important; background-clip:padding-box !important;
   }
-  .tile.spawn{animation:pop .15s ease-out}
-  .tile.merge{animation:bump .12s ease-out}
-  @keyframes pop{from{transform:scale(.6)} to{transform:scale(1)}}
-  @keyframes bump{0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)}}
+  .g2048-tile.g2048-spawn{animation:g2048-pop .15s ease-out}
+  .g2048-tile.g2048-merge{animation:g2048-bump .12s ease-out}
+  @keyframes g2048-pop{from{transform:scale(.6)} to{transform:scale(1)}}
+  @keyframes g2048-bump{0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)}}
 
   /* Tile colors */
-  .v2   {background:#eee4da; color:#776e65}
-  .v4   {background:#ede0c8; color:#776e65}
-  .v8   {background:#f2b179; color:#f9f6f2}
-  .v16  {background:#f59563; color:#f9f6f2}
-  .v32  {background:#f67c5f; color:#f9f6f2}
-  .v64  {background:#f65e3b; color:#f9f6f2}
-  .v128 {background:#edcf72; color:#f9f6f2; font-size:28px}
-  .v256 {background:#edcc61; color:#f9f6f2; font-size:28px}
-  .v512 {background:#edc850; color:#f9f6f2; font-size:28px}
-  .v1024{background:#edc53f; color:#f9f6f2; font-size:24px}
-  .v2048{background:#edc22e; color:#f9f6f2; font-size:24px}
-  .v4096,.v8192{background:#3c3a32; color:#f9f6f2; font-size:22px}
+  .g2048-v2   {background:#eee4da; color:#776e65}
+  .g2048-v4   {background:#ede0c8; color:#776e65}
+  .g2048-v8   {background:#f2b179; color:#f9f6f2}
+  .g2048-v16  {background:#f59563; color:#f9f6f2}
+  .g2048-v32  {background:#f67c5f; color:#f9f6f2}
+  .g2048-v64  {background:#f65e3b; color:#f9f6f2}
+  .g2048-v128 {background:#edcf72; color:#f9f6f2; font-size:28px}
+  .g2048-v256 {background:#edcc61; color:#f9f6f2; font-size:28px}
+  .g2048-v512 {background:#edc850; color:#f9f6f2; font-size:28px}
+  .g2048-v1024{background:#edc53f; color:#f9f6f2; font-size:24px}
+  .g2048-v2048{background:#edc22e; color:#f9f6f2; font-size:24px}
+  .g2048-v4096,.g2048-v8192{background:#3c3a32; color:#f9f6f2; font-size:22px}
 
-  .hint{font-size:13px; opacity:.8; margin-top:8px}
+  .g2048-hint{font-size:13px; opacity:.8; margin-top:8px}
 
-  .overlay{
+  .g2048-overlay{
     position:absolute; inset:0; display:none; align-items:center; justify-content:center;
-    background:rgba(238,228,218,.73); border-radius:var(--radius); z-index:2; text-align:center; padding:16px;
+    background:rgba(238,228,218,.73); border-radius:var(--g2048-radius); z-index:2; text-align:center; padding:16px;
   }
-  .overlay.show{display:flex}
-  .overlay .box{
-    background:var(--panel); padding:18px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.12);
+  .g2048-overlay.g2048-show{display:flex}
+  .g2048-overlay .g2048-box{
+    background:var(--g2048-panel); padding:18px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.12);
   }
-  .overlay h2{margin:0 0 6px; font-size:22px}
-  .overlay p{margin:0 0 12px}
-  .overlay .actions{display:flex; gap:8px; justify-content:center}
+  .g2048-overlay h2{margin:0 0 6px; font-size:22px}
+  .g2048-overlay p{margin:0 0 12px}
+  .g2048-overlay .g2048-actions{display:flex; gap:8px; justify-content:center}
+
   @media (max-width:420px){
-    :root{ --tile-size: clamp(60px, 21vw, 90px); }
-    .title{font-size:32px}
+    :root{ --g2048-tile-size: clamp(60px, 21vw, 90px); }
+    .g2048-title{font-size:32px}
   }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="header">
-      <div class="title">2048</div>
-      <div class="scores">
-        <div class="badge"><b>점수</b><i id="score">0</i></div>
-        <div class="badge"><b>최고점수</b><i id="best">0</i></div>
+  <div class="g2048-wrap" id="g2048-root">
+    <div class="g2048-header">
+      <div class="g2048-title">2048</div>
+      <div class="g2048-scores">
+        <div class="g2048-badge"><b>점수</b><i id="g2048-score">0</i></div>
+        <div class="g2048-badge"><b>최고점수</b><i id="g2048-best">0</i></div>
       </div>
     </div>
 
-    <div class="ctrls">
-      <button id="restart">다시 시작</button>
-      <button id="undo" class="secondary" title="한 수 되돌리기 (1스텝)">되돌리기</button>
+    <div class="g2048-ctrls">
+      <button id="g2048-restart" class="g2048-btn">다시 시작</button>
+      <button id="g2048-undo" class="g2048-btn secondary" title="한 수 되돌리기 (1스텝)">되돌리기</button>
     </div>
 
-    <div class="board" id="board" aria-label="2048 보드">
-      <div class="overlay" id="overlay" role="dialog" aria-live="polite" aria-modal="true">
-        <div class="box">
-          <h2 id="ol-title">게임 종료</h2>
-          <p id="ol-desc">다시 도전할까요?</p>
-          <div class="actions">
-            <button id="ol-restart">새 게임</button>
-            <button id="ol-close" class="secondary">닫기</button>
+    <div class="g2048-board" id="g2048-board" aria-label="2048 보드">
+      <div class="g2048-overlay" id="g2048-overlay" role="dialog" aria-live="polite" aria-modal="true">
+        <div class="g2048-box">
+          <h2 id="g2048-ol-title">게임 종료</h2>
+          <p id="g2048-ol-desc">다시 도전할까요?</p>
+          <div class="g2048-actions">
+            <button id="g2048-ol-restart" class="g2048-btn">새 게임</button>
+            <button id="g2048-ol-close" class="g2048-btn secondary">닫기</button>
           </div>
         </div>
       </div>
 
-      <div class="grid" id="grid"></div>
-      <div class="tiles" id="tiles" aria-hidden="true"></div>
+      <div class="g2048-grid" id="g2048-grid"></div>
+      <div class="g2048-tiles" id="g2048-tiles" aria-hidden="true"></div>
     </div>
 
-    <div class="hint">키보드(↑↓←→ / WASD) 또는 화면 스와이프로 이동</div>
+    <div class="g2048-hint">키보드(↑↓←→ / WASD) 또는 화면 스와이프로 이동</div>
   </div>
 
 <script>
@@ -149,15 +154,14 @@
   const bestKey = 'tistory-2048-best';
 
   const $ = sel => document.querySelector(sel);
-  const gridEl = $('#grid');
-  const tilesEl = $('#tiles');
-  const scoreEl = $('#score');
-  const bestEl = $('#best');
-  const overlay = $('#overlay');
-  const olTitle = $('#ol-title');
-  const olDesc = $('#ol-desc');
+  const gridEl = $('#g2048-grid');
+  const tilesEl = $('#g2048-tiles');
+  const scoreEl = $('#g2048-score');
+  const bestEl = $('#g2048-best');
+  const overlay = $('#g2048-overlay');
+  const olTitle = $('#g2048-ol-title');
+  const olDesc = $('#g2048-ol-desc');
 
-  // 상태
   let board = makeEmptyBoard();
   let score = 0;
   let best = Number(localStorage.getItem(bestKey) || 0);
@@ -165,18 +169,14 @@
   let mergedSpots = new Set(); // "r,c"
   let undoState = null; // {board, score}
 
-  // 초기 렌더 준비
   buildBaseGrid();
-  bestEl.textContent = best.toString();
-
-  // 새 게임
+  bestEl.textContent = String(best);
   startNew();
 
-  // 이벤트
-  $('#restart').addEventListener('click', startNew);
-  $('#ol-restart').addEventListener('click', ()=>{ hideOverlay(); startNew(); });
-  $('#ol-close').addEventListener('click', hideOverlay);
-  $('#undo').addEventListener('click', undoOne);
+  $('#g2048-restart').addEventListener('click', startNew);
+  $('#g2048-ol-restart').addEventListener('click', ()=>{ hideOverlay(); startNew(); });
+  $('#g2048-ol-close').addEventListener('click', hideOverlay);
+  $('#g2048-undo').addEventListener('click', undoOne);
 
   // 키보드
   window.addEventListener('keydown', (e)=>{
@@ -189,7 +189,7 @@
 
   // 터치 스와이프
   let startX=0,startY=0,startT=0;
-  const boardEl = $('#board');
+  const boardEl = $('#g2048-board');
   boardEl.addEventListener('touchstart', (e)=>{
     const t = e.changedTouches[0];
     startX = t.clientX; startY = t.clientY; startT = Date.now();
@@ -200,7 +200,7 @@
     const dy = t.clientY - startY;
     const adx = Math.abs(dx), ady = Math.abs(dy);
     const dt = Date.now() - startT;
-    const TH = 24; // 최소 이동
+    const TH = 24;
     if (Math.max(adx, ady) < TH || dt > 1000) return;
     if (adx > ady){ tryMove(dx>0 ? 'right':'left'); }
     else { tryMove(dy>0 ? 'down' : 'up'); }
@@ -227,7 +227,6 @@
   }
 
   function tryMove(dir){
-    // 되돌리기 저장
     undoState = { board: deepClone(board), score };
 
     const before = serialize(board);
@@ -247,7 +246,6 @@
         showOverlay('게임 종료', '더 이상 이동할 수 없어요. 새 게임으로 다시 시작해요.');
       }
     } else {
-      // 무효 이동이면 undoState 복구 기회 제거 방지
       undoState = { board: deepClone(board), score };
     }
   }
@@ -256,48 +254,48 @@
     gridEl.innerHTML = '';
     for (let i=0;i<SIZE*SIZE;i++){
       const cell = document.createElement('div');
-      cell.className = 'cell';
+      cell.className = 'g2048-cell';
       gridEl.appendChild(cell);
     }
   }
 
-  function render(initial=false, moveResult=null){
+  function render(initial=false){
     tilesEl.innerHTML = '';
     for (let r=0;r<SIZE;r++){
       for (let c=0;c<SIZE;c++){
         const v = board[r][c];
         if(!v) continue;
         const t = document.createElement('div');
-        t.className = 'tile v'+v + ' ' + tileSizeClass(v);
+        t.className = 'g2048-tile g2048-v'+v + ' ' + tileSizeClass(v);
         t.style.gridRowStart = r+1;
         t.style.gridColumnStart = c+1;
-        t.textContent = v;
-        // 등장/합체 효과
-        const isSpawn = lastSpawn && lastSpawn.r===r && lastSpawn.c===c && !initial;
-        if (isSpawn) t.classList.add('spawn');
-        if (mergedSpots.has(keyOf(r,c))) t.classList.add('merge');
+        t.textContent = v;                 // 숫자 그리기
         tilesEl.appendChild(t);
+
+        // 등장/합체 효과
+        if (!initial && lastSpawn && lastSpawn.r===r && lastSpawn.c===c) t.classList.add('g2048-spawn');
+        if (mergedSpots.has(keyOf(r,c))) t.classList.add('g2048-merge');
       }
     }
   }
 
   function tileSizeClass(v){
-    if (v>=1024 && v<4096) return 'big';
-    if (v>=4096) return 'bigger';
+    if (v>=1024 && v<4096) return 'g2048-big';
+    if (v>=4096) return 'g2048-bigger';
     return '';
   }
 
   function updateScore(){
-    scoreEl.textContent = score.toString();
+    scoreEl.textContent = String(score);
     if (score > best){ best = score; localStorage.setItem(bestKey, String(best)); bestEl.textContent = String(best); }
   }
 
   function showOverlay(title, desc){
     olTitle.textContent = title;
     olDesc.textContent = desc;
-    overlay.classList.add('show');
+    overlay.classList.add('g2048-show');
   }
-  function hideOverlay(){ overlay.classList.remove('show'); }
+  function hideOverlay(){ overlay.classList.remove('g2048-show'); }
 
   /* ===== 게임 로직 ===== */
 
@@ -323,27 +321,25 @@
   function moveBoard(b, dir){
     let rotated = rotateForDir(b, dir);
     let totalGain = 0;
-    const mergedSpots = new Set();
+    const merged = new Set();
     for (let r=0;r<SIZE;r++){
       const line = rotated[r].slice();
       const { newLine, gain, mergedIdx } = mergeLineLeft(line);
       totalGain += gain;
       rotated[r] = newLine;
-      // 병합된 인덱스를 실제 좌표로 기록 (되돌려서 원래 보드 좌표로)
       mergedIdx.forEach(ci=>{
         const {R,C} = unrotateIndex(r, ci, dir);
-        mergedSpots.add(keyOf(R, C));
+        merged.add(keyOf(R, C));
       });
     }
     const newBoard = unrotate(rotated, dir);
-    return { board:newBoard, gain: totalGain, mergedSpots };
+    return { board:newBoard, gain: totalGain, mergedSpots: merged };
   }
 
-  // 한 줄을 왼쪽으로 미는 동작 (압축 → 병합 → 재압축)
   function mergeLineLeft(arr){
     const compact = arr.filter(v=>v);
     const out = [];
-    const mergedIdx = []; // 최종 위치 인덱스
+    const mergedIdx = [];
     let gain = 0;
     for (let i=0;i<compact.length;i++){
       if (i<compact.length-1 && compact[i]===compact[i+1]){
@@ -351,7 +347,7 @@
         out.push(val);
         gain += val;
         mergedIdx.push(out.length-1);
-        i++; // 한 번만 병합
+        i++;
       } else {
         out.push(compact[i]);
       }
@@ -360,9 +356,7 @@
     return { newLine: out, gain, mergedIdx };
   }
 
-  // 방향 회전 도우미
   function rotateForDir(b, dir){
-    // dir 기준으로 "왼쪽"으로 민다고 가정하기 위해 보드를 회전
     if (dir==='left') return deepClone(b);
     if (dir==='right') return b.map(row=>row.slice().reverse());
     if (dir==='up'){
@@ -391,7 +385,6 @@
     }
   }
   function unrotateIndex(r, c, dir){
-    // rot[r][c] 의 원래 보드 좌표
     if (dir==='left') return {R:r, C:c};
     if (dir==='right') return {R:r, C: SIZE-1-c};
     if (dir==='up') return {R:c, C:r};
@@ -400,7 +393,6 @@
   const keyOf = (r,c)=> `${r},${c}`;
 
   function has2048(b){ return b.flat().some(v=>v>=2048); }
-
   function canMove(b){
     if (getEmptyCells(b).length) return true;
     for (let r=0;r<SIZE;r++){
