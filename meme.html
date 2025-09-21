@@ -1,70 +1,236 @@
 <!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>밈 메이커</title>
+<title>밈 메이커 (드래그/저장)</title>
 <style>
-body{margin:0;background:#0b1220;color:#e5e7eb;font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto}
-.wrap{max-width:900px;margin:24px auto;padding:16px}
-.panel{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:12px}
-input[type="text"],input[type="number"],input[type="file"],select{background:#0f172a;border:1px solid #334155;color:#e5e7eb;border-radius:8px;padding:8px}
-.btn{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
-.canvasWrap{position:relative; background:#0f172a;border:1px dashed #334155;border-radius:12px;overflow:hidden}
-#c{display:block;max-width:100%;height:auto}
-.drag{position:absolute;left:50%;top:8%;transform:translateX(-50%);cursor:move;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.35)}
-.drag input{width:360px;max-width:70vw}
-small{color:#93c5fd}
+:root{--bg:#0b1220;--card:#111827;--line:#1f2937;--ink:#e5e7eb}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial}
+.wrap{max-width:980px;margin:20px auto;padding:16px}
+.grid{display:grid;gap:12px}@media(min-width:860px){.grid{grid-template-columns:1.2fr .8fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+label{display:block;font-size:12px;margin:6px 0 4px;color:#c7d2fe}
+input[type="text"],input[type="number"],select{width:100%;background:#0f172a;border:1px solid #334155;color:var(--ink);border-radius:8px;padding:10px 12px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:12px 16px;font-weight:700;cursor:pointer}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.help{color:#93c5fd;font-size:12px;margin-top:8px}
+canvas{width:100%;height:auto;display:block;background:#0f172a;border:1px dashed #334155;border-radius:12px}
+.drop{padding:16px;border:2px dashed #334155;border-radius:12px;text-align:center;color:#9ca3af}
+.active{border-color:#60a5fa;color:#bfdbfe}
+.small{font-size:12px;color:#9ca3af}
+.tag{display:inline-block;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:6px 8px;margin-right:6px}
 </style>
-<div class="wrap">
-  <div class="panel">
-    <label class="card">이미지 <input id="file" type="file" accept="image/*"></label>
-    <label class="card">폰트 <select id="font"><option>Impact</option><option>Pretendard</option><option>Arial</option></select></label>
-    <label class="card">크기(px) <input id="size" type="number" value="56"></label>
-    <label class="card">굵기 <select id="weight"><option>700</option><option>900</option><option>600</option></select></label>
-    <button class="btn" id="save">이미지 저장</button>
-  </div>
 
-  <div class="canvasWrap card">
-    <img id="c" alt="preview">
-    <div class="drag" id="tbox"><input id="text" type="text" value="여기에 텍스트"><br><small>드래그해서 위치 이동</small></div>
+<div class="wrap">
+  <div class="grid">
+    <div class="card">
+      <canvas id="cv" width="1200" height="900"></canvas>
+      <div class="help">💡 캔버스에서 텍스트를 <b>드래그</b>해 위치를 바꿀 수 있어요. (모바일 터치 지원)</div>
+    </div>
+
+    <div class="card">
+      <div id="drop" class="drop">이미지를 여기로 드래그하거나, 아래에서 파일 선택</div>
+      <label>이미지 선택</label>
+      <input id="file" type="file" accept="image/*">
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>폰트</label>
+          <select id="font">
+            <option>Impact</option><option>Pretendard</option><option>Arial</option><option>Nanum Gothic</option>
+          </select>
+        </div>
+        <div>
+          <label>굵기</label>
+          <select id="weight"><option>900</option><option selected>700</option><option>600</option></select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>크기(px)</label>
+          <input id="size" type="number" value="72" min="12" max="300">
+        </div>
+        <div>
+          <label>테두리 두께</label>
+          <input id="stroke" type="number" value="6" min="0" max="40">
+        </div>
+      </div>
+
+      <label style="margin-top:10px">상단 텍스트</label>
+      <input id="topText" type="text" placeholder="상단 텍스트 입력">
+
+      <label style="margin-top:6px">하단 텍스트</label>
+      <input id="bottomText" type="text" placeholder="하단 텍스트 입력">
+
+      <div class="btn-row">
+        <button id="swap">상/하 텍스트 위치 바꾸기</button>
+        <button id="clear">텍스트 지우기</button>
+        <button id="save">이미지 저장</button>
+      </div>
+
+      <div class="help">
+        <span class="tag">클릭/드래그: 텍스트 이동</span>
+        <span class="tag">더블클릭: 텍스트 선택 토글</span>
+        <div class="small">저장 시 브라우저 다운로드가 열립니다. iOS 사파리에서는 새 탭으로 열릴 수 있어요.</div>
+      </div>
+    </div>
   </div>
 </div>
+
 <script>
-const img=c, box=tbox, input=text
-let dragging=false, dx=0, dy=0, pos={x:.5,y:.1}
-file.onchange=e=>{
-  const f=e.target.files[0]; if(!f) return
-  const r=new FileReader(); r.onload=ev=>{img.src=ev.target.result}; r.readAsDataURL(f)
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const file = document.getElementById('file');
+const drop = document.getElementById('drop');
+const topText = document.getElementById('topText');
+const bottomText = document.getElementById('bottomText');
+const fontSel = document.getElementById('font');
+const weightSel = document.getElementById('weight');
+const sizeInp = document.getElementById('size');
+const strokeInp = document.getElementById('stroke');
+const swapBtn = document.getElementById('swap');
+const clearBtn = document.getElementById('clear');
+const saveBtn = document.getElementById('save');
+
+let img = new Image(), hasImg = false;
+let state = {
+  top:   { x: 0.5, y: 0.1, text: '', selected:false },
+  bottom:{ x: 0.5, y: 0.9, text: '', selected:false }
+};
+let dragging = null;
+
+function fmtFont(){
+  const sz = +sizeInp.value||72;
+  const fw = weightSel.value||'700';
+  const ff = fontSel.value||'Impact';
+  return `${fw} ${sz}px "${ff}", Impact, Arial, sans-serif`;
 }
-function updateBoxPos(){
-  const rect=img.getBoundingClientRect()
-  box.style.left = (rect.left + rect.width*pos.x) + 'px'
-  box.style.top  = (rect.top  + rect.height*pos.y) + 'px'
-  box.style.transform='translate(-50%,-50%)'
+function draw(){
+  // 배경
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  if (hasImg) {
+    // 이미지가 캔버스에 꽉 차도록(레터박스 최소화)
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const cw = cv.width, ch = cv.height;
+    const ir = iw/ih, cr = cw/ch;
+    let w, h, x, y;
+    if (ir > cr){ // 가로가 더 김
+      w = cw; h = w/ir; x = 0; y = (ch - h)/2;
+    } else {
+      h = ch; w = h*ir; y = 0; x = (cw - w)/2;
+    }
+    ctx.drawImage(img, x, y, w, h);
+  }
+
+  // 텍스트
+  const font = fmtFont();
+  const strokeW = +strokeInp.value||0;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.font = font;
+
+  function drawOne(obj){
+    if(!obj.text) return;
+    const x = cv.width * obj.x;
+    const y = cv.height * obj.y;
+    if (strokeW>0){ ctx.lineWidth = strokeW; ctx.strokeStyle = 'black'; ctx.strokeText(obj.text, x, y); }
+    ctx.fillStyle = 'white';
+    ctx.fillText(obj.text, x, y);
+
+    // 선택 표시
+    if (obj.selected){
+      const m = ctx.measureText(obj.text);
+      const w = m.width + 24, h = (+sizeInp.value||72) + 16;
+      ctx.strokeStyle = 'rgba(96,165,250,.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - w/2, y - h/2, w, h);
+    }
+  }
+  drawOne(state.top);
+  drawOne(state.bottom);
 }
-window.addEventListener('resize', updateBoxPos)
-img.onload=updateBoxPos
-box.addEventListener('mousedown',e=>{dragging=true; dx=e.clientX; dy=e.clientY; e.preventDefault()})
-window.addEventListener('mousemove',e=>{
-  if(!dragging) return
-  const rect=img.getBoundingClientRect()
-  const nx = ((e.clientX - rect.left)/rect.width)
-  const ny = ((e.clientY - rect.top)/rect.height)
-  pos.x=Math.min(0.98,Math.max(0.02,nx)); pos.y=Math.min(0.98,Math.max(0.02,ny))
-  updateBoxPos()
-})
-window.addEventListener('mouseup',()=>dragging=false)
-save.onclick=()=>{
-  if(!img.src) return alert('이미지를 먼저 올려주세요.')
-  const cnv=document.createElement('canvas'), ctx=cnv.getContext('2d')
-  const w=img.naturalWidth, h=img.naturalHeight; cnv.width=w; cnv.height=h
-  ctx.drawImage(img,0,0,w,h)
-  const fontSize=+size.value||56, fw=weight.value||'700', ff=font.value||'Impact'
-  ctx.font = `${fw} ${fontSize}px "${ff}"`
-  ctx.fillStyle='white'; ctx.strokeStyle='black'; ctx.lineWidth= Math.max(4, Math.round(fontSize/10))
-  ctx.textAlign='center'; ctx.textBaseline='middle'
-  const text=input.value||''
-  const x=w*pos.x, y=h*pos.y
-  ctx.strokeText(text,x,y)
-  ctx.fillText(text,x,y)
-  const a=document.createElement('a'); a.href=cnv.toDataURL('image/png'); a.download='meme.png'; a.click()
+
+function loadFile(f){
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = e => { img = new Image(); img.onload=()=>{ hasImg=true; draw() }; img.src = e.target.result; };
+  r.readAsDataURL(f);
 }
-</script></html>
+
+file.addEventListener('change', e => loadFile(e.target.files[0]));
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.add('active')}))
+;['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.remove('active')}))
+drop.addEventListener('drop', e => { const f = e.dataTransfer.files?.[0]; loadFile(f); });
+
+[topText, bottomText, fontSel, weightSel, sizeInp, strokeInp].forEach(el=>el.addEventListener('input', ()=>{
+  state.top.text = topText.value;
+  state.bottom.text = bottomText.value;
+  draw();
+}));
+
+swapBtn.onclick = ()=>{ const tmp = { ...state.top }; state.top = { ...state.bottom }; state.bottom = tmp;
+  topText.value = state.top.text; bottomText.value = state.bottom.text; draw(); };
+
+clearBtn.onclick = ()=>{ topText.value=''; bottomText.value=''; state.top.text=''; state.bottom.text=''; draw(); };
+
+saveBtn.onclick = ()=>{
+  if (!hasImg) return alert('이미지를 먼저 올려주세요.');
+  const a = document.createElement('a');
+  a.href = cv.toDataURL('image/png');
+  a.download = 'meme.png';
+  // iOS/Safari 대응
+  if (typeof a.download === 'string'){ a.click(); }
+  else { window.open(a.href, '_blank'); }
+};
+
+// 좌표 유틸
+function posFromEvent(e){
+  const r = cv.getBoundingClientRect();
+  const cx = (e.touches? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches? e.touches[0].clientY : e.clientY) - r.top;
+  return { x: cx / r.width, y: cy / r.height };
+}
+function hitTest(p, obj){
+  if(!obj.text) return false;
+  ctx.font = fmtFont();
+  const m = ctx.measureText(obj.text);
+  const w = m.width + 24, h = (+sizeInp.value||72) + 16;
+  const x = cv.width * obj.x, y = cv.height * obj.y;
+  const rx = x - w/2, ry = y - h/2;
+  const px = p.x * cv.width, py = p.y * cv.height;
+  return (px>=rx && px<=rx+w && py>=ry && py<=ry+h);
+}
+
+// 드래그/선택
+function down(e){
+  const p = posFromEvent(e);
+  // 어떤 텍스트를 잡았는지 판정 (우선순위: 위->아래)
+  let target = null;
+  if (hitTest(p, state.top)) target = 'top';
+  else if (hitTest(p, state.bottom)) target = 'bottom';
+
+  state.top.selected = state.bottom.selected = false;
+  if (target){ state[target].selected = true; dragging = target; }
+  draw();
+}
+function move(e){
+  if(!dragging) return;
+  const p = posFromEvent(e);
+  const obj = state[dragging];
+  obj.x = Math.min(.98, Math.max(.02, p.x));
+  obj.y = Math.min(.98, Math.max(.02, p.y));
+  draw();
+}
+function up(){ dragging = null; }
+
+cv.addEventListener('mousedown', down);
+cv.addEventListener('mousemove', move);
+window.addEventListener('mouseup', up);
+cv.addEventListener('touchstart', e=>{down(e);}, {passive:false});
+cv.addEventListener('touchmove', e=>{move(e); e.preventDefault();}, {passive:false});
+window.addEventListener('touchend', up);
+
+// 초기 렌더
+draw();
+</script>
+</html>
