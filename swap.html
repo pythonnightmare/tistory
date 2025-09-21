@@ -1,4 +1,4 @@
-<!-- Reference-Guided Tone Transfer (Offline, CC0). No rights reserved. -->
+<!-- Reference-Guided Tone Transfer (Offline) — CC0 1.0 Public Domain. No rights reserved. -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -7,8 +7,9 @@
 <title>두 이미지 기반 톤/분위기 이식 (오프라인)</title>
 <style>
   :root{--bg:#0b0f16;--panel:#101522;--ink:#e7ecff;--mut:#8ea0d8;--acc:#6c7bff;--radius:14px}
-  *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui}
-  .wrap{max-width:1080px;margin:0 auto;padding:18px}
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px}
   .title{display:flex;gap:10px;align-items:center;font-weight:900;font-size:22px}
   .badge{background:#182044;border:1px solid #23305a;color:#cfe0ff;border-radius:999px;padding:3px 10px;font-size:12px}
   .card{background:linear-gradient(180deg,#0f1423,#0f1420);border:1px solid #1b2443;border-radius:var(--radius);box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px}
@@ -21,11 +22,15 @@
   .chip{background:#151c33;border:1px solid #24305a;color:#c9d6ff;padding:6px 10px;border-radius:999px;font-size:12px}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
   @media (max-width:1000px){.stage{grid-template-columns:1fr}}
-  .pane{background:#0d1220;border:1px solid #1b2443;border-radius:12px;padding:10px;position:relative}
+  .pane{background:#0d1220;border:1px solid #1b2443;border-radius:12px;padding:10px;position:relative;min-height:320px}
   canvas{max-width:100%;height:auto;display:block;margin:auto;border-radius:8px;background:#0b0f16}
   .hint{font-size:12px;color:#9fb0ff}
-  .drop{position:fixed;inset:0;display:none;place-items:center;background:rgba(40,60,120,.25);color:#dfe7ff;font-weight:800;font-size:22px;z-index:999}
+  .drop{position:fixed;inset:0;display:none;place-items:center;background:rgba(40,60,120,.28);color:#dfe7ff;
+        font-weight:800;font-size:22px;z-index:999;text-align:center;padding:12px}
   .drop.show{display:grid}
+  .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#141b33;border:1px solid #253261;
+         color:#dfe7ff;padding:8px 12px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -38,12 +43,12 @@
       <input id="src" type="file" accept="image/*">
       <label for="ref" class="btn">타겟(참고 사진) 불러오기</label>
       <input id="ref" type="file" accept="image/*">
-      <span class="hint">* 외부 사이트 이미지 URL 드래그는 CORS 때문에 실패합니다. 파일로 넣거나 붙여넣기(Ctrl/Cmd+V)를 사용하세요.</span>
+      <span class="hint">💡 파일 선택/드래그/붙여넣기 모두 가능. 웹페이지 이미지를 그대로 끌어오면 <b>URL만</b> 넘어와서 안 뜰 수 있어요 → 파일로 저장 후 넣기.</span>
     </div>
     <div class="tools">
       <label>강도 <input id="strength" type="range" min="0" max="1" step="0.01" value="0.7"></label>
       <span id="sv" class="chip">0.70</span>
-      <label>적용 채널
+      <label>채널
         <select id="channels">
           <option value="lab">LAB(L*,a*,b*)</option>
           <option value="l">밝기(L*)만</option>
@@ -58,11 +63,11 @@
 
   <div class="stage">
     <div class="pane">
-      <canvas id="cSrc" width="800" height="480"></canvas>
+      <canvas id="cSrc" width="800" height="480" aria-label="원본"></canvas>
       <div class="hint" style="margin-top:6px">왼쪽: 원본(편집 캔버스)</div>
     </div>
     <div class="pane">
-      <canvas id="cOut" width="800" height="480"></canvas>
+      <canvas id="cOut" width="800" height="480" aria-label="결과"></canvas>
       <div class="hint" style="margin-top:6px">오른쪽: 결과 미리보기</div>
     </div>
   </div>
@@ -72,7 +77,8 @@
   </p>
 </div>
 
-<div class="drop" id="drop">이미지를 여기로 놓으면 열립니다</div>
+<div class="drop" id="drop">이미지를 놓으면 열립니다<br/><span style="font-size:14px;opacity:.8">첫 번째는 원본, 두 번째는 타겟(참고)</span></div>
+<div class="toast" id="toast"></div>
 
 <script>
 /* CC0 1.0 — No rights reserved. */
@@ -82,14 +88,14 @@
   const cOut=$('#cOut'), xOut=cOut.getContext('2d');
   const srcIn=$('#src'), refIn=$('#ref');
   const strengthEl=$('#strength'), sv=$('#sv'), channelsEl=$('#channels');
-  const applyBtn=$('#apply'), dlBtn=$('#download');
-  const drop=$('#drop');
+  const applyBtn=$('#apply'), dlBtn=$('#download'), drop=$('#drop'), toast=$('#toast');
 
   let srcImg=null, refImg=null;
 
-  // ===== 공통 유틸
+  // ---------- 작은 유틸 ----------
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  function fitCanvasTo(img, canvas, maxW=1200, maxH=900){
+  function tip(msg, ms=1800){ toast.textContent=msg; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), ms); }
+  function fitCanvasTo(img, canvas, maxW=1400, maxH=1000){
     let w=img.naturalWidth, h=img.naturalHeight;
     const r=Math.min(1, maxW/w, maxH/h);
     canvas.width=Math.round(w*r); canvas.height=Math.round(h*r);
@@ -98,31 +104,42 @@
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.drawImage(img,0,0,canvas.width,canvas.height);
   }
-
-  // ===== 파일 로드 (input / drop / paste)
   function loadFile(file, cb){
+    if(!file || !/^image\//i.test(file.type)) return tip('이미지 파일만 넣어주세요.');
     const r=new FileReader();
     r.onload=()=>{ const im=new Image(); im.onload=()=>cb(im); im.src=r.result; };
     r.readAsDataURL(file);
   }
-  function setSrc(im){ srcImg=im; fitCanvasTo(im,cSrc); fitCanvasTo(im,cOut); drawImageTo(xSrc,im,cSrc); drawImageTo(xOut,im,cOut); }
-  function setRef(im){ refImg=im; if(!srcImg){ /* 참조만 먼저 들어와도 OK */ } }
+  function setSrc(im){
+    srcImg=im; fitCanvasTo(im,cSrc); fitCanvasTo(im,cOut);
+    drawImageTo(xSrc,im,cSrc); drawImageTo(xOut,im,cOut);
+  }
+  function setRef(im){
+    refImg=im;
+    if(!srcImg) tip('참고 이미지가 먼저 들어왔어요. 원본도 넣어주세요.');
+  }
 
-  srcIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, setSrc); });
-  refIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, setRef); });
+  // ---------- 파일 선택 ----------
+  srcIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f,setSrc); });
+  refIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f,setRef); });
 
-  // 드래그&드롭(어디에나 떨어뜨려도 동작)
+  // ---------- 드래그&드롭 ----------
   ['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.add('show'); }));
   ['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.remove('show'); }));
   document.addEventListener('drop', e=>{
-    const f=e.dataTransfer?.files?.[0]; if(!f) return;
-    const isImage = /^image\\//i.test(f.type);
-    if(!isImage) return alert('이미지 파일만 지원합니다.');
-    // 첫 파일은 원본, 두 번째 드롭부터는 참조로 사용하도록 UX 설정
-    loadFile(f, srcImg ? setRef : setSrc);
+    const files=e.dataTransfer?.files;
+    if(files && files.length){
+      // 첫 파일은 원본, 두 번째 이후는 타겟으로
+      loadFile(files[0], srcImg ? setRef : setSrc);
+      if(files.length>=2) loadFile(files[1], setRef);
+      return;
+    }
+    // 파일 없이 URL만 떨어진 경우
+    const hasUrl=[...(e.dataTransfer?.items||[])].some(it => it.kind==='string');
+    if(hasUrl) tip('웹 이미지 URL을 바로 드롭하면 보안상 불가합니다. 파일로 저장해서 넣거나, 스크린샷을 붙여넣기 하세요.');
   });
 
-  // 클립보드 붙여넣기
+  // ---------- 클립보드 붙여넣기 ----------
   document.addEventListener('paste', e=>{
     const item=[...(e.clipboardData?.items||[])].find(i=>i.type?.startsWith('image/'));
     if(!item) return;
@@ -130,7 +147,7 @@
     loadFile(blob, srcImg ? setRef : setSrc);
   });
 
-  // ===== 색공간/히스토 매칭
+  // ---------- 색공간/히스토 매칭 ----------
   function toLinear(v){ v/=255; return v<=0.04045? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }
   function toSRGB(v){ return v<=0.0031308? v*12.92 : 1.055*Math.pow(v,1/2.4)-0.055; }
   function rgb2xyz(r,g,b){ r=toLinear(r); g=toLinear(g); b=toLinear(b);
@@ -156,11 +173,7 @@
     const nS=cdfSrc[255]||1, nR=cdfRef[255]||1;
     for(let i=0;i<256;i++){ cdfSrc[i]/=nS; cdfRef[i]/=nR; }
     const map=new Uint8Array(256);
-    for(let i=0,j=0;i<256;i++){
-      const s=cdfSrc[i];
-      while(j<255 && cdfRef[j]<s) j++;
-      map[i]=j;
-    }
+    for(let i=0,j=0;i<256;i++){ const s=cdfSrc[i]; while(j<255 && cdfRef[j]<s) j++; map[i]=j; }
     return map;
   }
 
@@ -176,20 +189,20 @@
   }
 
   function applyToneTransfer(){
-    if(!srcImg || !refImg){ alert('원본과 타겟 이미지를 모두 불러오세요.'); return; }
-    // 원본/결과 캔버스는 같은 크기로 보정되어 있음
-    drawImageTo(xSrc, srcImg, cSrc); // 원본 다시 덮어 그려 안전하게
+    if(!srcImg || !refImg){ tip('원본과 타겟 이미지를 모두 넣어주세요.'); return; }
+
+    // 원본 다시 그려서 깨끗한 버퍼 확보
+    drawImageTo(xSrc, srcImg, cSrc);
     const src = xSrc.getImageData(0,0,cSrc.width,cSrc.height);
 
-    // 참조 이미지를 원본 크기에 맞춰 임시 버퍼에 렌더
+    // 참조 이미지를 원본 크기에 맞춰 임시 캔버스에 렌더
     const tmp=document.createElement('canvas'); tmp.width=cSrc.width; tmp.height=cSrc.height;
     const xt=tmp.getContext('2d'); xt.drawImage(refImg,0,0,tmp.width,tmp.height);
     let ref;
-    try{
-      ref = xt.getImageData(0,0,tmp.width,tmp.height);
-    }catch(err){
-      // 외부 URL 이미지 끌어온 경우 CORS로 캔버스 오염 → 안내
-      alert('외부 사이트 이미지 URL을 직접 드래그하면 보안상 처리할 수 없습니다. 파일로 불러오거나, 스크린샷을 저장해서 넣어주세요.');
+    try{ ref = xt.getImageData(0,0,tmp.width,tmp.height); }
+    catch(err){
+      // 외부 URL 이미지로 인한 CORS 오염
+      alert('외부 사이트 이미지 URL을 바로 드래그하면 보안상 처리할 수 없습니다.\n이미지를 파일로 저장해서 넣거나, 스크린샷을 붙여넣기(Ctrl/Cmd+V)로 사용하세요.');
       return;
     }
 
@@ -198,9 +211,10 @@
     const out = xOut.createImageData(src.width, src.height);
 
     if(mode==='rgb'){
-      // 빠른 RGB 매칭(속도↑)
-      const rS=new Uint8Array(src.data.length/4), gS=new Uint8Array(src.data.length/4), bS=new Uint8Array(src.data.length/4);
-      const rR=new Uint8Array(rS.length), gR=new Uint8Array(rS.length), bR=new Uint8Array(rS.length);
+      // 빠른 RGB 히스토 매칭
+      const n=src.data.length/4;
+      const rS=new Uint8Array(n), gS=new Uint8Array(n), bS=new Uint8Array(n);
+      const rR=new Uint8Array(n), gR=new Uint8Array(n), bR=new Uint8Array(n);
       for(let i=0,k=0;i<src.data.length;i+=4,k++){ rS[k]=src.data[i]; gS[k]=src.data[i+1]; bS[k]=src.data[i+2]; }
       for(let i=0,k=0;i<ref.data.length;i+=4,k++){ rR[k]=ref.data[i]; gR[k]=ref.data[i+1]; bR[k]=ref.data[i+2]; }
       const mapR=histMatchChannel(rS,rR), mapG=histMatchChannel(gS,gR), mapB=histMatchChannel(bS,bR);
@@ -212,7 +226,7 @@
         out.data[i+3]=255;
       }
     }else{
-      // LAB 기반(룩 보존↑)
+      // LAB 기반(룩 안정)
       const sLAB=buildLABArrays(src), rLAB=buildLABArrays(ref);
       const maps={};
       if(mode==='lab'||mode==='l') maps.L=histMatchChannel(sLAB.L, rLAB.L);
@@ -227,32 +241,34 @@
         out.data[i]=r; out.data[i+1]=g; out.data[i+2]=b; out.data[i+3]=255;
       }
     }
+
     xOut.putImageData(out,0,0);
   }
 
-  // 이벤트
+  // ---------- 이벤트 ----------
   strengthEl.addEventListener('input', ()=> sv.textContent=Number(strengthEl.value).toFixed(2));
   applyBtn.addEventListener('click', applyToneTransfer);
 
-  // 저장 (다운로드 막힌 브라우저 폴백 포함)
+  // 저장 (iOS 폴백 포함)
   function savePNG(canvas){
     try{
       const a=document.createElement('a');
       a.href=canvas.toDataURL('image/png'); a.download='tone_transfer.png'; a.click();
     }catch(e){
-      // iOS 등 a[download] 미지원 → 새 탭 열기
-      const win=window.open(canvas.toDataURL('image/png'),'_blank'); if(!win) alert('팝업이 차단되었습니다. 새 탭 허용 후 다시 시도하세요.');
+      const win=window.open(canvas.toDataURL('image/png'),'_blank');
+      if(!win) alert('팝업 차단을 해제하고 다시 시도하세요.');
     }
   }
   dlBtn.addEventListener('click', ()=>savePNG(cOut));
 
-  // 기본 안내 렌더
+  // ---------- 초기 안내 화면 ----------
   (function placeholder(){
     const ctx=xSrc; ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,cSrc.width,cSrc.height);
-    ctx.fillStyle='#a9b4ff'; ctx.font='700 22px system-ui'; ctx.fillText('원본 이미지를 불러오세요 (파일 선택 / 드래그 / 붙여넣기)', 24, 60);
+    ctx.fillStyle='#a9b4ff'; ctx.font='700 20px system-ui'; ctx.fillText('원본 이미지를 불러오세요 (파일 선택 / 드래그 / 붙여넣기)', 24, 56);
     const ctx2=xOut; ctx2.fillStyle='#0b0f16'; ctx2.fillRect(0,0,cOut.width,cOut.height);
-    ctx2.fillStyle='#c9d6ff'; ctx2.font='14px system-ui'; ctx2.fillText('참고 이미지를 불러온 뒤 [이식 실행]을 누르세요.', 24, 60);
+    ctx2.fillStyle='#c9d6ff'; ctx2.font='14px system-ui'; ctx2.fillText('참고 이미지 추가 후 [이식 실행]을 누르세요.', 24, 56);
   })();
+
 })();
 </script>
 </body>
