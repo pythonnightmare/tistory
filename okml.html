@@ -1,15 +1,16 @@
 <!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>오목 SAFE (고정 900x900)</title>
+<title>오목 SAFE (강화 AI)</title>
 <style>
 body{margin:0;display:grid;place-items:center;min-height:100vh;background:#111;color:#e5e7eb;font-family:system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial}
 .wrap{padding:16px;background:#0f172a;border:1px solid #243042;border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.35)}
 h1{font-size:18px;margin:0 0 10px}
-.row{display:flex;gap:8px;margin-bottom:10px}
+.row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 button,select{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
 button.sec{background:#374151}
 .badge{padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #334155}
 canvas{display:block;background:#f7efd9;border:1px solid #111827;border-radius:12px}
+small{color:#93c5fd}
 </style>
 
 <div class="wrap">
@@ -17,14 +18,19 @@ canvas{display:block;background:#f7efd9;border:1px solid #111827;border-radius:1
   <div class="row">
     <button id="new">새 게임</button>
     <button id="undo" class="sec">되돌리기</button>
-    <select id="mode"><option value="pvp">사람 vs 사람</option><option value="ai">사람 vs AI</option></select>
+    <select id="mode">
+      <option value="pvp">사람 vs 사람</option>
+      <option value="ai-ez">사람 vs AI(보통)</option>
+      <option value="ai-hard" selected>사람 vs AI(강함)</option>
+    </select>
     <span class="badge" id="status">흑 선공</span>
   </div>
-  <!-- 고정 크기 캔버스: 레이아웃/반응형 영향 없음 -->
   <canvas id="cv" width="900" height="900"></canvas>
+  <small>팁: “강함”은 2~3수 앞을 보고 ‘열린3/4’ 같은 패턴을 적극 노립니다.</small>
 </div>
 
 <script>
+/* ===== 기본 상수/상태 ===== */
 const N=15, MARGIN=40, STAR=[3,7,11], BLACK=1, WHITE=2, RATIO=0.42;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const statusEl=document.getElementById('status'), modeSel=document.getElementById('mode');
@@ -35,6 +41,7 @@ function cellSize(){ return (cv.width - MARGIN*2)/(N-1); }
 function cellCenter(gx,gy){ const s=cellSize(); return {x:MARGIN+gx*s, y:MARGIN+gy*s, s}; }
 function pxToCell(px,py){ const s=cellSize(); const gx=Math.round((px-MARGIN)/s), gy=Math.round((py-MARGIN)/s); return {gx,gy}; }
 
+/* ===== 보드 그리기 ===== */
 function drawBoard(){
   clear();
   const g=ctx.createLinearGradient(0,0,cv.width,cv.height); g.addColorStop(0,'#f7efd9'); g.addColorStop(1,'#f0e2bf');
@@ -66,6 +73,8 @@ function drawWinLine(line){
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
   ctx.restore();
 }
+
+/* ===== 규칙/로직 ===== */
 function checkWin(gx,gy,c){
   const dirs=[[1,0],[0,1],[1,1],[1,-1]];
   for(const [dx,dy] of dirs){
@@ -84,46 +93,200 @@ function place(gx,gy,byAI=false){
   const line=checkWin(gx,gy,turn);
   if(line){ over=true; winLine=line; drawBoard(); statusEl.textContent=(turn===BLACK?'흑':'백')+' 승리!'; return; }
   turn=(turn===BLACK?WHITE:BLACK);
-  statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례')+(modeSel.value==='ai'&&turn===WHITE?' (AI)':'');
-  if(modeSel.value==='ai' && !over && turn===WHITE && !byAI) setTimeout(aiMove,120);
+  statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : '');
+  if(isAIturn() && !byAI) setTimeout(aiMove, 60);
 }
 function undo(){
   if(!moves.length || (over && winLine)){ winLine=null; over=false; }
   if(!moves.length) return;
   const last=moves.pop(); board[last[1]][last[0]]=0; turn=last[2]; drawBoard();
-  statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례')+(modeSel.value==='ai'&&turn===WHITE?' (AI)':'');
+  statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : '');
 }
-function aiMove(){
-  const me=WHITE, opp=BLACK;
-  function tryWin(col){
-    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-      if(board[y][x]) continue;
-      board[y][x]=col; const ok=!!checkWin(x,y,col); board[y][x]=0;
-      if(ok) return [x,y];
-    } return null;
-  }
-  let mv=tryWin(me)||tryWin(opp);
-  if(!mv){
-    const cand=[]; for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-      if(board[y][x]) continue; let near=0;
-      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
-        const ny=y+dy,nx=x+dx; if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]) near++;
-      } if(near>0) cand.push({x,y,w:near});
+function isAIturn(){ return (modeSel.value==='ai-ez' || modeSel.value==='ai-hard') && turn===WHITE; }
+
+/* ===== 강화 AI =====
+ * - 후보 생성: 돌에서 맨해튼 거리 ≤ 2 칸만 (비었을 땐 중앙)
+ * - 평가: 열린4/닫힌4/열린3/닫힌3/열린2 가중치 + 중심/근접 보너스
+ * - 보통: 1-플라이(내 최선 한 수) + 즉시수 (승/수비)
+ * - 강함: 알파베타(depth=2~3, 후보 상위 K만 탐색)
+ */
+const SCORE = {
+  FIVE: 1_000_000_000,
+  OPEN_FOUR: 8_000_000,
+  CLOSED_FOUR: 800_000,
+  OPEN_THREE: 80_000,
+  CLOSED_THREE: 8_000,
+  OPEN_TWO: 800,
+  CLOSED_TWO: 120
+};
+function lineScore(x,y,c){
+  // (x,y)에 c를 뒀다고 가정하고 4방향 패턴 평가
+  let total=0;
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const [dx,dy] of dirs){
+    let count=1, openL=0, openR=0;
+
+    // 한쪽
+    let nx=x+dx, ny=y+dy;
+    while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===c){count++; nx+=dx; ny+=dy;}
+    if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===0) openR=1;
+
+    // 반대쪽
+    nx=x-dx; ny=y-dy;
+    while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===c){count++; nx-=dx; ny-=dy;}
+    if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===0) openL=1;
+
+    const open = openL + openR;
+    if(count>=5) { total += SCORE.FIVE; continue; }
+    if(count===4){
+      if(open===2) total += SCORE.OPEN_FOUR;
+      else if(open===1) total += SCORE.CLOSED_FOUR;
+    } else if(count===3){
+      if(open===2) total += SCORE.OPEN_THREE;
+      else if(open===1) total += SCORE.CLOSED_THREE;
+    } else if(count===2){
+      if(open===2) total += SCORE.OPEN_TWO;
+      else if(open===1) total += SCORE.CLOSED_TWO;
     }
-    if(cand.length){
-      const sum=cand.reduce((a,c)=>a+c.w,0); let r=Math.random()*sum;
-      for(const c of cand){ r-=c.w; if(r<=0){ mv=[c.x,c.y]; break; } }
-      if(!mv){ const c=cand[Math.floor(Math.random()*cand.length)]; mv=[c.x,c.y]; }
-    } else mv=[7,7];
   }
-  if(mv) place(mv[0],mv[1],true);
+  return total;
+}
+function heuristic(x,y,me){
+  // 내 패턴 점수 - 상대 패턴 점수 + 중앙/근접 보너스
+  const opp = me===WHITE?BLACK:WHITE;
+  let s = 0;
+  s += lineScore(x,y,me);
+  s += Math.floor(lineScore(x,y,opp)*0.9); // 수비 가중 (상대 위협도 반영)
+  // 중앙 보너스
+  const mid=7; s += (20 - (Math.abs(x-mid)+Math.abs(y-mid))) * 20;
+  // 이웃 보너스
+  let near=0;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const nx=x+dx, ny=y+dy; if(nx<0||ny<0||nx>=N||ny>=N) continue;
+    if(board[ny][nx]) near++;
+  }
+  s += near*50;
+  return s;
+}
+function genCandidates(){
+  const cand=[];
+  let any=false;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(board[y][x]) any=true;
+  if(!any) return [[7,7,99999999]]; // 첫 수 중앙
+
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    // 거리2 이내에 돌 없으면 스킵
+    let ok=false;
+    for(let dy=-2;dy<=2;dy++){ if(ok) break;
+      for(let dx=-2;dx<=2;dx++){
+        const nx=x+dx, ny=y+dy;
+        if(nx>=0&&nx<N&&ny>=0&&ny<N && board[ny][nx]){ ok=true; break; }
+      }
+    }
+    if(!ok) continue;
+    cand.push([x,y,0]);
+  }
+  return cand;
+}
+function bestOnePly(me){
+  const cand = genCandidates();
+  let best=null, bestScore=-1e100;
+  for(const c of cand){
+    const [x,y] = c;
+    c[2] = heuristic(x,y,me);
+    if(c[2] > bestScore){ best = c; bestScore = c[2]; }
+  }
+  return best;
+}
+// 즉시승/수비 체크
+function immediate(me){
+  // 이 수 두면 이김 / 상대가 다음에 이길 수 있으면 막기
+  const opp = me===WHITE?BLACK:WHITE;
+  // 이김
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    board[y][x]=me;
+    const win = !!checkWin(x,y,me);
+    board[y][x]=0;
+    if(win) return [x,y];
+  }
+  // 막기
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    board[y][x]=opp;
+    const win = !!checkWin(x,y,opp);
+    board[y][x]=0;
+    if(win) return [x,y];
+  }
+  return null;
 }
 
+/* === 알파베타(강함) === */
+function alphaBeta(depth, me, alpha, beta){
+  const opp = me===WHITE?BLACK:WHITE;
+  // 후보 뽑고 정렬(탐색 줄이기)
+  let cand = genCandidates();
+  cand.forEach(c => c[2] = heuristic(c[0], c[1], me));
+  cand.sort((a,b)=>b[2]-a[2]);
+  const LIMIT = depth>=3 ? 6 : 10; // 노드 폭 제한
+  cand = cand.slice(0, LIMIT);
+
+  let bestScore = -1e100, bestMove = null;
+  for(const [x,y,] of cand){
+    board[y][x]=me;
+    // 빠른 승리 프루닝
+    if(checkWin(x,y,me)){ board[y][x]=0; return {score: SCORE.FIVE, move:[x,y]}; }
+    const sc = (depth<=1)
+      ? evaluateStatic(me)  // 정적 평가
+      : -alphaBeta(depth-1, opp, -beta, -alpha).score;
+    board[y][x]=0;
+
+    if(sc > bestScore){ bestScore=sc; bestMove=[x,y]; }
+    if(sc > alpha) alpha=sc;
+    if(alpha >= beta) break; // 컷
+  }
+  return {score: bestScore, move: bestMove};
+}
+function evaluateStatic(me){
+  // 보드 전체 간단 평가(내 위협 - 상대 위협)
+  const opp = me===WHITE?BLACK:WHITE;
+  let my=0, their=0;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    my   += heuristic(x,y,me)*0.3;
+    their+= heuristic(x,y,opp)*0.3;
+  }
+  return my - their;
+}
+
+/* === 모드별 AI === */
+function aiMove(){
+  const me = WHITE;
+  // 1) 즉시 수(승/수비)
+  const fast = immediate(me);
+  if(fast){ place(fast[0], fast[1], true); return; }
+
+  if(modeSel.value==='ai-ez'){
+    // 보통: 1-플라이 최적
+    const best = bestOnePly(me) || [7,7];
+    place(best[0], best[1], true);
+  } else {
+    // 강함: 알파베타 (깊이 2~3)
+    // 중반 이후 돌이 많아지면 2, 초반/후반은 3까지
+    const depth = moves.length<10 || moves.length>60 ? 3 : 2;
+    const {move} = alphaBeta(depth, me, -1e100, 1e100);
+    const m = move || bestOnePly(me) || [7,7];
+    place(m[0], m[1], true);
+  }
+}
+
+/* ===== 입력/이벤트 ===== */
 cv.addEventListener('click', e=>{ const r=cv.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top; const c=pxToCell(x,y); place(c.gx,c.gy); });
 cv.addEventListener('touchstart', e=>{ const t=e.touches[0], r=cv.getBoundingClientRect(); const c=pxToCell(t.clientX-r.left, t.clientY-r.top); place(c.gx,c.gy); },{passive:true});
 document.getElementById('new').onclick=reset;
 document.getElementById('undo').onclick=undo;
-modeSel.onchange=()=>{ statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례')+(modeSel.value==='ai'&&turn===WHITE?' (AI)':''); };
+modeSel.onchange=()=>{ statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : ''); };
 
 reset();
 </script>
