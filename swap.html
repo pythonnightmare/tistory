@@ -1,4 +1,4 @@
-<!-- Reference-Guided Tone Transfer (Offline) — CC0 1.0 Public Domain -->
+<!-- Reference-Guided Tone Transfer (Offline, CC0). No rights reserved. -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -17,13 +17,15 @@
   .btn{appearance:none;border:1px solid #2a355e;background:#151c2f;color:#dbe4ff;border-radius:12px;padding:10px 14px;cursor:pointer}
   .btn.primary{background:var(--acc);border:0;color:#fff;font-weight:800;box-shadow:0 6px 18px rgba(108,123,255,.25)}
   input[type=range],select{background:#11172a;color:#e7ecff;border:1px solid #263055;border-radius:10px;padding:8px 10px}
+  .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .chip{background:#151c33;border:1px solid #24305a;color:#c9d6ff;padding:6px 10px;border-radius:999px;font-size:12px}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
   @media (max-width:1000px){.stage{grid-template-columns:1fr}}
   .pane{background:#0d1220;border:1px solid #1b2443;border-radius:12px;padding:10px;position:relative}
   canvas{max-width:100%;height:auto;display:block;margin:auto;border-radius:8px;background:#0b0f16}
-  .hint{font-size:12px;color:var(--mut)}
-  .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
-  .chip{background:#151c33;border:1px solid #24305a;color:#c9d6ff;padding:6px 10px;border-radius:999px;font-size:12px}
+  .hint{font-size:12px;color:#9fb0ff}
+  .drop{position:fixed;inset:0;display:none;place-items:center;background:rgba(40,60,120,.25);color:#dfe7ff;font-weight:800;font-size:22px;z-index:999}
+  .drop.show{display:grid}
 </style>
 </head>
 <body>
@@ -36,7 +38,7 @@
       <input id="src" type="file" accept="image/*">
       <label for="ref" class="btn">타겟(참고 사진) 불러오기</label>
       <input id="ref" type="file" accept="image/*">
-      <span class="hint">타겟의 색감·밝기·대비를 원본에 이식합니다. 얼굴 스왑/합성 아님.</span>
+      <span class="hint">* 외부 사이트 이미지 URL 드래그는 CORS 때문에 실패합니다. 파일로 넣거나 붙여넣기(Ctrl/Cmd+V)를 사용하세요.</span>
     </div>
     <div class="tools">
       <label>강도 <input id="strength" type="range" min="0" max="1" step="0.01" value="0.7"></label>
@@ -49,9 +51,6 @@
           <option value="rgb">RGB</option>
         </select>
       </label>
-      <label>브러시 크기 <input id="brush" type="range" min="10" max="120" step="1" value="50"></label>
-      <button id="toggleMask" class="btn">마스크: 칠하기</button>
-      <button id="clearMask" class="btn">마스크 초기화</button>
       <button id="apply" class="btn">이식 실행</button>
       <button id="download" class="btn">PNG 저장</button>
     </div>
@@ -59,166 +58,107 @@
 
   <div class="stage">
     <div class="pane">
-      <canvas id="cSrc"></canvas>
-      <div class="hint" style="margin-top:6px">왼쪽: 원본(편집 캔버스). 마스크 모드에서 얼굴 부위를 칠하세요.</div>
+      <canvas id="cSrc" width="800" height="480"></canvas>
+      <div class="hint" style="margin-top:6px">왼쪽: 원본(편집 캔버스)</div>
     </div>
     <div class="pane">
-      <canvas id="cOut"></canvas>
+      <canvas id="cOut" width="800" height="480"></canvas>
       <div class="hint" style="margin-top:6px">오른쪽: 결과 미리보기</div>
     </div>
   </div>
 
   <p class="hint" style="margin-top:10px">
-    ※ 100% 오프라인 동작(외부 요청/저장 없음). 타인의 얼굴 정체성 복제(스왑/합성)는 지원하지 않습니다.<br/>
-    ※ 광고 수익 OK / CC0 퍼블릭 도메인(표기 불필요).
+    ※ 100% 오프라인(외부 요청/저장 없음) · CC0 퍼블릭 도메인(표기 불필요). iFrame 임베드 시 <code>sandbox="allow-scripts allow-forms allow-downloads"</code> 권장.
   </p>
 </div>
 
+<div class="drop" id="drop">이미지를 여기로 놓으면 열립니다</div>
+
 <script>
-/* CC0 1.0 — No rights reserved. All processing happens locally. */
+/* CC0 1.0 — No rights reserved. */
 (()=>{
   const $=s=>document.querySelector(s);
   const cSrc=$('#cSrc'), xSrc=cSrc.getContext('2d',{willReadFrequently:true});
   const cOut=$('#cOut'), xOut=cOut.getContext('2d');
   const srcIn=$('#src'), refIn=$('#ref');
   const strengthEl=$('#strength'), sv=$('#sv'), channelsEl=$('#channels');
-  const brushEl=$('#brush'), toggleBtn=$('#toggleMask'), clearMaskBtn=$('#clearMask');
   const applyBtn=$('#apply'), dlBtn=$('#download');
-  let srcImg=null, refImg=null, mask=null, painting=false, maskMode=false;
+  const drop=$('#drop');
 
+  let srcImg=null, refImg=null;
+
+  // ===== 공통 유틸
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-
-  // --- 이미지 로드 & 캔버스 세팅
-  function fitCanvasTo(img, canvas){
-    const maxW=1024, maxH=768;
+  function fitCanvasTo(img, canvas, maxW=1200, maxH=900){
     let w=img.naturalWidth, h=img.naturalHeight;
     const r=Math.min(1, maxW/w, maxH/h);
-    w=Math.round(w*r); h=Math.round(h*r);
-    canvas.width=w; canvas.height=h;
+    canvas.width=Math.round(w*r); canvas.height=Math.round(h*r);
   }
-  function drawSrc(){
-    if(!srcImg) return;
-    xSrc.drawImage(srcImg,0,0,cSrc.width,cSrc.height);
-    if(mask) {
-      // 빨간 마스크 미리보기
-      const id=xSrc.getImageData(0,0,cSrc.width,cSrc.height);
-      const m=mask.data;
-      for(let i=0;i<id.data.length;i+=4){
-        const a=m[i>>2]; if(a>0){
-          id.data[i]=clamp(id.data[i]+80,0,255);
-          id.data[i+3]=255;
-        }
-      }
-      xSrc.putImageData(id,0,0);
-    }
+  function drawImageTo(ctx, img, canvas){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
   }
+
+  // ===== 파일 로드 (input / drop / paste)
   function loadFile(file, cb){
     const r=new FileReader();
     r.onload=()=>{ const im=new Image(); im.onload=()=>cb(im); im.src=r.result; };
     r.readAsDataURL(file);
   }
-  srcIn.addEventListener('change', e=>{
-    const f=e.target.files?.[0]; if(!f) return;
-    loadFile(f, im=>{
-      srcImg=im; fitCanvasTo(im,cSrc); fitCanvasTo(im,cOut);
-      mask=new ImageData(cSrc.width,cSrc.height); // 1-channel in .data[R] positions
-      xOut.drawImage(im,0,0,cOut.width,cOut.height);
-      drawSrc();
-    });
-  });
-  refIn.addEventListener('change', e=>{
-    const f=e.target.files?.[0]; if(!f) return;
-    loadFile(f, im=>{ refImg=im; });
-  });
+  function setSrc(im){ srcImg=im; fitCanvasTo(im,cSrc); fitCanvasTo(im,cOut); drawImageTo(xSrc,im,cSrc); drawImageTo(xOut,im,cOut); }
+  function setRef(im){ refImg=im; if(!srcImg){ /* 참조만 먼저 들어와도 OK */ } }
 
-  // --- 마스크 그리기
-  cSrc.addEventListener('pointerdown', e=>{
-    if(!maskMode || !srcImg) return;
-    painting=true; paint(e);
-  });
-  cSrc.addEventListener('pointermove', e=>{ if(painting) paint(e); });
-  window.addEventListener('pointerup', ()=>painting=false);
+  srcIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, setSrc); });
+  refIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, setRef); });
 
-  function paint(e){
-    const rect=cSrc.getBoundingClientRect();
-    const x=((e.clientX-rect.left)/rect.width)*cSrc.width;
-    const y=((e.clientY-rect.top)/rect.height)*cSrc.height;
-    const r=parseInt(brushEl.value,10);
-    const id=mask; const d=id.data;
-    for(let j=-r;j<=r;j++){
-      for(let i=-r;i<=r;i++){
-        const dx=i, dy=j;
-        if(dx*dx+dy*dy<=r*r){
-          const px=Math.round(x+dx), py=Math.round(y+dy);
-          if(px>=0 && px<cSrc.width && py>=0 && py<cSrc.height){
-            const idx=(py*cSrc.width+px)<<2;
-            d[idx]=255; // mark
-          }
-        }
-      }
-    }
-    drawSrc();
-  }
-
-  toggleBtn.addEventListener('click', ()=>{
-    maskMode=!maskMode;
-    toggleBtn.textContent = maskMode? '마스크: 칠하는 중(클릭 종료)' : '마스크: 칠하기';
-  });
-  clearMaskBtn.addEventListener('click', ()=>{
-    if(mask) mask=new ImageData(cSrc.width,cSrc.height);
-    drawSrc();
+  // 드래그&드롭(어디에나 떨어뜨려도 동작)
+  ['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.add('show'); }));
+  ['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.remove('show'); }));
+  document.addEventListener('drop', e=>{
+    const f=e.dataTransfer?.files?.[0]; if(!f) return;
+    const isImage = /^image\\//i.test(f.type);
+    if(!isImage) return alert('이미지 파일만 지원합니다.');
+    // 첫 파일은 원본, 두 번째 드롭부터는 참조로 사용하도록 UX 설정
+    loadFile(f, srcImg ? setRef : setSrc);
   });
 
-  strengthEl.addEventListener('input', ()=> sv.textContent=Number(strengthEl.value).toFixed(2));
+  // 클립보드 붙여넣기
+  document.addEventListener('paste', e=>{
+    const item=[...(e.clipboardData?.items||[])].find(i=>i.type?.startsWith('image/'));
+    if(!item) return;
+    const blob=item.getAsFile(); if(!blob) return;
+    loadFile(blob, srcImg ? setRef : setSrc);
+  });
 
-  // --- 색/톤 이식: LAB/RGB 히스토그램 매칭 + 혼합
+  // ===== 색공간/히스토 매칭
   function toLinear(v){ v/=255; return v<=0.04045? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }
   function toSRGB(v){ return v<=0.0031308? v*12.92 : 1.055*Math.pow(v,1/2.4)-0.055; }
-  function rgb2xyz(r,g,b){
-    r=toLinear(r); g=toLinear(g); b=toLinear(b);
-    return {
-      x: (0.4124564*r + 0.3575761*g + 0.1804375*b),
-      y: (0.2126729*r + 0.7151522*g + 0.0721750*b),
-      z: (0.0193339*r + 0.1191920*g + 0.9503041*b)
-    };
-  }
-  function fLab(t){ const d=6/29; return t>Math.pow(d,3)? Math.cbrt(t): (t/(3*d*d)+4/29); }
-  function rgb2lab(R,G,B){
-    const {x,y,z}=rgb2xyz(R,G,B);
-    // D65 white
-    const X=x/0.95047, Y=y/1.00000, Z=z/1.08883;
-    const fx=fLab(X), fy=fLab(Y), fz=fLab(Z);
-    const L=116*fy-16, a=500*(fx-fy), b=200*(fy-fz);
-    return [L,a,b];
-  }
-  function lab2rgb(L,a,b){
-    const fy=(L+16)/116, fx=fy+a/500, fz=fy-b/200;
-    const d=6/29;
+  function rgb2xyz(r,g,b){ r=toLinear(r); g=toLinear(g); b=toLinear(b);
+    return { x:0.4124564*r+0.3575761*g+0.1804375*b, y:0.2126729*r+0.7151522*g+0.0721750*b, z:0.0193339*r+0.1191920*g+0.9503041*b }; }
+  function fLab(t){ const d=6/29; return t>Math.pow(d,3)? Math.cbrt(t) : (t/(3*d*d)+4/29); }
+  function rgb2lab(R,G,B){ const {x,y,z}=rgb2xyz(R,G,B), X=x/0.95047,Y=y/1,Z=z/1.08883;
+    const fx=fLab(X), fy=fLab(Y), fz=fLab(Z); const L=116*fy-16, a=500*(fx-fy), b=200*(fy-fz); return [L,a,b]; }
+  function lab2rgb(L,a,b){ const fy=(L+16)/116, fx=fy+a/500, fz=fy-b/200, d=6/29;
     const X=0.95047*(fx>d? fx*fx*fx : 3*d*d*(fx-4/29));
     const Y=1.00000*(fy>d? fy*fy*fy : 3*d*d*(fy-4/29));
     const Z=1.08883*(fz>d? fz*fz*fz : 3*d*d*(fz-4/29));
-    // xyz -> linear rgb
-    let r =  3.2404542*X + (-1.5371385)*Y + (-0.4985314)*Z;
-    let g = (-0.9692660)*X +  1.8760108*Y +  0.0415560*Z;
-    let b =  0.0556434*X + (-0.2040259)*Y +  1.0572252*Z;
-    r=toSRGB(clamp(r,0,1)); g=toSRGB(clamp(g,0,1)); b=toSRGB(clamp(b,0,1));
-    return [clamp(Math.round(r*255),0,255), clamp(Math.round(g*255),0,255), clamp(Math.round(b*255),0,255)];
-  }
+    let r=3.2404542*X-1.5371385*Y-0.4985314*Z, g=-0.9692660*X+1.8760108*Y+0.0415560*Z, bb=0.0556434*X-0.2040259*Y+1.0572252*Z;
+    r=toSRGB(clamp(r,0,1)); g=toSRGB(clamp(g,0,1)); bb=toSRGB(clamp(bb,0,1));
+    return [Math.round(r*255),Math.round(g*255),Math.round(bb*255)]; }
 
   function histMatchChannel(srcArr, refArr){
-    // 256-bin 히스토그램 매칭
-    const histSrc=new Array(256).fill(0), histRef=new Array(256).fill(0);
-    for(const v of srcArr) histSrc[v]++; for(const v of refArr) histRef[v]++;
-    const cdfSrc=new Array(256).fill(0), cdfRef=new Array(256).fill(0);
+    const histSrc=new Uint32Array(256), histRef=new Uint32Array(256);
+    for(let i=0;i<srcArr.length;i++) histSrc[srcArr[i]]++;
+    for(let i=0;i<refArr.length;i++) histRef[refArr[i]]++;
+    const cdfSrc=new Float32Array(256), cdfRef=new Float32Array(256);
     cdfSrc[0]=histSrc[0]; cdfRef[0]=histRef[0];
     for(let i=1;i<256;i++){ cdfSrc[i]=cdfSrc[i-1]+histSrc[i]; cdfRef[i]=cdfRef[i-1]+histRef[i]; }
-    const nSrc=cdfSrc[255]||1, nRef=cdfRef[255]||1;
-    for(let i=0;i<256;i++){ cdfSrc[i]/=nSrc; cdfRef[i]/=nRef; }
-    // 매핑 테이블
+    const nS=cdfSrc[255]||1, nR=cdfRef[255]||1;
+    for(let i=0;i<256;i++){ cdfSrc[i]/=nS; cdfRef[i]/=nR; }
     const map=new Uint8Array(256);
-    for(let i=0;i<256;i++){
+    for(let i=0,j=0;i<256;i++){
       const s=cdfSrc[i];
-      let j=0; while(j<255 && cdfRef[j]<s) j++;
+      while(j<255 && cdfRef[j]<s) j++;
       map[i]=j;
     }
     return map;
@@ -227,90 +167,92 @@
   function buildLABArrays(imgData){
     const d=imgData.data, n=d.length/4;
     const L=new Uint8ClampedArray(n), A=new Int16Array(n), B=new Int16Array(n);
-    for(let i=0, k=0; i<d.length; i+=4, k++){
+    for(let i=0,k=0;i<d.length;i+=4,k++){
       const [l,a,b]=rgb2lab(d[i],d[i+1],d[i+2]);
-      L[k]=clamp(Math.round(l*255/100),0,255);  // L* 0..100 -> 0..255
-      A[k]=Math.round(a+128); // 대략 -128..127 -> 0..255 (부호 유지용 Int16)
-      B[k]=Math.round(b+128);
+      L[k]=clamp(Math.round(l*255/100),0,255);
+      A[k]=Math.round(a+128); B[k]=Math.round(b+128);
     }
     return {L,A,B};
   }
 
   function applyToneTransfer(){
-    if(!srcImg || !refImg) return alert('원본과 타겟 이미지를 모두 불러오세요.');
-    // 작업용 버퍼 가져오기
+    if(!srcImg || !refImg){ alert('원본과 타겟 이미지를 모두 불러오세요.'); return; }
+    // 원본/결과 캔버스는 같은 크기로 보정되어 있음
+    drawImageTo(xSrc, srcImg, cSrc); // 원본 다시 덮어 그려 안전하게
     const src = xSrc.getImageData(0,0,cSrc.width,cSrc.height);
-    // 타겟 이미지를 원본 캔버스 크기에 맞춰 임시 렌더
+
+    // 참조 이미지를 원본 크기에 맞춰 임시 버퍼에 렌더
     const tmp=document.createElement('canvas'); tmp.width=cSrc.width; tmp.height=cSrc.height;
     const xt=tmp.getContext('2d'); xt.drawImage(refImg,0,0,tmp.width,tmp.height);
-    const ref = xt.getImageData(0,0,tmp.width,tmp.height);
-
-    const mode = channelsEl.value;
-    const alpha = parseFloat(strengthEl.value);
-
-    let out = xOut.createImageData(src.width, src.height);
-
-    if(mode==='rgb'){
-      // RGB 채널별 히스토그램 매칭
-      const mapR = histMatchChannel(
-        src.data.filter((_,i)=> i%4===0),
-        ref.data.filter((_,i)=> i%4===0)
-      );
-      const mapG = histMatchChannel(
-        src.data.filter((_,i)=> i%4===1),
-        ref.data.filter((_,i)=> i%4===1)
-      );
-      const mapB = histMatchChannel(
-        src.data.filter((_,i)=> i%4===2),
-        ref.data.filter((_,i)=> i%4===2)
-      );
-      for(let i=0;i<src.data.length;i+=4){
-        let r=mapR[src.data[i]], g=mapG[src.data[i+1]], b=mapB[src.data[i+2]];
-        // 혼합 + 마스크
-        const m = mask?.data ? (mask.data[i>>2]/255) : 1;
-        out.data[i]   = clamp(Math.round(src.data[i]*(1-alpha*m)   + r*(alpha*m)),0,255);
-        out.data[i+1] = clamp(Math.round(src.data[i+1]*(1-alpha*m) + g*(alpha*m)),0,255);
-        out.data[i+2] = clamp(Math.round(src.data[i+2]*(1-alpha*m) + b*(alpha*m)),0,255);
-        out.data[i+3] = 255;
-      }
-    } else {
-      // LAB 기반: L*, a*, b* 채널 선택적 매칭
-      const sLAB = buildLABArrays(src);
-      const rLAB = buildLABArrays(ref);
-
-      // 8bit 표현으로 히스토그램 매칭
-      const maps = {};
-      if(mode==='lab' || mode==='l'){ maps.L = histMatchChannel(sLAB.L, rLAB.L); }
-      if(mode==='lab' || mode==='ab'){ maps.A = histMatchChannel(sLAB.A, rLAB.A); maps.B = histMatchChannel(sLAB.B, rLAB.B); }
-
-      for(let i=0,k=0;i<src.data.length;i+=4,k++){
-        let L = sLAB.L[k], A = sLAB.A[k], B = sLAB.B[k];
-        const m = mask?.data ? (mask.data[k]/255) : 1;
-
-        if(m>0){
-          if(maps.L){ const v=maps.L[L]; L = clamp(Math.round(L*(1-alpha*m) + v*(alpha*m)),0,255); }
-          if(maps.A){ const v=maps.A[A]; A = clamp(Math.round(A*(1-alpha*m) + v*(alpha*m)),0,255); }
-          if(maps.B){ const v=maps.B[B]; B = clamp(Math.round(B*(1-alpha*m) + v*(alpha*m)),0,255); }
-        }
-
-        // 되돌리기: 간단 역변환
-        const l100 = L*100/255, a = A-128, b = B-128;
-        const [r,g,bb] = lab2rgb(l100,a,b);
-        out.data[i]=r; out.data[i+1]=g; out.data[i+2]=bb; out.data[i+3]=255;
-      }
+    let ref;
+    try{
+      ref = xt.getImageData(0,0,tmp.width,tmp.height);
+    }catch(err){
+      // 외부 URL 이미지 끌어온 경우 CORS로 캔버스 오염 → 안내
+      alert('외부 사이트 이미지 URL을 직접 드래그하면 보안상 처리할 수 없습니다. 파일로 불러오거나, 스크린샷을 저장해서 넣어주세요.');
+      return;
     }
 
+    const alpha=parseFloat(strengthEl.value);
+    const mode=channelsEl.value;
+    const out = xOut.createImageData(src.width, src.height);
+
+    if(mode==='rgb'){
+      // 빠른 RGB 매칭(속도↑)
+      const rS=new Uint8Array(src.data.length/4), gS=new Uint8Array(src.data.length/4), bS=new Uint8Array(src.data.length/4);
+      const rR=new Uint8Array(rS.length), gR=new Uint8Array(rS.length), bR=new Uint8Array(rS.length);
+      for(let i=0,k=0;i<src.data.length;i+=4,k++){ rS[k]=src.data[i]; gS[k]=src.data[i+1]; bS[k]=src.data[i+2]; }
+      for(let i=0,k=0;i<ref.data.length;i+=4,k++){ rR[k]=ref.data[i]; gR[k]=ref.data[i+1]; bR[k]=ref.data[i+2]; }
+      const mapR=histMatchChannel(rS,rR), mapG=histMatchChannel(gS,gR), mapB=histMatchChannel(bS,bR);
+      for(let i=0;i<src.data.length;i+=4){
+        const r=mapR[src.data[i]], g=mapG[src.data[i+1]], b=mapB[src.data[i+2]];
+        out.data[i]= clamp(Math.round(src.data[i]*(1-alpha)+r*alpha),0,255);
+        out.data[i+1]= clamp(Math.round(src.data[i+1]*(1-alpha)+g*alpha),0,255);
+        out.data[i+2]= clamp(Math.round(src.data[i+2]*(1-alpha)+b*alpha),0,255);
+        out.data[i+3]=255;
+      }
+    }else{
+      // LAB 기반(룩 보존↑)
+      const sLAB=buildLABArrays(src), rLAB=buildLABArrays(ref);
+      const maps={};
+      if(mode==='lab'||mode==='l') maps.L=histMatchChannel(sLAB.L, rLAB.L);
+      if(mode==='lab'||mode==='ab'){ maps.A=histMatchChannel(sLAB.A, rLAB.A); maps.B=histMatchChannel(sLAB.B, rLAB.B); }
+
+      for(let i=0,k=0;i<src.data.length;i+=4,k++){
+        let L=sLAB.L[k], A=sLAB.A[k], B=sLAB.B[k];
+        if(maps.L){ const v=maps.L[L]; L=clamp(Math.round(L*(1-alpha)+v*alpha),0,255); }
+        if(maps.A){ const v=maps.A[A]; A=clamp(Math.round(A*(1-alpha)+v*alpha),0,255); }
+        if(maps.B){ const v=maps.B[B]; B=clamp(Math.round(B*(1-alpha)+v*alpha),0,255); }
+        const [r,g,b]=lab2rgb(L*100/255, A-128, B-128);
+        out.data[i]=r; out.data[i+1]=g; out.data[i+2]=b; out.data[i+3]=255;
+      }
+    }
     xOut.putImageData(out,0,0);
   }
 
-  // --- 이벤트
+  // 이벤트
   strengthEl.addEventListener('input', ()=> sv.textContent=Number(strengthEl.value).toFixed(2));
-  $('#apply').addEventListener('click', applyToneTransfer);
-  dlBtn.addEventListener('click', ()=>{
-    const a=document.createElement('a');
-    a.href=cOut.toDataURL('image/png'); a.download='tone_transfer.png'; a.click();
-  });
+  applyBtn.addEventListener('click', applyToneTransfer);
 
+  // 저장 (다운로드 막힌 브라우저 폴백 포함)
+  function savePNG(canvas){
+    try{
+      const a=document.createElement('a');
+      a.href=canvas.toDataURL('image/png'); a.download='tone_transfer.png'; a.click();
+    }catch(e){
+      // iOS 등 a[download] 미지원 → 새 탭 열기
+      const win=window.open(canvas.toDataURL('image/png'),'_blank'); if(!win) alert('팝업이 차단되었습니다. 새 탭 허용 후 다시 시도하세요.');
+    }
+  }
+  dlBtn.addEventListener('click', ()=>savePNG(cOut));
+
+  // 기본 안내 렌더
+  (function placeholder(){
+    const ctx=xSrc; ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,cSrc.width,cSrc.height);
+    ctx.fillStyle='#a9b4ff'; ctx.font='700 22px system-ui'; ctx.fillText('원본 이미지를 불러오세요 (파일 선택 / 드래그 / 붙여넣기)', 24, 60);
+    const ctx2=xOut; ctx2.fillStyle='#0b0f16'; ctx2.fillRect(0,0,cOut.width,cOut.height);
+    ctx2.fillStyle='#c9d6ff'; ctx2.font='14px system-ui'; ctx2.fillText('참고 이미지를 불러온 뒤 [이식 실행]을 누르세요.', 24, 60);
+  })();
 })();
 </script>
 </body>
