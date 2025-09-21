@@ -1,0 +1,44 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D-Day & 날짜 계산</title>
+<style>
+body{font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial;margin:0;background:#f5f6fa}
+.card{max-width:720px;margin:24px auto;background:#fff;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.07);padding:22px}
+h1{margin:0 0 14px;font-size:20px}.grid{display:grid;gap:12px}@media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
+label{font-size:13px;color:#333}input,select{width:100%;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:14px}
+section{margin-top:16px} .out{margin-top:10px;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:12px}
+</style>
+<div class="card">
+  <h1>D-Day & 날짜 계산</h1>
+  <section>
+    <h3 style="margin:0 0 8px">1) D-Day</h3>
+    <div class="grid">
+      <div><label>목표 날짜</label><input id="d1" type="date"></div>
+      <div><label>기준 날짜(선택)</label><input id="d0" type="date"></div>
+    </div>
+    <button id="b1" style="margin-top:10px">계산</button>
+    <div class="out" id="o1"></div>
+  </section>
+  <section>
+    <h3 style="margin:16px 0 8px">2) 날짜 더하기</h3>
+    <div class="grid">
+      <div><label>기준 날짜</label><input id="s" type="date"></div>
+      <div><label>일수(+/-)</label><input id="days" type="number" placeholder="예: 30 또는 -7"></div>
+    </div>
+    <button id="b2" style="margin-top:10px">계산</button>
+    <div class="out" id="o2"></div>
+  </section>
+</div>
+<script>
+const fmt=(d)=>d.toISOString().slice(0,10)
+b1.onclick=()=>{
+  const t=new Date(d1.value), base=d0.value?new Date(d0.value):new Date()
+  if(isNaN(+t)){o1.textContent='목표 날짜를 입력하세요.';return}
+  const diff=Math.ceil((t - new Date(base.toDateString()))/86400000)
+  o1.textContent = (diff===0?'D-DAY': diff>0?`D-${diff}`:`D+${Math.abs(diff)}`)
+}
+b2.onclick=()=>{
+  if(!s.value){o2.textContent='기준 날짜를 입력하세요.';return}
+  const base=new Date(s.value), nd=new Date(base); nd.setDate(base.getDate()+(+days.value||0))
+  o2.textContent = `결과: ${fmt(nd)}`
+}
+</script></html>
