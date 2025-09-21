@@ -11,27 +11,88 @@ body{margin:0;background:#0b1220;color:#e5e7eb;font-family:ui-sans-serif,system-
 .hole.up .mole{bottom:6%}
 .stats{display:flex;gap:10px;margin-top:10px}
 .tag{background:#0f172a;border:1px solid #1f2937;border-radius:10px;padding:6px 10px;font-variant-numeric:tabular-nums}
+.notice{margin-top:8px;color:#93c5fd;font-size:12px}
 </style>
 <div class="wrap">
-  <div class="head"><h2 style="margin:0;font-size:18px">두더지 잡기</h2><button class="btn" id="start">시작</button></div>
+  <div class="head">
+    <h2 style="margin:0;font-size:18px">두더지 잡기</h2>
+    <button class="btn" id="btnStart">시작</button>
+  </div>
   <div class="grid" id="grid"></div>
-  <div class="stats"><div class="tag">점수: <b id="score">0</b></div><div class="tag">남은시간: <b id="time">30</b>s</div></div>
+  <div class="stats">
+    <div class="tag">점수: <b id="score">0</b></div>
+    <div class="tag">남은시간: <b id="time">30</b>s</div>
+  </div>
+  <div class="notice">두더지가 올라왔을 때 칸을 클릭하세요!</div>
 </div>
 <script>
-const grid=document.getElementById('grid'); let holes=[], score=0, time=30, tInt=null, mInt=null, playing=false
-for(let i=0;i<9;i++){ const h=document.createElement('div'); h.className='hole'; h.innerHTML='<div class="mole"></div>'; grid.appendChild(h); holes.push(h) }
-grid.addEventListener('click',e=>{
-  if(!playing) return
-  const h=e.target.closest('.hole'); if(!h) return
-  if(h.classList.contains('up')){ score++; document.getElementById('score').textContent=score; h.classList.remove('up') }
-})
-function pop(){ holes.forEach(h=>h.classList.remove('up')); const idx=Math.floor(Math.random()*holes.length); holes[idx].classList.add('up') }
-function start(){
-  if(playing) return; playing=true; score=0; time=30
-  document.getElementById('score').textContent=0; document.getElementById('time').textContent=time
-  pop(); mInt=setInterval(pop,600)
-  tInt=setInterval(()=>{ time--; document.getElementById('time').textContent=time; if(time<=0){ stop() } },1000)
+const grid = document.getElementById('grid');
+const btnStart = document.getElementById('btnStart');
+const scoreEl = document.getElementById('score');
+const timeEl = document.getElementById('time');
+
+let holes = [], score = 0, time = 30, tInt = null, mInt = null, playing = false;
+
+// 보드 생성
+for (let i=0; i<9; i++) {
+  const h = document.createElement('div');
+  h.className = 'hole';
+  h.innerHTML = '<div class="mole"></div>';
+  grid.appendChild(h);
+  holes.push(h);
 }
-function stop(){ playing=false; clearInterval(mInt); clearInterval(tInt); holes.forEach(h=>h.classList.remove('up')); alert(`끝! 점수: ${score}`) }
-start.onclick=start
+
+// 클릭 처리
+grid.addEventListener('click', e => {
+  if (!playing) return;
+  const h = e.target.closest('.hole');
+  if (!h) return;
+  if (h.classList.contains('up')) {
+    score++;
+    scoreEl.textContent = score;
+    h.classList.remove('up');
+  }
+});
+
+function pop() {
+  holes.forEach(h => h.classList.remove('up'));
+  const idx = Math.floor(Math.random()*holes.length);
+  holes[idx].classList.add('up');
+}
+
+function startGame() {
+  if (playing) return;
+  playing = true;
+  score = 0; time = 30;
+  scoreEl.textContent = '0';
+  timeEl.textContent = time.toString();
+  btnStart.textContent = '진행중…';
+  btnStart.disabled = true;
+
+  pop();
+  mInt = setInterval(pop, 600);
+  tInt = setInterval(() => {
+    time--;
+    timeEl.textContent = time.toString();
+    if (time <= 0) stopGame();
+  }, 1000);
+}
+
+function stopGame() {
+  playing = false;
+  clearInterval(mInt);
+  clearInterval(tInt);
+  holes.forEach(h => h.classList.remove('up'));
+  btnStart.textContent = '다시 시작';
+  btnStart.disabled = false;
+
+  // alert가 샌드박스에서 막힐 수 있어 간단히 텍스트로 안내
+  const done = document.createElement('div');
+  done.style.cssText='margin-top:10px;background:#0f172a;border:1px solid #1f2937;border-radius:10px;padding:10px';
+  done.textContent = `끝! 점수: ${score}`;
+  document.querySelector('.wrap').appendChild(done);
+  setTimeout(()=>done.remove(), 2500);
+}
+
+btnStart.addEventListener('click', startGame);
 </script></html>
