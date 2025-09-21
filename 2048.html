@@ -1,0 +1,56 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2048 미니</title>
+<style>
+body{margin:0;background:#0b1220;color:#e5e7eb;font-family:system-ui,Segoe UI,Apple SD Gothic Neo}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+.card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px}
+h1{margin:0 0 10px;font-size:18px}
+.row{display:flex;gap:8px;align-items:center}
+.badge{padding:6px 10px;border:1px solid #334155;border-radius:999px;background:#0f172a}
+.btn{border:0;background:#22c55e;color:#0b1220;font-weight:800;border-radius:10px;padding:10px 14px;cursor:pointer}
+.board{width:520px;max-width:100%;aspect-ratio:1;display:grid;gap:10px;margin-top:12px;
+grid-template-columns:repeat(4,1fr);background:#0f172a;border:1px solid #243042;padding:10px;border-radius:12px}
+.cell{background:#111827;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:28px}
+.tile-0{opacity:.15}
+.tile-2{background:#eee4da;color:#776e65}
+.tile-4{background:#ede0c8;color:#776e65}
+.tile-8{background:#f2b179}
+.tile-16{background:#f59563}
+.tile-32{background:#f67c5f}
+.tile-64{background:#f65e3b}
+.tile-128{background:#edcf72}
+.tile-256{background:#edcc61}
+.tile-512{background:#edc850}
+.tile-1024{background:#edc53f}
+.tile-2048{background:#edc22e}
+</style>
+<div class="wrap"><div class="card">
+  <h1>2048</h1>
+  <div class="row">
+    <span class="badge">점수: <b id="score">0</b></span>
+    <span class="badge">최고: <b id="best">0</b></span>
+    <button class="btn" id="new">새 게임</button>
+  </div>
+  <div class="board" id="board"></div>
+  <small>스와이프/방향키 지원</small>
+</div></div>
+<script>
+const B=4; let g,score=0,best=+(localStorage.getItem('best2048')||0);
+best.textContent=best;
+function newGame(){ g=[...Array(B)].map(()=>Array(B).fill(0)); score=0; add(); add(); draw(); }
+function add(){ const z=[]; for(let y=0;y<B;y++)for(let x=0;x<B;x++) if(!g[y][x]) z.push([x,y]); if(!z.length) return; const [x,y]=z[Math.random()*z.length|0]; g[y][x]=Math.random()<.9?2:4; }
+function draw(){ board.innerHTML=''; for(let y=0;y<B;y++)for(let x=0;x<B;x++){ const v=g[y][x]; const c=document.createElement('div'); c.className='cell tile-'+(v||0); c.textContent=v||''; board.appendChild(c);} scoreEl(); parent?.postMessage({type:'EMBED_SIZE',h:document.body.scrollHeight},'*'); }
+function scoreEl(){ scoreEl_=document.getElementById('score'); scoreEl_.textContent=score; if(score>best){best=score; localStorage.setItem('best2048',best);} document.getElementById('best').textContent=best;}
+function slide(row){ row=row.filter(v=>v); for(let i=0;i<row.length-1;i++) if(row[i]===row[i+1]){row[i]*=2; score+=row[i]; row.splice(i+1,1);} while(row.length<B) row.push(0); return row;}
+function rot(){ const t=[...Array(B)].map(()=>Array(B).fill(0)); for(let y=0;y<B;y++)for(let x=0;x<B;x++) t[x][B-1-y]=g[y][x]; g=t; }
+function move(dir){ let old=JSON.stringify(g); if(dir==='left'){ for(let y=0;y<B;y++) g[y]=slide(g[y]); } 
+else if(dir==='right'){ for(let y=0;y<B;y++) g[y]=slide(g[y].reverse()).reverse(); } 
+else if(dir==='up'){ rot(); for(let y=0;y<B;y++) g[y]=slide(g[y]); rot(); rot(); rot(); } 
+else if(dir==='down'){ rot(); for(let y=0;y<B;y++) g[y]=slide(g[y].reverse()).reverse(); rot(); rot(); rot(); }
+if(JSON.stringify(g)!==old){ add(); draw(); if(isOver()) alert('게임 종료!'); } }
+function isOver(){ for(let y=0;y<B;y++)for(let x=0;x<B;x++){ if(!g[y][x])return false; const v=g[y][x]; if(x<B-1&&g[y][x+1]===v) return false; if(y<B-1&&g[y+1][x]===v) return false; } return true; }
+addEventListener('keydown',e=>{ const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key]; if(m){e.preventDefault(); move(m);} });
+let sx=0,sy=0; board.addEventListener('touchstart',e=>{const t=e.touches[0]; sx=t.clientX; sy=t.clientY;},{passive:true});
+board.addEventListener('touchend',e=>{const t=e.changedTouches[0]; const dx=t.clientX-sx, dy=t.clientY-sy; if(Math.abs(dx)>Math.abs(dy)) move(dx>0?'right':'left'); else move(dy>0?'down':'up');},{passive:true});
+new.onclick=newGame; newGame();
+</script>
