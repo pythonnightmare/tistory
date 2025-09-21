@@ -1,14 +1,14 @@
-<!-- Offline Garment Try-On (Homography Warp) — CC0 1.0 Public Domain. No rights reserved. -->
+<!-- Offline Garment Cutout + TPS Try-On — CC0 1.0 Public Domain. No rights reserved. -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>오프라인 가상 피팅(옷 입혀보기) · 호모그래피 워프</title>
+<title>오프라인 의상 추출 + TPS 워프 가상 피팅</title>
 <style>
   :root{--bg:#0b0f16;--panel:#101522;--ink:#e7ecff;--mut:#8ea0d8;--acc:#6c7bff}
   *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui}
-  .wrap{max-width:1120px;margin:0 auto;padding:18px}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px}
   .title{display:flex;gap:10px;align-items:center;font-weight:900;font-size:22px}
   .badge{background:#182044;border:1px solid #23305a;color:#cfe0ff;border-radius:999px;padding:3px 10px;font-size:12px}
   .card{background:linear-gradient(180deg,#0f1423,#0f1420);border:1px solid #1b2443;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px}
@@ -16,67 +16,80 @@
   input[type=file]{display:none}
   .btn{appearance:none;border:1px solid #2a355e;background:#151c2f;color:#dbe4ff;border-radius:12px;padding:10px 14px;cursor:pointer}
   .btn.primary{background:var(--acc);border:0;color:#fff;font-weight:800;box-shadow:0 6px 18px rgba(108,123,255,.25)}
-  select,input[type=range]{background:#11172a;color:#e7ecff;border:1px solid #263055;border-radius:10px;padding:8px 10px}
+  select,input[type=range],input[type=color]{background:#11172a;color:#e7ecff;border:1px solid #263055;border-radius:10px;padding:8px 10px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
-  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  @media (max-width:1024px){.grid{grid-template-columns:1fr}}
   .pane{background:#0d1220;border:1px solid #1b2443;border-radius:12px;padding:10px;position:relative;min-height:320px}
   canvas{max-width:100%;height:auto;display:block;margin:auto;border-radius:8px;background:#0b0f16}
   .hint{font-size:12px;color:#9fb0ff}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .chip{background:#151c33;border:1px solid #24305a;color:#c9d6ff;padding:6px 10px;border-radius:999px;font-size:12px}
   .drop{position:fixed;inset:0;display:none;place-items:center;background:rgba(40,60,120,.28);color:#dfe7ff;
         font-weight:800;font-size:22px;z-index:999;text-align:center;padding:12px}
   .drop.show{display:grid}
-  .chip{background:#151c33;border:1px solid #24305a;color:#c9d6ff;padding:6px 10px;border-radius:999px;font-size:12px}
-  .pt{position:absolute; width:14px; height:14px; border-radius:50%; border:2px solid #fff; background:#6c7bff; transform:translate(-50%,-50%); pointer-events:auto; cursor:move}
+  .pin{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;background:#6c7bff;transform:translate(-50%,-50%);cursor:move;pointer-events:auto}
+  .pin.ref{background:#ff7b7b}
   .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#141b33;border:1px solid #253261;
          color:#dfe7ff;padding:8px 12px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s}
   .toast.show{opacity:1}
+  .wand-tip{position:absolute;right:10px;top:10px;background:#111a33;border:1px solid #263055;color:#cfe0ff;font-size:12px;padding:6px 8px;border-radius:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="title">가상 피팅(옷 입혀보기) <span class="badge">오프라인 · 4점 워프 · 상업 OK/CC0</span></div>
+  <div class="title">의상 추출 + TPS 워프 가상 피팅 <span class="badge">오프라인 · 상업 OK · CC0</span></div>
 
   <div class="card">
     <div class="row">
-      <label for="base" class="btn primary">인물(베이스) 불러오기</label>
-      <input id="base" type="file" accept="image/*">
-      <label for="gar" class="btn">의상(전면 사진/PNG) 불러오기</label>
-      <input id="gar" type="file" accept="image/*">
-      <span class="hint">드래그&드롭/붙여넣기(Ctrl/Cmd+V)도 가능. 웹에서 그대로 끌면 URL만 넘어와서 안 뜰 수 있음 → <b>파일로 저장</b> 후 넣기</span>
+      <label for="person" class="btn primary">① 인물(베이스) 불러오기</label>
+      <input id="person" type="file" accept="image/*">
+      <label for="garment" class="btn">② 의상(전면 이미지/PNG) 불러오기</label>
+      <input id="garment" type="file" accept="image/*">
+      <span class="chip">의상 추출: 의상 패널에서 영역 클릭(매직원드) → 브러시로 보정</span>
     </div>
 
     <div class="toolbar">
-      <span class="chip">1) 좌패널 캔버스에서 옷이 입혀질 위치(어깨-허리 등)로 <b>4점</b>을 배치</span>
-      <button id="resetQuad" class="btn">점 초기화</button>
-      <label>페더 <input id="feather" type="range" min="0" max="40" step="1" value="12"></label>
-      <label>불투명도 <input id="opacity" type="range" min="0" max="1" step="0.01" value="0.9"></label>
+      <span class="chip">짝점 찍기: 왼쪽(의상) 한 점 클릭 → 오른쪽(인물) 같은 위치 한 점 클릭 (3쌍 이상)</span>
+      <button id="undoPair" class="btn">마지막 짝점 취소</button>
+      <button id="clearPairs" class="btn">짝점 초기화</button>
+      <label>워프 가장자리 페더 <input id="feather" type="range" min="0" max="40" step="1" value="14"></label>
+      <label>불투명도 <input id="opacity" type="range" min="0" max="1" step="0.01" value="0.92"></label>
       <label>블렌드
         <select id="blend">
           <option>normal</option><option>multiply</option><option>overlay</option><option>screen</option><option>soft-light</option>
         </select>
       </label>
       <label><input id="matchL" type="checkbox" checked> 밝기 매칭</label>
-      <button id="apply" class="btn">적용</button>
+      <button id="apply" class="btn">워프 적용 → 우측 결과</button>
       <button id="save" class="btn">PNG 저장</button>
     </div>
   </div>
 
   <div class="grid">
-    <div class="pane" id="paneL" style="user-select:none;touch-action:none">
-      <canvas id="cv" width="900" height="560" aria-label="편집"></canvas>
-      <!-- draggable quad points -->
-      <div class="pt" id="p0" style="left:30%;top:25%;display:none"></div>
-      <div class="pt" id="p1" style="left:70%;top:25%;display:none"></div>
-      <div class="pt" id="p2" style="left:70%;top:70%;display:none"></div>
-      <div class="pt" id="p3" style="left:30%;top:70%;display:none"></div>
-      <div class="hint" style="margin-top:6px">왼쪽: 점 4개를 드래그해 옷이 올 자리(사각형)에 맞추세요.</div>
+    <!-- Left: Garment Cutout & control points -->
+    <div class="pane" id="paneG" style="user-select:none;touch-action:none">
+      <canvas id="cG" width="820" height="520" aria-label="의상"></canvas>
+      <div class="wand-tip">매직원드: 클릭 / Tolerance <input id="tol" type="range" min="1" max="80" value="24"></div>
+      <div class="toolbar" style="margin-top:8px">
+        <button id="wand" class="btn">매직원드</button>
+        <label>브러시 <input id="brush" type="range" min="6" max="120" step="1" value="36"></label>
+        <label><input id="eraser" type="checkbox"> 지우개</label>
+        <button id="clearMask" class="btn">마스크 초기화</button>
+        <span class="chip">의상 점(파랑) 찍기</span>
+      </div>
     </div>
-    <div class="pane">
-      <canvas id="out" width="900" height="560" aria-label="결과"></canvas>
-      <div class="hint" style="margin-top:6px">오른쪽: 결과 미리보기</div>
+
+    <!-- Right: Person & control points + result overlay -->
+    <div class="pane" id="paneP" style="user-select:none;touch-action:none;position:relative">
+      <canvas id="cP" width="820" height="520" aria-label="인물"></canvas>
+      <canvas id="cOut" width="820" height="520" aria-label="결과" style="position:absolute;left:10px;top:10px;pointer-events:none"></canvas>
+      <div class="hint" style="margin-top:6px">인물 점(빨강) 찍기 → [워프 적용]</div>
     </div>
   </div>
+
+  <p class="hint" style="margin-top:10px">
+    ※ 완전 오프라인(외부 요청/저장 없음). 웹페이지 이미지를 그대로 드래그하면 URL만 전달되어 처리 실패할 수 있습니다 → 파일로 저장하거나 스크린샷 붙여넣기 사용.
+  </p>
 </div>
 
 <div class="drop" id="drop">이미지를 놓으면 열립니다</div>
@@ -86,306 +99,412 @@
 /* CC0 1.0 — No rights reserved. All processing happens locally. */
 (()=>{
   const $=s=>document.querySelector(s);
-  const cv=$('#cv'), cx=cv.getContext('2d',{willReadFrequently:true});
-  const ov=$('#out'), ox=ov.getContext('2d');
-  const baseIn=$('#base'), garIn=$('#gar');
-  const paneL=$('#paneL'), pts=[ $('#p0'),$('#p1'),$('#p2'),$('#p3') ];
-  const featherEl=$('#feather'), opaEl=$('#opacity'), blendEl=$('#blend'), matchLEl=$('#matchL');
-  const applyBtn=$('#apply'), resetQuadBtn=$('#resetQuad'), saveBtn=$('#save');
+  const gPane=$('#paneG'), pPane=$('#paneP');
+  const cG=$('#cG'), xG=cG.getContext('2d',{willReadFrequently:true});
+  const cP=$('#cP'), xP=cP.getContext('2d',{willReadFrequently:true});
+  const cOut=$('#cOut'), xO=cOut.getContext('2d');
+  const personIn=$('#person'), garmentIn=$('#garment');
   const drop=$('#drop'), toast=$('#toast');
 
-  let baseImg=null, garImg=null; // garment은 소스(투명 PNG도 OK)
+  const tolEl=$('#tol'), wandBtn=$('#wand'), brushEl=$('#brush'), eraserEl=$('#eraser'), clearMaskBtn=$('#clearMask');
+  const undoPairBtn=$('#undoPair'), clearPairsBtn=$('#clearPairs');
+  const featherEl=$('#feather'), opaEl=$('#opacity'), blendEl=$('#blend'), matchLEl=$('#matchL');
+  const applyBtn=$('#apply'), saveBtn=$('#save');
 
-  // ===== 유틸 =====
+  let person=null, garment=null, gMask=null; // garment alpha mask
+  let pinMode='garment'; // which side expects the next pin
+  const pinsG=[], pinsP=[]; // arrays of {x,y} in canvas coords
+
+  // ===== Utils =====
   const tip=(m,ms=1600)=>{toast.textContent=m;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),ms);}
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function fitCanvasTo(img, canvas, maxW=1400, maxH=1000){
     let w=img.naturalWidth, h=img.naturalHeight; const r=Math.min(1,maxW/w,maxH/h);
     canvas.width=Math.round(w*r); canvas.height=Math.round(h*r);
   }
-  function drawBase(){ cx.clearRect(0,0,cv.width,cv.height); if(baseImg) cx.drawImage(baseImg,0,0,cv.width,cv.height); }
-  function cloneCanvas(src, dst, ctxDst){ dst.width=src.width; dst.height=src.height; ctxDst.drawImage(src,0,0); }
+  function drawGarment(){
+    xG.clearRect(0,0,cG.width,cG.height);
+    if(garment) xG.drawImage(garment,0,0,cG.width,cG.height);
+    if(gMask){ // show mask in red overlay
+      const id=xG.getImageData(0,0,cG.width,cG.height); const d=id.data, m=gMask.data;
+      for(let i=0;i<d.length;i+=4){ const a=m[i>>2]; if(a){ d[i]=clamp(d[i]+80,0,255); d[i+3]=255; } }
+      xG.putImageData(id,0,0);
+    }
+    drawPins('G');
+  }
+  function drawPerson(){
+    xP.clearRect(0,0,cP.width,cP.height);
+    if(person) xP.drawImage(person,0,0,cP.width,cP.height);
+    drawPins('P');
+  }
+  function drawPins(side){
+    const arr = side==='G'? pinsG : pinsP;
+    const pane = side==='G'? gPane : pPane;
+    // remove existing DOM pins
+    [...pane.querySelectorAll('.pin'+(side==='P'?'.ref':''))].forEach(e=>e.remove());
+    arr.forEach((pt,i)=>{
+      const pin=document.createElement('div');
+      pin.className='pin'+(side==='P'?' ref':'');
+      const rect=(side==='G'?cG:cP).getBoundingClientRect();
+      pin.style.left=(rect.left + (pt.x/(side==='G'?cG:cP).width)*rect.width)+'px';
+      pin.style.top =(rect.top  + (pt.y/(side==='G'?cG:cP).height)*rect.height)+'px';
+      pin.style.position='fixed';
+      document.body.appendChild(pin);
+      // drag
+      let drag=false;
+      pin.addEventListener('pointerdown',e=>{drag=true; pin.setPointerCapture(e.pointerId);});
+      pin.addEventListener('pointermove',e=>{
+        if(!drag) return;
+        const r=(side==='G'?cG:cP).getBoundingClientRect();
+        const x=clamp((e.clientX-r.left)/r.width*(side==='G'?cG:cP).width,0,(side==='G'?cG:cP).width);
+        const y=clamp((e.clientY-r.top )/r.height*(side==='G'?cG:cP).height,0,(side==='G'?cG:cP).height);
+        pt.x=x; pt.y=y;
+        pin.style.left=(r.left + (pt.x/(side==='G'?cG:cP).width)*r.width)+'px';
+        pin.style.top =(r.top  + (pt.y/(side==='G'?cG:cP).height)*r.height)+'px';
+      });
+      pin.addEventListener('pointerup',()=>{drag=false;});
+    });
+  }
   function loadFile(file, cb){
-    if(!file || !/^image\//i.test(file.type)) return tip('이미지 파일만 넣어주세요.');
     const r=new FileReader(); r.onload=()=>{ const im=new Image(); im.onload=()=>cb(im); im.src=r.result; }; r.readAsDataURL(file);
   }
 
-  // ===== 파일/드롭/붙여넣기 =====
-  baseIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, im=>{ baseImg=im; fitCanvasTo(im,cv); fitCanvasTo(im,ov); drawBase(); placeDefaultQuad(); }); });
-  garIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, im=>{ garImg=im; tip('의상 로드 완료. 4점을 목적 위치에 맞추고 [적용].'); showPts(true); }); });
+  // ===== File / DnD / Paste =====
+  personIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, im=>{ person=im; fitCanvasTo(im,cP); fitCanvasTo(im,cOut); drawPerson(); }); });
+  garmentIn.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadFile(f, im=>{ garment=im; fitCanvasTo(im,cG); gMask=new ImageData(cG.width,cG.height); drawGarment(); tip('의상 로드 완료. 매직원드로 선택 영역을 만들거나 브러시로 칠하세요.'); }); });
 
   ['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.add('show'); }));
   ['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.remove('show'); }));
   document.addEventListener('drop', e=>{
-    const files=e.dataTransfer?.files; if(files && files.length){
-      // 첫 드롭은 베이스, 두 번째 드롭은 의상
-      loadFile(files[0], baseImg ? (im=>{ garImg=im; showPts(true); }) : (im=>{ baseImg=im; fitCanvasTo(im,cv); fitCanvasTo(im,ov); drawBase(); placeDefaultQuad(); }));
-      if(files.length>=2) loadFile(files[1], im=>{ garImg=im; showPts(true); });
-      return;
-    }
-    tip('웹 이미지 URL 드롭은 보안상 불가. 파일로 저장해서 넣거나 붙여넣기를 사용하세요.');
+    const files=e.dataTransfer?.files; if(!files || !files.length) return tip('웹 이미지 URL 드롭은 보안상 불가. 파일로 저장 또는 붙여넣기 사용.');
+    if(!person){ loadFile(files[0], im=>{ person=im; fitCanvasTo(im,cP); fitCanvasTo(im,cOut); drawPerson(); }); }
+    else { loadFile(files[0], im=>{ garment=im; fitCanvasTo(im,cG); gMask=new ImageData(cG.width,cG.height); drawGarment(); }); }
   });
-
   document.addEventListener('paste', e=>{
-    const item=[...(e.clipboardData?.items||[])].find(i=>i.type?.startsWith('image/'));
-    if(!item) return;
+    const item=[...(e.clipboardData?.items||[])].find(i=>i.type?.startsWith('image/')); if(!item) return;
     const blob=item.getAsFile(); if(!blob) return;
-    const set = baseImg ? (im=>{ garImg=im; showPts(true); }) : (im=>{ baseImg=im; fitCanvasTo(im,cv); fitCanvasTo(im,ov); drawBase(); placeDefaultQuad(); });
-    loadFile(blob, set);
+    loadFile(blob, im=>{
+      if(!person){ person=im; fitCanvasTo(im,cP); fitCanvasTo(im,cOut); drawPerson(); }
+      else { garment=im; fitCanvasTo(im,cG); gMask=new ImageData(cG.width,cG.height); drawGarment(); }
+    });
   });
 
-  // ===== 4점 핸들 =====
-  function showPts(v){ pts.forEach(p=>p.style.display = v?'block':'none'); }
-  function placeDefaultQuad(){
-    // 캔버스 가운데에 기본 사각
-    const r=cv.getBoundingClientRect();
-    const L=0.3, T=0.25, R=0.7, B=0.7;
-    [[L,T],[R,T],[R,B],[L,B]].forEach((xy,i)=>{ setPtByCanvasFrac(i, xy[0], xy[1]); });
-    showPts(true);
-  }
-  function setPtByCanvasFrac(i, fx, fy){
-    const rect=cv.getBoundingClientRect();
-    pts[i].style.left = (fx*rect.width)+'px';
-    pts[i].style.top  = (fy*rect.height)+'px';
-    // absolute inside pane (which equals canvas box due to CSS)
-  }
-  function getDestQuadInCanvas(){
-    const rect=cv.getBoundingClientRect();
-    return pts.map(p=>{
-      const x=parseFloat(p.style.left), y=parseFloat(p.style.top);
-      return {x: x/rect.width*cv.width, y: y/rect.height*cv.height};
-    });
-  }
-  pts.forEach((p,idx)=>{
-    let dragging=false,offX=0,offY=0;
-    p.addEventListener('pointerdown',e=>{ dragging=true; p.setPointerCapture(e.pointerId); offX=e.offsetX; offY=e.offsetY; });
-    p.addEventListener('pointermove',e=>{
-      if(!dragging) return;
-      const r=paneL.getBoundingClientRect();
-      let x=e.clientX - r.left, y=e.clientY - r.top;
-      p.style.left = clamp(x,0,r.width)+'px';
-      p.style.top  = clamp(y,0,r.height)+'px';
-    });
-    p.addEventListener('pointerup',()=>dragging=false);
+  // ===== Magic Wand (HSV flood fill with tolerance) =====
+  let wandActive=false;
+  wandBtn.addEventListener('click', ()=>{ wandActive=!wandActive; wandBtn.textContent=wandActive?'매직원드(활성)':'매직원드'; });
+  cG.addEventListener('click', e=>{
+    if(!wandActive || !garment) return;
+    const r=cG.getBoundingClientRect();
+    const x=Math.floor((e.clientX-r.left)/r.width * cG.width);
+    const y=Math.floor((e.clientY-r.top )/r.height* cG.height);
+    const id=xG.getImageData(0,0,cG.width,cG.height);
+    const d=id.data; if(!gMask) gMask=new ImageData(cG.width,cG.height);
+    const m=gMask.data;
+    const tol=parseInt(tolEl.value,10);
+    const idx=(y*cG.width+x)<<2;
+    const targetRGB=[d[idx],d[idx+1],d[idx+2]];
+    const tHSV=rgb2hsv(...targetRGB);
+    const Q=[[x,y]]; const vis=new Uint8Array(cG.width*cG.height);
+    const inside=(xx,yy)=> xx>=0 && yy>=0 && xx<cG.width && yy<cG.height;
+    while(Q.length){
+      const [qx,qy]=Q.pop();
+      const q=qy*cG.width+qx; if(vis[q]) continue; vis[q]=1;
+      const i=(q<<2);
+      const hsv=rgb2hsv(d[i],d[i+1],d[i+2]);
+      if(hsvDist(hsv,tHSV) <= tol){
+        m[q]=255;
+        // 4-neigh
+        if(inside(qx+1,qy)) Q.push([qx+1,qy]);
+        if(inside(qx-1,qy)) Q.push([qx-1,qy]);
+        if(inside(qx,qy+1)) Q.push([qx,qy+1]);
+        if(inside(qx,qy-1)) Q.push([qx,qy-1]);
+      }
+    }
+    // 간단 팽창/침식으로 잡티 제거
+    morphMask(gMask, 1);
+    drawGarment();
   });
-  resetQuadBtn.addEventListener('click', placeDefaultQuad);
 
-  // ===== 수학: 4점 호모그래피 =====
-  function computeHomography(srcQuad, dstQuad){
-    // src: (0,0),(W,0),(W,H),(0,H) 로 가정 → 실제 의상 이미지 크기 기준
-    // dst: 사용자 지정 4점
-    const src = srcQuad, dst = dstQuad;
-    // Solve for H such that dst ~ H * src  (x' = (h11*x + h12*y + h13)/(h31*x + h32*y + 1))
-    function buildA(srcPt, dstPt){
-      const x=srcPt.x, y=srcPt.y, X=dstPt.x, Y=dstPt.y;
-      return [
-        [-x,-y,-1, 0, 0, 0, x*X, y*X, X],
-        [ 0, 0, 0,-x,-y,-1, x*Y, y*Y, Y]
-      ];
+  function rgb2hsv(r,g,b){
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    const d=max-min;
+    let h=0; if(d!==0){
+      switch(max){ case r: h=((g-b)/d + (g<b?6:0)); break; case g: h=(b-r)/d + 2; break; case b: h=(r-g)/d + 4; break; }
+      h/=6;
     }
-    let A=[];
-    for(let i=0;i<4;i++){ A=A.concat(buildA(src[i], dst[i])); }
-    // Solve Ah=0 → last right-singular vector. But 4-point allows closed form via Gaussian elim.
-    // We'll use a lightweight 9x9 linear solver with h[8]=1 constraint.
-    // Rearrange to 8x8 by moving last column to RHS:
-    const M = new Array(8).fill(0).map(()=>new Array(8).fill(0));
-    const b = new Array(8).fill(0);
-    for(let r=0;r<8;r++){
-      for(let c=0;c<8;c++) M[r][c]=A[r][c];
-      b[r] = -A[r][8];
-    }
-    const h = solveLinear(M,b); // length 8
-    h.push(1);
-    // Return 3x3
-    return [
-      [h[0],h[1],h[2]],
-      [h[3],h[4],h[5]],
-      [h[6],h[7],1]
-    ];
+    const s=max===0?0:d/max, v=max;
+    return [h*360,s,v];
   }
-  function solveLinear(M,b){
-    // Gaussian elimination
-    const n=b.length; for(let i=0;i<n;i++){ M[i]=M[i].slice(); }
-    const x=new Array(n).fill(0);
+  function hsvDist(a,b){
+    // hue wrap-aware distance + s/v diff
+    let dh=Math.abs(a[0]-b[0]); dh=Math.min(dh,360-dh);
+    return dh*0.6 + Math.abs(a[1]-b[1])*100 + Math.abs(a[2]-b[2])*100;
+  }
+  function morphMask(mask, r=1){
+    const w=cG.width,h=cG.height, src=mask.data;
+    const tmp=new Uint8Array(src.length);
+    // 1) 에지 제거(침식)
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      let ok=true;
+      for(let j=-r;j<=r && ok;j++)for(let i=-r;i<=r && ok;i++){
+        const xx=x+i, yy=y+j; if(xx<0||yy<0||xx>=w||yy>=h) { ok=false; break; }
+        if(!src[yy*w+xx]) ok=false;
+      }
+      tmp[y*w+x]= ok?255:0;
+    }
+    // 2) 팽창
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      if(tmp[y*w+x]) continue;
+      let any=false;
+      for(let j=-r;j<=r && !any;j++)for(let i=-r;i<=r && !any;i++){
+        const xx=x+i, yy=y+j; if(xx<0||yy<0||xx>=w||yy>=h) continue;
+        if(tmp[yy*w+xx]) any=true;
+      }
+      src[y*w+x]= any?255:0;
+    }
+  }
+
+  // Brush refine on garment mask
+  let painting=false,lastX=0,lastY=0;
+  cG.addEventListener('pointerdown', e=>{
+    if(!garment) return;
+    painting=true; drawStroke(e,true);
+  });
+  cG.addEventListener('pointermove', e=>{ if(painting) drawStroke(e,false); });
+  window.addEventListener('pointerup', ()=> painting=false);
+  function drawStroke(e,first){
+    const r=cG.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*cG.width;
+    const y=(e.clientY-r.top )/r.height*cG.height;
+    const b=parseInt(brushEl.value,10);
+    if(!gMask) gMask=new ImageData(cG.width,cG.height);
+    const d=gMask.data;
+    if(first){ lastX=x; lastY=y; }
+    const steps=Math.max(1, Math.ceil(Math.hypot(x-lastX,y-lastY)/ (b*0.5)));
+    for(let s=0;s<=steps;s++){
+      const px=Math.round(lastX + (x-lastX)*s/steps);
+      const py=Math.round(lastY + (y-lastY)*s/steps);
+      for(let j=-b;j<=b;j++)for(let i=-b;i<=b;i++){
+        if(i*i+j*j>b*b) continue;
+        const xx=px+i, yy=py+j; if(xx<0||yy<0||xx>=cG.width||yy>=cG.height) continue;
+        const idx=(yy*cG.width+xx);
+        d[idx] = eraserEl.checked? 0 : 255;
+      }
+    }
+    lastX=x; lastY=y; drawGarment();
+  }
+  clearMaskBtn.addEventListener('click', ()=>{ if(cG.width) gMask=new ImageData(cG.width,cG.height); drawGarment(); });
+
+  // ===== Pin pairs =====
+  function addPin(side, x,y){
+    (side==='G'?pinsG:pinsP).push({x,y});
+    drawPins('G'); drawPins('P');
+  }
+  cG.addEventListener('click', e=>{
+    if(!garment) return;
+    const r=cG.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*cG.width;
+    const y=(e.clientY-r.top )/r.height*cG.height;
+    addPin('G',x,y); pinMode='person'; tip('오른쪽 인물에서 대응 위치를 찍으세요');
+  });
+  cP.addEventListener('click', e=>{
+    if(pinMode!=='person' || !person) return;
+    const r=cP.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*cP.width;
+    const y=(e.clientY-r.top )/r.height*cP.height;
+    addPin('P',x,y); pinMode='garment';
+  });
+  undoPairBtn.addEventListener('click', ()=>{
+    if(pinsP.length && pinsG.length){ pinsP.pop(); pinsG.pop(); drawPins('G'); drawPins('P'); }
+  });
+  clearPairsBtn.addEventListener('click', ()=>{ pinsG.length=0; pinsP.length=0; drawPins('G'); drawPins('P'); });
+
+  // ===== TPS (Thin Plate Spline) warp from dest->src =====
+  function tpsSolve(srcPts, dstPts){
+    // maps dest -> src (so we sample src when painting dest)
+    const n=srcPts.length;
+    // Build K matrix: K_ij = U(||pi-pj||), U(r)=r^2 log r^2
+    const K=new Array(n).fill(0).map(()=>new Array(n).fill(0));
+    for(let i=0;i<n;i++){
+      for(let j=0;j<n;j++){
+        if(i===j){ K[i][j]=0; continue; }
+        const dx=dstPts[i].x - dstPts[j].x, dy=dstPts[i].y - dstPts[j].y;
+        const r2=dx*dx+dy*dy; K[i][j]= r2===0? 0 : r2*Math.log(r2);
+      }
+    }
+    const P=new Array(n).fill(0).map(()=>[1, dstPts[arguments.callee.i]?.x, dstPts[arguments.callee.i]?.y]);
+    // above hacky; rebuild P properly:
+  }
+  // we’ll implement without clever tricks to keep readable
+  function tpsWeights(srcPts, dstPts){
+    const n=srcPts.length;
+    // L = [K P; P^T 0]
+    const L = new Array(n+3).fill(0).map(()=>new Array(n+3).fill(0));
+    function U(r2){ return r2<=1e-6? 0 : r2*Math.log(r2); }
+    for(let i=0;i<n;i++){
+      for(let j=0;j<n;j++){
+        const dx=dstPts[i].x - dstPts[j].x, dy=dstPts[i].y - dstPts[j].y;
+        const r2 = dx*dx+dy*dy;
+        L[i][j]=U(r2);
+      }
+      L[i][n]=1; L[i][n+1]=dstPts[i].x; L[i][n+2]=dstPts[i].y;
+      L[n][i]=1; L[n+1][i]=dstPts[i].x; L[n+2][i]=dstPts[i].y;
+    }
+    // Yx, Yy
+    const Yx=new Array(n+3).fill(0), Yy=new Array(n+3).fill(0);
+    for(let i=0;i<n;i++){ Yx[i]=srcPts[i].x; Yy[i]=srcPts[i].y; }
+    // Solve L*Wx=Yx , L*Wy=Yy
+    const Wx=gaussSolve(L, Yx);
+    const Wy=gaussSolve(L, Yy);
+    return {Wx, Wy, n, dstPts};
+  }
+  function tpsMap(w, x, y){
+    const {Wx,Wy,n,dstPts}=w;
+    function U(r2){ return r2<=1e-6? 0 : r2*Math.log(r2); }
+    let fx=Wx[n]*1 + Wx[n+1]*x + Wx[n+2]*y;
+    let fy=Wy[n]*1 + Wy[n+1]*x + Wy[n+2]*y;
+    for(let i=0;i<n;i++){
+      const dx=x-dstPts[i].x, dy=y-dstPts[i].y, r2=dx*dx+dy*dy, u=U(r2);
+      fx += Wx[i]*u; fy += Wy[i]*u;
+    }
+    return {x:fx, y:fy};
+  }
+  function gaussSolve(A,b){
+    // deep copy
+    A=A.map(r=>r.slice()); b=b.slice();
+    const n=b.length;
     for(let i=0;i<n;i++){
       // pivot
-      let max=i; for(let r=i+1;r<n;r++) if(Math.abs(M[r][i])>Math.abs(M[max][i])) max=r;
-      if(max!==i){ [M[i],M[max]]=[M[max],M[i]]; [b[i],b[max]]=[b[max],b[i]]; }
-      const piv=M[i][i]||1e-12;
-      for(let c=i;c<n;c++) M[i][c]/=piv; b[i]/=piv;
+      let max=i; for(let r=i+1;r<n;r++) if(Math.abs(A[r][i])>Math.abs(A[max][i])) max=r;
+      if(max!==i){ [A[i],A[max]]=[A[max],A[i]]; [b[i],b[max]]=[b[max],b[i]]; }
+      let piv=A[i][i]||1e-12;
+      for(let c=i;c<n;c++) A[i][c]/=piv; b[i]/=piv;
       for(let r=0;r<n;r++){
         if(r===i) continue;
-        const f=M[r][i];
-        for(let c=i;c<n;c++) M[r][c]-=f*M[i][c];
+        const f=A[r][i];
+        for(let c=i;c<n;c++) A[r][c]-=f*A[i][c];
         b[r]-=f*b[i];
       }
     }
-    for(let i=0;i<n;i++) x[i]=b[i];
-    return x;
-  }
-  function invert3x3(H){
-    const a=H[0][0],b=H[0][1],c=H[0][2], d=H[1][0],e=H[1][1],f=H[1][2], g=H[2][0],h=H[2][1],i=H[2][2];
-    const A = e*i - f*h, B = -(d*i - f*g), C = d*h - e*g;
-    const D = -(b*i - c*h), E = a*i - c*g, F = -(a*h - b*g);
-    const G = b*f - c*e, Hh = -(a*f - c*d), I = a*e - b*d;
-    const det = a*A + b*B + c*C || 1e-12;
-    return [
-      [A/det, D/det, G/det],
-      [B/det, E/det, Hh/det],
-      [C/det, F/det, I/det]
-    ];
-  }
-  function mulH(H, x, y){
-    const X = H[0][0]*x + H[0][1]*y + H[0][2];
-    const Y = H[1][0]*x + H[1][1]*y + H[1][2];
-    const W = H[2][0]*x + H[2][1]*y + H[2][2];
-    return {x: X/W, y: Y/W};
+    return b;
   }
 
-  // ===== 렌더(워프 + 페더 + 블렌드 + 밝기매칭) =====
+  // ===== Apply warp & composite =====
   function applyWarp(){
-    if(!baseImg || !garImg){ tip('인물/의상 이미지를 모두 불러오세요.'); return; }
-    drawBase();
-    cloneCanvas(cv, ov, ox); // 결과 시작: 베이스 복사
+    if(!person || !garment){ tip('인물과 의상을 모두 불러오세요.'); return; }
+    if(!gMask){ tip('의상 마스크를 먼저 만들어요(매직원드/브러시).'); return; }
+    if(pinsG.length<3 || pinsP.length<3 || pinsG.length!==pinsP.length){ tip('짝점을 3쌍 이상, 동일 개수로 찍어주세요.'); return; }
 
-    // 소스/목적 4점
-    const srcQuad = [{x:0,y:0},{x:garImg.naturalWidth,y:0},{x:garImg.naturalWidth,y:garImg.naturalHeight},{x:0,y:garImg.naturalHeight}];
-    const dstQuad = getDestQuadInCanvas();
-    const H = computeHomography(srcQuad, dstQuad);
-    const Hinv = invert3x3(H);
+    // 준비: 버퍼들
+    xO.clearRect(0,0,cOut.width,cOut.height);
+    // 소스(의상) 버퍼: 의상 이미지를 의상 캔버스 크기로 다시 확보
+    const sCv=document.createElement('canvas'); sCv.width=cG.width; sCv.height=cG.height;
+    const sCtx=sCv.getContext('2d'); sCtx.drawImage(garment,0,0,cG.width,cG.height);
+    const sData=sCtx.getImageData(0,0,sCv.width,sCv.height).data;
+    const mData=gMask.data;
 
-    // 소스 이미지를 임시 캔버스에 스케일링 후 사용(성능↑)
-    const s=document.createElement('canvas'); s.width=garImg.naturalWidth; s.height=garImg.naturalHeight;
-    const sx=s.getContext('2d'); sx.drawImage(garImg,0,0);
-    const sData=sx.getImageData(0,0,s.width,s.height); const sd=sData.data;
+    // TPS weights: dest=인물 점, src=의상 점 → dest 픽셀을 src로 샘플링
+    const tps=tpsWeights(pinsG, pinsP); // 주의: 위 함수는 (srcPts, dstPts) 순서
+    // 우리가 만든 tpsWeights는 인자 (src, dst)로 받도록 작성했음. 지금은 pinsG=src, pinsP=dst
 
-    // 결과 버퍼
-    const out = ox.getImageData(0,0,ov.width,ov.height); const od=out.data;
+    // 목적 bbox= 인물 짝점 범위 (연산량 최적화)
+    const xs=pinsP.map(p=>p.x), ys=pinsP.map(p=>p.y);
+    const minX=Math.floor(Math.max(0, Math.min(...xs)-10)), maxX=Math.ceil(Math.min(cOut.width, Math.max(...xs)+10));
+    const minY=Math.floor(Math.max(0, Math.min(...ys)-10)), maxY=Math.ceil(Math.min(cOut.height, Math.max(...ys)+10));
 
-    // 목적 사각형 bbox
-    const xs=dstQuad.map(p=>p.x), ys=dstQuad.map(p=>p.y);
-    const minX=Math.floor(Math.min(...xs)), maxX=Math.ceil(Math.max(...xs));
-    const minY=Math.floor(Math.min(...ys)), maxY=Math.ceil(Math.max(...ys));
-    const feather = parseInt(featherEl.value,10);
-    const opacity = parseFloat(opaEl.value);
-    const blend = blendEl.value;
+    const out=xO.getImageData(0,0,cOut.width,cOut.height), od=out.data;
+    const base=xP.getImageData(0,0,cP.width,cP.height), bd=base.data;
 
-    // 밝기 매칭 (대략적)
+    const feather=parseInt(featherEl.value,10), opacity=parseFloat(opaEl.value), blend=blendEl.value;
+    // 밝기 매칭(대략): 베이스/의상 평균 L
     let gain=1;
     if(matchLEl.checked){
-      // 목적 영역 평균 L, 소스 평균 L
-      let sumLd=0, cnt=0, sumLs=0, cnts=0;
-      // 샘플을 2px 스텝으로
-      for(let y=minY;y<=maxY;y+=2){
-        for(let x=minX;x<=maxX;x+=2){
-          const uv = mulH(Hinv, x+0.5, y+0.5);
-          if(uv.x>=0 && uv.y>=0 && uv.x<s.width && uv.y<s.height && pointInQuad({x,y}, dstQuad)){
-            const si=((Math.floor(uv.y)*s.width)+Math.floor(uv.x))<<2;
-            const di=((y*ov.width)+x)<<2;
-            const Ld = 0.2126*od[di] + 0.7152*od[di+1] + 0.0722*od[di+2];
-            const Ls = 0.2126*sd[si] + 0.7152*sd[si+1] + 0.0722*sd[si+2];
-            if(isFinite(Ld)){ sumLd+=Ld; cnt++; }
-            if(isFinite(Ls)){ sumLs+=Ls; cnts++; }
-          }
+      let sumB=0,cntB=0,sumS=0,cntS=0;
+      for(let y=minY;y<=maxY;y+=3){
+        for(let x=minX;x<=maxX;x+=3){
+          const map=tpsMap(tps, x, y); const sx=map.x, sy=map.y;
+          if(sx<0||sy<0||sx>=sCv.width||sy>=sCv.height) continue;
+          const si=((Math.floor(sy)*sCv.width)+Math.floor(sx))<<2;
+          const mi=(Math.floor(sy)*sCv.width)+Math.floor(sx);
+          if(!mData[mi]) continue;
+          const di=((y*cOut.width)+x)<<2;
+          const Lb=0.2126*bd[di]+0.7152*bd[di+1]+0.0722*bd[di+2];
+          const Ls=0.2126*sData[si]+0.7152*sData[si+1]+0.0722*sData[si+2];
+          sumB+=Lb; cntB++; sumS+=Ls; cntS++;
         }
       }
-      if(cnt>20 && cnts>20){ const md=sumLd/cnt, ms=sumLs/cnts; if(ms>2) gain=md/ms; }
+      if(cntB>10 && cntS>10){ const mb=sumB/cntB, ms=sumS/cntS; if(ms>2) gain=mb/ms; }
     }
 
-    // 메인 루프(목적 bbox 픽셀마다 역매핑)
+    // 렌더
     for(let y=minY;y<=maxY;y++){
       for(let x=minX;x<=maxX;x++){
-        if(!pointInQuad({x,y}, dstQuad)) continue;
+        const map=tpsMap(tps, x, y); const sx=map.x, sy=map.y;
+        if(sx<0||sy<0||sx>=sCv.width||sy>=sCv.height) continue;
+        const si=((Math.floor(sy)*sCv.width)+Math.floor(sx))<<2;
+        const mi=(Math.floor(sy)*sCv.width)+Math.floor(sx);
+        if(!mData[mi]) continue; // 의상 마스크 밖
 
-        // feather: 가장자리까지 거리 기반 soft mask
-        const dist = edgeDistance({x,y}, dstQuad);
-        const aMask = feather>0 ? smoothstep(0, feather, dist) : 1;
+        // feather: 간단히 마스크 에지까지의 근사거리 → 여기선 소프트닝을 간이로 적용(알파 스무스)
+        const aMask = feather>0? edgeAlphaApprox(mData, sCv.width, sCv.height, Math.floor(sx), Math.floor(sy), feather) : 1;
 
-        const uv = mulH(Hinv, x+0.5, y+0.5);
-        if(uv.x<0 || uv.y<0 || uv.x>=s.width || uv.y>=s.height) continue;
+        // 샘플 + 밝기 보정
+        let r=sData[si]*gain, g=sData[si+1]*gain, b=sData[si+2]*gain, a=(sData[si+3]/255);
+        a *= opacity * aMask; if(a<=0) continue;
 
-        // bilinear
-        const sx0=Math.floor(uv.x), sy0=Math.floor(uv.y);
-        const tx=uv.x - sx0, ty=uv.y - sy0;
-        const idx00=((sy0*s.width)+sx0)<<2;
-        const idx10=idx00+4, idx01=idx00+(s.width<<2), idx11=idx01+4;
-        function sample(i){ return [sd[i], sd[i+1], sd[i+2], sd[i+3]/255]; }
-        const c00=sample(idx00), c10=sample(idx10), c01=sample(idx01), c11=sample(idx11);
-        const r = lerp( lerp(c00[0], c10[0], tx), lerp(c01[0], c11[0], tx), ty ) * gain;
-        const g = lerp( lerp(c00[1], c10[1], tx), lerp(c01[1], c11[1], tx), ty ) * gain;
-        const b = lerp( lerp(c00[2], c10[2], tx), lerp(c01[2], c11[2], tx), ty ) * gain;
-        const a = lerp( lerp(c00[3], c10[3], tx), lerp(c01[3], c11[3], tx), ty ) * opacity * aMask;
+        const di=((y*cOut.width)+x)<<2;
+        const br=bd[di], bg=bd[di+1], bb=bd[di+2];
 
-        if(a<=0) continue;
-        const di=((y*ov.width)+x)<<2;
-        const dr=od[di], dg=od[di+1], db=od[di+2];
-
-        let rr=r, gg=g, bb=b;
         // blend
-        if(blend==='multiply'){ rr=dr*r/255; gg=dg*g/255; bb=db*b/255; }
-        else if(blend==='screen'){ rr=255-(255-dr)*(255-r)/255; gg=255-(255-dg)*(255-g)/255; bb=255-(255-db)*(255-b)/255; }
+        let rr=r, gg=g, bb2=b;
+        if(blend==='multiply'){ rr=br*r/255; gg=bg*g/255; bb2=bb*b/255; }
+        else if(blend==='screen'){ rr=255-(255-br)*(255-r)/255; gg=255-(255-bg)*(255-g)/255; bb2=255-(255-bb)*(255-b)/255; }
         else if(blend==='overlay'){
           const ovf=(s,t)=> (s<128)? (2*s*t/255) : (255 - 2*(255-s)*(255-t)/255);
-          rr=ovf(dr,r); gg=ovf(dg,g); bb=ovf(db,b);
+          rr=ovf(br,r); gg=ovf(bg,g); bb2=ovf(bb,b);
         }else if(blend==='soft-light'){
           const sl=(s,t)=> ((1 - 2*t/255)*s*s/255 + (2*t/255-1)*s + t);
-          rr=sl(dr,r); gg=sl(dg,g); bb=sl(db,b);
+          rr=sl(br,r); gg=sl(bg,g); bb2=sl(bb,b);
         }
-        // alpha composite
-        od[di]   = Math.round(dr*(1-a) + rr*a);
-        od[di+1] = Math.round(dg*(1-a) + gg*a);
-        od[di+2] = Math.round(db*(1-a) + bb*a);
+
+        od[di]   = Math.round(br*(1-a) + rr*a);
+        od[di+1] = Math.round(bg*(1-a) + gg*a);
+        od[di+2] = Math.round(bb*(1-a) + bb2*a);
         od[di+3] = 255;
       }
     }
-    ox.putImageData(out,0,0);
+    xO.putImageData(out,0,0);
   }
 
-  function pointInQuad(p,q){ // split into two triangles
-    return pointInTri(p,q[0],q[1],q[2]) || pointInTri(p,q[0],q[2],q[3]); }
-  function pointInTri(p,a,b,c){
-    const s = (x1,y1,x2,y2)=> x1*y2 - x2*y1;
-    const v0={x:c.x-a.x,y:c.y-a.y}, v1={x:b.x-a.x,y:b.y-a.y}, v2={x:p.x-a.x,y:p.y-a.y};
-    const den = s(v1.x,v1.y,v0.x,v0.y); if(den===0) return false;
-    const u = s(v2.x,v2.y,v0.x,v0.y)/den, v = s(v1.x,v1.y,v2.x,v2.y)/den;
-    return u>=0 && v>=0 && (u+v)<=1;
-  }
-  function edgeDistance(p,q){ // distance to nearest edge (inside positive, outside negative)
-    let d=1e9; let inside=pointInQuad(p,q);
-    for(let i=0;i<4;i++){
-      const a=q[i], b=q[(i+1)&3];
-      d=Math.min(d, pointSegDist(p,a,b));
+  function edgeAlphaApprox(mask, w,h, x,y, R){
+    // 근처에 0이 있으면 경계로 간주 → 거리 비례 α
+    for(let r=0;r<=R;r++){
+      // 사각 링 검사(빠름)
+      for(let i=-r;i<=r;i++){
+        const pts=[[x+i,y-r],[x+i,y+r],[x-r,y+i],[x+r,y+i]];
+        for(const [xx,yy] of pts){
+          if(xx<0||yy<0||xx>=w||yy>=h) return 1; // 바깥 = 경계
+          if(mask[yy*w+xx]===0) return r/R; // 경계 근사
+        }
+      }
     }
-    return inside? d : -d;
+    return 1;
   }
-  function pointSegDist(p,a,b){
-    const vx=b.x-a.x, vy=b.y-a.y;
-    const wx=p.x-a.x, wy=p.y-a.y;
-    const c1 = vx*wx + vy*wy;
-    const c2 = vx*vx + vy*vy || 1e-9;
-    let t = clamp(c1/c2, 0, 1);
-    const dx = (a.x + t*vx) - p.x;
-    const dy = (a.y + t*vy) - p.y;
-    return Math.hypot(dx,dy);
-  }
-  const smoothstep=(e0,e1,x)=>{ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); }
-  const lerp=(a,b,t)=> a+(b-a)*t;
 
-  // ===== 이벤트 =====
+  // 이벤트 연결
   applyBtn.addEventListener('click', applyWarp);
   saveBtn.addEventListener('click', ()=>{
-    try{ const a=document.createElement('a'); a.href=ov.toDataURL('image/png'); a.download='tryon.png'; a.click(); }
-    catch(e){ const win=window.open(ov.toDataURL('image/png'),'_blank'); if(!win) alert('팝업 차단 해제 후 다시 시도하세요.'); }
+    try{ const a=document.createElement('a'); a.href=cOut.toDataURL('image/png'); a.download='tryon.png'; a.click(); }
+    catch(e){ const win=window.open(cOut.toDataURL('image/png'),'_blank'); if(!win) alert('팝업 차단 해제 후 다시 시도하세요.'); }
   });
 
   // 초기 안내
   (function init(){
-    cx.fillStyle='#0b0f16'; cx.fillRect(0,0,cv.width,cv.height);
-    cx.fillStyle='#a9b4ff'; cx.font='700 20px system-ui';
-    cx.fillText('인물(베이스) 이미지를 불러오세요 (파일/드롭/붙여넣기)', 24, 56);
-    ox.fillStyle='#0b0f16'; ox.fillRect(0,0,ov.width,ov.height);
-    ox.fillStyle='#c9d6ff'; ox.font='14px system-ui';
-    ox.fillText('의상 이미지를 불러오고, 좌측 4점을 위치에 맞춘 뒤 [적용]', 24, 56);
+    xG.fillStyle='#0b0f16'; xG.fillRect(0,0,cG.width,cG.height);
+    xG.fillStyle='#a9b4ff'; xG.font='700 18px system-ui'; xG.fillText('② 의상 이미지를 불러오고 매직원드/브러시로 의상만 선택', 20, 46);
+    xP.fillStyle='#0b0f16'; xP.fillRect(0,0,cP.width,cP.height);
+    xP.fillStyle='#c9d6ff'; xP.font='700 18px system-ui'; xP.fillText('① 인물 이미지를 불러온 뒤, 양쪽에 짝점 찍기', 20, 46);
   })();
 })();
 </script>
