@@ -22,140 +22,28 @@
   <small>방향키 / 스와이프 지원</small>
 </div></div>
 <script>
-(() => {
-  const B=4, PAD=10, BG='#0f172a', CELL='#111827';
-  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-  const scoreEl=document.getElementById('score'), bestEl=document.getElementById('best');
-  let best=+localStorage.getItem('best2048')||0; bestEl.textContent=best;
-  let g, score=0, anim=null;
-
-  function newGame(){ g=[...Array(B)].map(()=>Array(B).fill(0)); score=0; add(); add(); draw(); reportSize(); }
-  function add(){ const z=[]; for(let y=0;y<B;y++)for(let x=0;x<B;x++) if(!g[y][x]) z.push([x,y]);
-    if(!z.length) return; const [x,y]=z[(Math.random()*z.length)|0]; g[y][x]=Math.random()<.9?2:4; }
-  function drawGrid(){
-    ctx.fillStyle=BG; ctx.fillRect(0,0,cv.width,cv.height);
-    const s=(cv.width-PAD*5)/4;
-    for(let y=0;y<B;y++)for(let x=0;x<B;x++){
-      const X=PAD+(s+PAD)*x, Y=PAD+(s+PAD)*y;
-      ctx.fillStyle=CELL; ctx.fillRect(X,Y,s,s);
-    }
-  }
-  function tileColor(v){
-    const map={2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',
-               128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
-    return map[v]||'#3f8cff';
-  }
-  function drawTiles(state){
-    const s=(cv.width-PAD*5)/4;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    for(const t of state){
-      const X=PAD+(s+PAD)*t.x + (t.dx||0), Y=PAD+(s+PAD)*t.y + (t.dy||0);
-      ctx.fillStyle=tileColor(t.v);
-      ctx.roundRect?.(X,Y,s,s,10); // 새 브라우저용
-      if(!ctx.roundRect){ ctx.beginPath(); ctx.rect(X,Y,s,s); }
-      ctx.fill();
-      ctx.fillStyle=(t.v<=4)?'#776e65':'#fff';
-      let f=28; if(t.v>=128) f=24; if(t.v>=1024) f=20;
-      ctx.font=`bold ${f}px system-ui,Segoe UI,Apple SD Gothic Neo`;
-      ctx.fillText(t.v, X+s/2, Y+s/2);
-    }
-  }
-  function snapshot(){
-    const state=[];
-    for(let y=0;y<B;y++)for(let x=0;x<B;x++) if(g[y][x]) state.push({x,y,v:g[y][x],dx:0,dy:0});
-    return state;
-  }
-  function commit(dir){
-    const s0=JSON.stringify(g);
-    let moved=false, merged=[...Array(B)].map(()=>Array(B).fill(false));
-    const line=(arr)=>{
-      arr=arr.filter(v=>v);
-      for(let i=0;i<arr.length-1;i++){
-        if(arr[i]===arr[i+1]){ arr[i]*=2; score+=arr[i]; arr.splice(i+1,1); }
-      }
-      while(arr.length<B) arr.push(0);
-      return arr;
-    };
-    if(dir==='left'){
-      for(let y=0;y<B;y++){ const before=[...g[y]]; g[y]=line(g[y]); if(g[y].some((v,i)=>v!==before[i])) moved=true; }
-    }else if(dir==='right'){
-      for(let y=0;y<B;y++){ const before=[...g[y]].reverse(); const after=line(before).reverse(); if(after.some((v,i)=>v!==g[y][i])) moved=true; g[y]=after; }
-    }else if(dir==='up'){
-      for(let x=0;x<B;x++){ const col=g.map(r=>r[x]); const before=[...col]; const after=line(col); if(after.some((v,i)=>v!==before[i])) moved=true; for(let y=0;y<B;y++) g[y][x]=after[y]; }
-    }else if(dir==='down'){
-      for(let x=0;x<B;x++){ const col=g.map(r=>r[x]).reverse(); const after=line(col).reverse(); if(after.some((v,i)=>v!==g.map(r=>r[x])[i])) moved=true; for(let y=0;y<B;y++) g[y][x]=after[y]; }
-    }
-    if(moved){ add(); }
-    return moved;
-  }
-  function animate(dir){
-    // 간단: 합치기 자체는 commit에서 하고, 시각은 120ms 슬라이드
-    const pre=snapshot(); // 시작 전
-    // 가상의 이동량: 각 타일이 어느 칸만큼 이동했는지 계산용
-    const offset=(x,y,dx,dy)=>{
-      let nx=x+dx, ny=y+dy, step=0;
-      while(nx>=0&&nx<B&&ny>=0&&ny<B && !g[ny][nx]){ nx+=dx; ny+=dy; step++; }
-      return step;
-    };
-    const dirv={left:[-1,0], right:[1,0], up:[0,-1], down:[0,1]}[dir];
-    const s=(cv.width-PAD*5)/4, dist=(step)=>step*(s+PAD);
-    const tmpGrid=[...Array(B)].map(()=>Array(B).fill(0)); // 원본 g가 이미 업데이트된 상태라 보정 없이 슬라이드만
-    pre.forEach(t=>{
-      const step=offset(t.x,t.y,dirv[0],dirv[1]);
-      t.dx = dist(dirv[0]*step);
-      t.dy = dist(dirv[1]*step);
-      tmpGrid[t.y][t.x]=t.v;
-    });
-
-    const start=performance.now(), DUR=120;
-    function frame(now){
-      const p=Math.min(1,(now-start)/DUR);
-      drawGrid();
-      drawTiles(pre.map(t=>({ ...t, dx:t.dx*p, dy:t.dy*p })));
-      if(p<1) requestAnimationFrame(frame); else { draw(); }
-    }
-    requestAnimationFrame(frame);
-  }
-  function draw(){
-    scoreEl.textContent=score;
-    if(score>best){ best=score; localStorage.setItem('best2048',best); }
-    bestEl.textContent=best;
-    drawGrid();
-    drawTiles(snapshot());
-  }
-  function isOver(){
-    for(let y=0;y<B;y++)for(let x=0;x<B;x++){
-      if(!g[y][x]) return false;
-      const v=g[y][x];
-      if(x<B-1 && g[y][x+1]===v) return false;
-      if(y<B-1 && g[y+1][x]===v) return false;
-    }
-    return true;
-  }
-  function move(dir){
-    if(anim) return;
-    const moved=commit(dir);
-    if(moved){
-      animate(dir);
-      if(isOver()) setTimeout(()=>alert('게임 종료!'), 10);
-    }
-  }
-  // input
-  addEventListener('keydown',e=>{
-    const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];
-    if(m){ e.preventDefault(); move(m); }
-  });
-  let sx=0,sy=0;
-  cv.addEventListener('touchstart',e=>{const t=e.touches[0]; sx=t.clientX; sy=t.clientY;},{passive:true});
-  cv.addEventListener('touchend',e=>{
-    const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
-    if(Math.abs(dx)>Math.abs(dy)) move(dx>0?'right':'left'); else move(dy>0?'down':'up');
-  },{passive:true});
-  new.onclick=newGame; newGame();
-
-  // 임베드 높이 자동 보고
-  function report(){ parent?.postMessage({type:'EMBED_SIZE',h:document.body.scrollHeight},'*'); }
-  function reportSize(){ report(); setTimeout(report, 50); }
-  addEventListener('load',report); addEventListener('resize',()=>setTimeout(report,0));
-})();
+(()=>{const B=4,PAD=10,BG='#0f172a',CELL='#111827';const cv=document.getElementById('cv'),ctx=cv.getContext('2d');const scoreEl=document.getElementById('score'),bestEl=document.getElementById('best');let best=+localStorage.getItem('best2048')||0;bestEl.textContent=best;let g,score=0;
+function newGame(){g=[...Array(B)].map(()=>Array(B).fill(0));score=0;add();add();draw();}
+function add(){const z=[];for(let y=0;y<B;y++)for(let x=0;x<B;x++)if(!g[y][x])z.push([x,y]);if(!z.length)return;const [x,y]=z[(Math.random()*z.length)|0];g[y][x]=Math.random()<.9?2:4;}
+function drawGrid(){ctx.fillStyle=BG;ctx.fillRect(0,0,cv.width,cv.height);const s=(cv.width-PAD*5)/4;for(let y=0;y<B;y++)for(let x=0;x<B;x++){const X=PAD+(s+PAD)*x,Y=PAD+(s+PAD)*y;ctx.fillStyle=CELL;ctx.fillRect(X,Y,s,s);}}
+function tileColor(v){const map={2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};return map[v]||'#3f8cff';}
+function snapshot(){const state=[];for(let y=0;y<B;y++)for(let x=0;x<B;x++)if(g[y][x])state.push({x,y,v:g[y][x],dx:0,dy:0});return state;}
+function drawTiles(state){const s=(cv.width-PAD*5)/4;ctx.textAlign='center';ctx.textBaseline='middle';for(const t of state){const X=PAD+(s+PAD)*t.x+(t.dx||0),Y=PAD+(s+PAD)*t.y+(t.dy||0);ctx.fillStyle=tileColor(t.v);ctx.roundRect?.(X,Y,s,s,10);if(!ctx.roundRect){ctx.beginPath();ctx.rect(X,Y,s,s);}ctx.fill();ctx.fillStyle=(t.v<=4)?'#776e65':'#fff';let f=28;if(t.v>=128)f=24;if(t.v>=1024)f=20;ctx.font=`bold ${f}px system-ui,Segoe UI,Apple SD Gothic Neo`;ctx.fillText(t.v,X+s/2,Y+s/2);}}
+function commit(dir){let moved=false;const line=a=>{a=a.filter(v=>v);for(let i=0;i<a.length-1;i++)if(a[i]===a[i+1]){a[i]*=2;score+=a[i];a.splice(i+1,1);}while(a.length<B)a.push(0);return a;};
+if(dir==='left'){for(let y=0;y<B;y++){const before=[...g[y]];g[y]=line(g[y]);if(g[y].some((v,i)=>v!==before[i]))moved=true;}}
+else if(dir==='right'){for(let y=0;y<B;y++){const before=[...g[y]].reverse();const after=line(before).reverse();if(after.some((v,i)=>v!==g[y][i]))moved=true;g[y]=after;}}
+else if(dir==='up'){for(let x=0;x<B;x++){const col=g.map(r=>r[x]);const before=[...col];const after=line(col);if(after.some((v,i)=>v!==before[i]))moved=true;for(let y=0;y<B;y++)g[y][x]=after[y];}}
+else if(dir==='down'){for(let x=0;x<B;x++){const col=g.map(r=>r[x]).reverse();const after=line(col).reverse();if(after.some((v,i)=>v!==g.map(r=>r[x])[i]))moved=true;for(let y=0;y<B;y++)g[y][x]=after[y];}}
+if(moved){add();}return moved;}
+function animate(dir){const pre=snapshot();const dirv={left:[-1,0],right:[1,0],up:[0,-1],down:[0,1]}[dir];const s=(cv.width-PAD*5)/4,dist=step=>step*(s+PAD);
+function offset(x,y,dx,dy){let nx=x+dx,ny=y+dy,step=0;while(nx>=0&&nx<B&&ny>=0&&ny<B&&!g[ny][nx]){nx+=dx;ny+=dy;step++;}return step;}
+pre.forEach(t=>{const step=offset(t.x,t.y,dirv[0],dirv[1]);t.dx=dist(dirv[0]*step);t.dy=dist(dirv[1]*step);});
+const start=performance.now(),DUR=120;function frame(now){const p=Math.min(1,(now-start)/DUR);drawGrid();drawTiles(pre.map(t=>({...t,dx:t.dx*p,dy:t.dy*p})));if(p<1)requestAnimationFrame(frame);else draw();}requestAnimationFrame(frame);}
+function draw(){scoreEl.textContent=score;if(score>best){best=score;localStorage.setItem('best2048',best);}bestEl.textContent=best;drawGrid();drawTiles(snapshot());}
+function isOver(){for(let y=0;y<B;y++)for(let x=0;x<B;x++){if(!g[y][x])return false;const v=g[y][x];if(x<B-1&&g[y][x+1]===v)return false;if(y<B-1&&g[y+1][x]===v)return false;}return true;}
+function move(dir){const moved=commit(dir);if(moved){animate(dir);if(isOver())setTimeout(()=>alert('게임 종료!'),10);}}
+addEventListener('keydown',e=>{const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];if(m){e.preventDefault();move(m);}});let sx=0,sy=0;
+cv.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;},{passive:true});
+cv.addEventListener('touchend',e=>{const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;if(Math.abs(dx)>Math.abs(dy))move(dx>0?'right':'left');else move(dy>0?'down':'up');},{passive:true});
+new.onclick=newGame;newGame();})();
 </script>
