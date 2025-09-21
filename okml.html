@@ -290,4 +290,21 @@ modeSel.onchange=()=>{ statusEl.textContent=(turn===BLACK?'흑 차례':'백 차�
 
 reset();
 </script>
+  <script>
+(function(){
+  function report(){
+    const h = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
+    // 내부 기준 가로 900을 함께 보냄
+    window.parent?.postMessage({ type:'OMOK_SIZE', w:900, h }, '*');
+  }
+  window.addEventListener('load', report);
+  window.addEventListener('resize', () => setTimeout(report, 0));
+  // 글꼴/이미지 로딩 지연 대비
+  setTimeout(report, 100);
+})();
+</script>
+
 </html>
