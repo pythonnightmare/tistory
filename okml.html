@@ -1,183 +1,114 @@
 <!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>오목 (15x15)</title>
+<title>오목 SAFE (고정 900x900)</title>
 <style>
-:root{--bg:#0b1220;--card:#111827;--line:#111827;--ink:#e5e7eb;--accent:#22c55e}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,Apple SD Gothic Neo,Segoe UI,Roboto}
-.wrap{max-width:980px;margin:20px auto;padding:16px}
-.card{background:var(--card);border:1px solid #1f2937;border-radius:14px;padding:14px;box-shadow:0 10px 28px rgba(0,0,0,.35)}
-.head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap}
-h1{font-size:18px;margin:0}
-.controls{display:flex;gap:10px;flex-wrap:wrap}
+body{margin:0;display:grid;place-items:center;min-height:100vh;background:#111;color:#e5e7eb;font-family:system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial}
+.wrap{padding:16px;background:#0f172a;border:1px solid #243042;border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.35)}
+h1{font-size:18px;margin:0 0 10px}
+.row{display:flex;gap:8px;margin-bottom:10px}
 button,select{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
 button.sec{background:#374151}
-.badge{padding:6px 10px;border-radius:999px;background:#0f172a;border:1px solid #334155;font-variant-numeric:tabular-nums}
-.notice{color:#93c5fd;font-size:12px;margin-top:8px}
-.boardWrap{position:relative}
-canvas{width:100%;aspect-ratio:1/1;display:block;background:#f8f3e7;border:1px solid #111827;border-radius:12px}
-.winline{position:absolute;inset:0;pointer-events:none}
+.badge{padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #334155}
+canvas{display:block;background:#f7efd9;border:1px solid #111827;border-radius:12px}
 </style>
 
 <div class="wrap">
-  <div class="card">
-    <div class="head">
-      <h1>오목(15×15)</h1>
-      <div class="controls">
-        <button id="new">새 게임</button>
-        <button id="undo" class="sec">되돌리기</button>
-        <select id="mode">
-          <option value="pvp">사람 vs 사람</option>
-          <option value="ai">사람 vs AI(기본)</option>
-        </select>
-        <span class="badge" id="status">흑 선공</span>
-      </div>
-    </div>
-
-    <div class="boardWrap">
-      <canvas id="cv" width="900" height="900"></canvas>
-      <canvas id="hl" class="winline" width="900" height="900"></canvas>
-    </div>
-    <div class="notice">팁: 돌을 잘못 놓았으면 <b>되돌리기</b>. 승리하면 승리선이 강조됩니다. 모바일 터치 지원.</div>
+  <h1>오목 SAFE</h1>
+  <div class="row">
+    <button id="new">새 게임</button>
+    <button id="undo" class="sec">되돌리기</button>
+    <select id="mode"><option value="pvp">사람 vs 사람</option><option value="ai">사람 vs AI</option></select>
+    <span class="badge" id="status">흑 선공</span>
   </div>
+  <!-- 고정 크기 캔버스: CSS/레이아웃 영향 없음 -->
+  <canvas id="cv" width="900" height="900"></canvas>
 </div>
 
 <script>
-/* ===== 설정 ===== */
-const N=15, MARGIN=28, STAR=[3,7,11], STONE_RATIO=0.42, BLACK=1, WHITE=2;
+const N=15, MARGIN=40, STAR=[3,7,11], BLACK=1, WHITE=2, RATIO=0.42;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-const hl=document.getElementById('hl'), hctx=hl.getContext('2d');
-const statusEl=document.getElementById('status');
-const newBtn=document.getElementById('new'), undoBtn=document.getElementById('undo'), modeSel=document.getElementById('mode');
+const statusEl=document.getElementById('status'), modeSel=document.getElementById('mode');
 let board, turn, over, moves, winLine=null;
 
-/* ===== 안전 리사이즈(0px 예방) ===== */
-function ensureSize(canvas){
-  const rect = canvas.getBoundingClientRect();
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  // 레이아웃이 아직 계산 안 됐으면 임시 폭 600px 사용
-  const cssW = rect.width || 600;
-  canvas.width = Math.round(cssW * dpr);
-  canvas.height= Math.round(cssW * dpr);
-  return dpr;
-}
-function clear(c){ c.clearRect(0,0,c.canvas.width,c.canvas.height); }
+function clear(){ ctx.clearRect(0,0,cv.width,cv.height); }
+function cellSize(){ return (cv.width - MARGIN*2)/(N-1); }
+function cellCenter(gx,gy){ const s=cellSize(); return {x:MARGIN+gx*s, y:MARGIN+gy*s, s}; }
+function pxToCell(px,py){ const s=cellSize(); const gx=Math.round((px-MARGIN)/s), gy=Math.round((py-MARGIN)/s); return {gx,gy}; }
 
-function cellCenter(gx,gy){
-  const dpr=Math.max(1,window.devicePixelRatio||1);
-  const W=cv.width,H=cv.height;
-  const size=(Math.min(W,H)-MARGIN*2*dpr)/(N-1);
-  const cx=MARGIN*dpr+gx*size, cy=MARGIN*dpr+gy*size;
-  return {cx,cy,size};
-}
-function pxToCell(x,y){
-  const dpr=Math.max(1,window.devicePixelRatio||1);
-  const W=cv.width,H=cv.height;
-  const size=(Math.min(W,H)-MARGIN*2*dpr)/(N-1);
-  const gx=Math.round((x-MARGIN*dpr)/size);
-  const gy=Math.round((y-MARGIN*dpr)/size);
-  return {gx,gy};
-}
-
-/* ===== 그리기 ===== */
 function drawBoard(){
-  const dpr=ensureSize(cv); ensureSize(hl); clear(ctx); clear(hctx);
+  clear();
+  // 배경
+  const g=ctx.createLinearGradient(0,0,cv.width,cv.height); g.addColorStop(0,'#f7efd9'); g.addColorStop(1,'#f0e2bf');
+  ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
 
-  // 보드 배경(우드 톤)
-  const grad = ctx.createLinearGradient(0,0,cv.width,cv.height);
-  grad.addColorStop(0,'#f7efd9'); grad.addColorStop(1,'#f0e2bf');
-  ctx.fillStyle = grad; ctx.fillRect(0,0,cv.width,cv.height);
-
-  ctx.save();
-  ctx.lineWidth = 2*dpr;            // 선 두껍게
-  ctx.strokeStyle = '#111827';      // 진한 그리드
-  const size = (Math.min(cv.width,cv.height) - MARGIN*2*dpr)/(N-1);
-
+  // 격자
+  ctx.strokeStyle='#111827'; ctx.lineWidth=2;
+  const s=cellSize();
   for(let i=0;i<N;i++){
-    const x=MARGIN*dpr+i*size;
     // 가로
-    ctx.beginPath();
-    ctx.moveTo(MARGIN*dpr, MARGIN*dpr+i*size);
-    ctx.lineTo(MARGIN*dpr+(N-1)*size, MARGIN*dpr+i*size);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(MARGIN, MARGIN+i*s); ctx.lineTo(MARGIN+(N-1)*s, MARGIN+i*s); ctx.stroke();
     // 세로
-    ctx.beginPath();
-    ctx.moveTo(x, MARGIN*dpr);
-    ctx.lineTo(x, MARGIN*dpr+(N-1)*size);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(MARGIN+i*s, MARGIN); ctx.lineTo(MARGIN+i*s, MARGIN+(N-1)*s); ctx.stroke();
   }
   // 화점
-  ctx.fillStyle='#0f172a';
-  const r=3.5*dpr;
+  ctx.fillStyle='#0b1220';
   STAR.forEach(ix=>STAR.forEach(iy=>{
-    const {cx,cy}=cellCenter(ix,iy);
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    const {x,y}=cellCenter(ix,iy); ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
   }));
-  ctx.restore();
 
   // 돌
   for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
+  // 승리선
   if(winLine) drawWinLine(winLine);
 }
-function drawStone(gx,gy,color){
-  const {cx,cy,size}=cellCenter(gx,gy);
-  const dpr=Math.max(1,window.devicePixelRatio||1), r=size*STONE_RATIO;
-  ctx.save();
-  const g=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,r*0.2,cx,cy,r);
-  if(color===BLACK){ g.addColorStop(0,'#6b7280'); g.addColorStop(1,'#111827'); }
-  else{ g.addColorStop(0,'#fff'); g.addColorStop(1,'#d1d5db'); }
-  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-  ctx.lineWidth=1.6*dpr; ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
-  ctx.restore();
-}
-function drawWinLine(line){
-  clear(hctx); hctx.save();
-  const dpr=Math.max(1,window.devicePixelRatio||1);
-  hctx.strokeStyle='#22c55e'; hctx.lineWidth=5*dpr; hctx.lineJoin='round'; hctx.lineCap='round';
-  for(let i=0;i<line.length-1;i++){
-    const a=cellCenter(line[i][0],line[i][1]);
-    const b=cellCenter(line[i+1][0],line[i+1][1]);
-    hctx.beginPath(); hctx.moveTo(a.cx,a.cy); hctx.lineTo(b.cx,b.cy); hctx.stroke();
-  }
-  hctx.restore();
+
+function drawStone(gx,gy,col){
+  const {x,y,s}=cellCenter(gx,gy); const r=s*RATIO;
+  const gr=ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.2,x,y,r);
+  if(col===BLACK){ gr.addColorStop(0,'#6b7280'); gr.addColorStop(1,'#111827'); }
+  else{ gr.addColorStop(0,'#fff'); gr.addColorStop(1,'#d1d5db'); }
+  ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.lineWidth=1.6; ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
 }
 
-/* ===== 게임 로직 ===== */
-function checkWin(gx,gy,color){
+function drawWinLine(line){
+  ctx.save(); ctx.strokeStyle='#22c55e'; ctx.lineWidth=5; ctx.lineJoin='round'; ctx.lineCap='round';
+  for(let i=0;i<line.length-1;i++){
+    const a=cellCenter(line[i][0],line[i][1]), b=cellCenter(line[i+1][0],line[i+1][1]);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function checkWin(gx,gy,c){
   const dirs=[[1,0],[0,1],[1,1],[1,-1]];
   for(const [dx,dy] of dirs){
-    let count=1, line=[[gx,gy]];
-    let x=gx+dx,y=gy+dy;
-    while(x>=0&&x<N&&y>=0&&y<N&&board[y][x]===color){ line.push([x,y]); count++; x+=dx; y+=dy; }
+    let cnt=1, line=[[gx,gy]], x=gx+dx, y=gy+dy;
+    while(x>=0&&x<N&&y>=0&&y<N&&board[y][x]===c){ line.push([x,y]); cnt++; x+=dx; y+=dy; }
     x=gx-dx; y=gy-dy;
-    while(x>=0&&x<N&&y>=0&&y<N&&board[y][x]===color){ line.unshift([x,y]); count++; x-=dx; y-=dy; }
-    if(count>=5) return line;
+    while(x>=0&&x<N&&y>=0&&y<N&&board[y][x]===c){ line.unshift([x,y]); cnt++; x-=dx; y-=dy; }
+    if(cnt>=5) return line;
   }
   return null;
 }
-function reset(){
-  board=Array.from({length:N},()=>Array(N).fill(0));
-  turn=BLACK; over=false; moves=[]; winLine=null;
-  statusEl.textContent='흑 선공';
-  drawBoard();
-}
+
+function reset(){ board=Array.from({length:N},()=>Array(N).fill(0)); turn=BLACK; over=false; moves=[]; winLine=null; statusEl.textContent='흑 선공'; drawBoard(); }
 function place(gx,gy,byAI=false){
   if(over||gx<0||gx>=N||gy<0||gy>=N||board[gy][gx]) return;
   board[gy][gx]=turn; moves.push([gx,gy,turn]); drawStone(gx,gy,turn);
   const line=checkWin(gx,gy,turn);
-  if(line){ over=true; winLine=line; drawWinLine(line); statusEl.textContent=(turn===BLACK?'흑':'백')+' 승리!'; return; }
+  if(line){ over=true; winLine=line; drawBoard(); statusEl.textContent=(turn===BLACK?'흑':'백')+' 승리!'; return; }
   turn=(turn===BLACK?WHITE:BLACK);
   statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례')+(modeSel.value==='ai'&&turn===WHITE?' (AI)':'');
   if(modeSel.value==='ai' && !over && turn===WHITE && !byAI) setTimeout(aiMove,120);
 }
 function undo(){
-  if(!moves.length || (over && winLine)){ winLine=null; over=false; clear(hctx); }
+  if(!moves.length || (over && winLine)){ winLine=null; over=false; }
   if(!moves.length) return;
-  const last=moves.pop(); board[last[1]][last[0]]=0; turn=last[2];
-  drawBoard();
+  const last=moves.pop(); board[last[1]][last[0]]=0; turn=last[2]; drawBoard();
   statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례')+(modeSel.value==='ai'&&turn===WHITE?' (AI)':'');
 }
 function aiMove(){
-  if(over) return;
   const me=WHITE, opp=BLACK;
   function tryWin(col){
     for(let y=0;y<N;y++)for(let x=0;x<N;x++){
@@ -188,52 +119,27 @@ function aiMove(){
   }
   let mv=tryWin(me)||tryWin(opp);
   if(!mv){
-    const cand=[];
-    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-      if(board[y][x]) continue;
-      let near=0;
+    const cand=[]; for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      if(board[y][x]) continue; let near=0;
       for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
-        const ny=y+dy,nx=x+dx;
-        if(nx>=0&&nx<N&&ny>=0&&ny<N && board[ny][nx]) near++;
-      }
-      if(near>0) cand.push({x,y,w:near});
+        const ny=y+dy,nx=x+dx; if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]) near++;
+      } if(near>0) cand.push({x,y,w:near});
     }
     if(cand.length){
       const sum=cand.reduce((a,c)=>a+c.w,0); let r=Math.random()*sum;
       for(const c of cand){ r-=c.w; if(r<=0){ mv=[c.x,c.y]; break; } }
       if(!mv){ const c=cand[Math.floor(Math.random()*cand.length)]; mv=[c.x,c.y]; }
-    }else mv=[7,7];
+    } else mv=[7,7];
   }
   if(mv) place(mv[0],mv[1],true);
 }
 
-/* ===== 입력/이벤트 ===== */
-function pointerPos(ev){
-  const rect=cv.getBoundingClientRect();
-  const clientX=(ev.touches?ev.touches[0].clientX:ev.clientX);
-  const clientY=(ev.touches?ev.touches[0].clientY:ev.clientY);
-  const dpr=Math.max(1,window.devicePixelRatio||1);
-  return {x:(clientX-rect.left)*dpr, y:(clientY-rect.top)*dpr};
-}
-function onTap(ev){
-  ev.preventDefault?.();
-  if(over) return;
-  const p=pointerPos(ev);
-  const c=pxToCell(p.x,p.y);
-  place(c.gx,c.gy);
-}
-cv.addEventListener('click', onTap);
-cv.addEventListener('touchstart', onTap, {passive:false});
-window.addEventListener('resize', ()=>{ drawBoard(); });
-// 레이아웃이 늦게 잡히는 경우 보정해서 몇 번 더 그림
-document.addEventListener('DOMContentLoaded', ()=>setTimeout(drawBoard, 0));
-window.addEventListener('load', ()=>setTimeout(drawBoard, 0));
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(drawBoard,0); });
-
-newBtn.onclick=reset; undoBtn.onclick=undo;
+cv.addEventListener('click', e=>{ const rect=cv.getBoundingClientRect(); place(...Object.values(pxToCell(e.clientX-rect.left, e.clientY-rect.top))); });
+cv.addEventListener('touchstart', e=>{const t=e.touches[0],r=cv.getBoundingClientRect(); place(...Object.values(pxToCell(t.clientX-r.left,t.clientY-r.top)));},{passive:true});
+document.getElementById('new').onclick=reset;
+document.getElementById('undo').onclick=undo;
 modeSel.onchange=()=>{ statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례')+(modeSel.value==='ai'&&turn===WHITE?' (AI)':''); };
 
-/* 시작 */
 reset();
 </script>
 </html>
