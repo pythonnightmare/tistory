@@ -1,16 +1,16 @@
 <!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>타자 속도 테스트</title>
+<title>타자 속도 테스트 (Lite)</title>
 <style>
-body{margin:0;background:#0b1220;color:#e5e7eb;font-family:system-ui,Segoe UI,Apple SD Gothic Neo,Roboto}
+body{margin:0;background:#0b1220;color:#e5e7eb;font-family:system-ui,Apple SD Gothic Neo,Segoe UI,Roboto}
 .wrap{max-width:900px;margin:0 auto;padding:16px}
 .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px}
 h1{margin:0 0 6px;font-size:18px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .badge{padding:6px 10px;border:1px solid #334155;border-radius:999px;background:#0f172a}
-.passage{background:#0f172a;border:1px solid #243042;border-radius:12px;padding:12px;line-height:1.7}
-.passage span{opacity:.6}
-.passage span.done{opacity:1}
-.passage span.bad{color:#ef4444;opacity:1}
+.passage{background:#0f172a;border:1px solid #243042;border-radius:12px;padding:12px;line-height:1.7;word-break:keep-all}
+.passage .done{opacity:1}
+.passage span{opacity:.55}
+.passage .bad{color:#ef4444;opacity:1}
 input{width:100%;padding:12px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#e5e7eb}
 .btn{border:0;background:#22c55e;color:#0b1220;font-weight:800;border-radius:10px;padding:10px 14px;cursor:pointer}
 small{color:#93c5fd}
@@ -18,64 +18,67 @@ small{color:#93c5fd}
 <div class="wrap"><div class="card">
   <h1>타자 속도 테스트 (60초)</h1>
   <div class="row">
-    <span class="badge">남은 시간: <b id="time">60</b>s</span>
+    <span class="badge">남은: <b id="time">60</b>s</span>
     <span class="badge">WPM: <b id="wpm">0</b></span>
     <span class="badge">정확도: <b id="acc">100%</b></span>
-    <span class="badge">최고기록: <b id="best">-</b></span>
+    <span class="badge">최고: <b id="best">-</b></span>
     <button class="btn" id="restart">다시</button>
   </div>
   <div class="passage" id="passage"></div>
-  <div class="row">
-    <input id="inp" placeholder="여기에 입력…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-  </div>
-  <small>Tip: 끝나면 결과가 저장돼요(LocalStorage).</small>
+  <div class="row"><input id="inp" placeholder="여기에 입력…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+  <small>Tip: 결과는 기기에 저장됩니다.</small>
 </div></div>
 <script>
-const texts=[
-'바람이 불어오는 곳, 그곳으로 가네. 길을 따라 꿈을 찾아 걸어가네.',
-'낯선 길 위에서도 우리는 결국 서로를 알아볼 수 있을 거야.',
-'가끔은 멈춰 서서 숨을 고르고, 다시 한 발 내딛으면 돼.',
-'작은 습관이 큰 변화를 만든다. 오늘의 나를 칭찬해 보자.'
-];
-let target='', idx=0, wrong=0, timer=60, ticking=null, started=false;
-const elP=document.getElementById('passage'), elIn=document.getElementById('inp');
-const tEl=time, wEl=wpm, aEl=acc, bEl=best;
-bEl.textContent=localStorage.getItem('typing_best')||'-';
-function setText(){
-  target=(texts[Math.floor(Math.random()*texts.length)]+' ').repeat(8).slice(0,480);
-  elP.innerHTML=''; idx=0; wrong=0;
-  [...target].forEach((ch,i)=>{ const s=document.createElement('span'); s.textContent=ch; if(i<1)s.className='done'; elP.appendChild(s); });
-}
-function updateStats(){
-  const correct=idx-wrong;
-  const words=correct/5;
-  const wpm=Math.max(0, Math.round(words/((60-timer||1)/60)));
-  const accP= idx? Math.max(0, Math.round((correct/idx)*100)) : 100;
-  wEl.textContent=wpm; aEl.textContent=accP+'%';
-}
-function tick(){
-  tEl.textContent=timer;
-  if(--timer<0){ clearInterval(ticking); elIn.disabled=true; done(); }
-}
-function done(){
-  const finalWPM=wEl.textContent;
-  const prev=Number(localStorage.getItem('typing_best')||0);
-  if(+finalWPM>prev){ localStorage.setItem('typing_best', finalWPM); bEl.textContent=finalWPM; }
-}
-setText();
-elIn.addEventListener('input', e=>{
-  if(!started){ started=true; ticking=setInterval(tick,1000); }
-  const ch=elIn.value.slice(-1);
-  const cur=target[idx]||'';
-  if(ch===cur){ elP.children[idx]?.classList.add('done'); idx++; }
-  else { wrong++; elP.children[idx]?.classList.add('bad','done'); idx++; }
-  updateStats();
-  if(idx>=target.length){ setText(); elIn.value=''; }
-});
-restart.onclick=()=>{ clearInterval(ticking); timer=60; started=false; elIn.disabled=false; elIn.value=''; setText(); updateStats(); tEl.textContent=60; elIn.focus(); };
-updateStats();
-</script>
-<script>
-(function(){function r(){const h=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);parent?.postMessage({type:'EMBED_SIZE',h},'*');}
-addEventListener('load',r);addEventListener('resize',()=>setTimeout(r,0));setTimeout(r,50);})();
+(() => {
+  const texts=[
+  '하루에 한 걸음이라도 꾸준히 걷는 사람이 결국 멀리 간다.',
+  '작은 습관이 큰 변화를 만든다. 오늘의 나를 칭찬해 보자.',
+  '가끔은 멈춰 서서 숨을 고르고, 다시 한 발 내딛으면 돼.',
+  '낯선 길 위에서도 우리는 결국 서로를 알아볼 수 있을 거야.'
+  ];
+  let target='', i=0, mistakes=0, started=false, t=60, tick=null;
+  const elP=passage, elIn=inp, elT=time, elW=wpm, elA=acc, elB=best;
+  elB.textContent=localStorage.getItem('typing_best')||'-';
+
+  function setText(){
+    target=(texts[Math.random()*texts.length|0]+' ').repeat(8).slice(0,480);
+    const frag=document.createDocumentFragment();
+    for(let k=0;k<target.length;k++){ const s=document.createElement('span'); s.textContent=target[k]; if(k===0) s.className='done'; frag.appendChild(s); }
+    elP.innerHTML=''; elP.appendChild(frag); i=0; mistakes=0;
+  }
+  function stats(){
+    const correct=Math.max(0, i - mistakes);
+    const words=correct/5;
+    const w=Math.max(0, Math.round(words/((60-t||1)/60)));
+    const p= i? Math.max(0, Math.round((correct/i)*100)) : 100;
+    elW.textContent=w; elA.textContent=p+'%';
+  }
+  function end(){
+    clearInterval(tick); elIn.disabled=true;
+    const w=+elW.textContent, prev=+(localStorage.getItem('typing_best')||0);
+    if(w>prev){ localStorage.setItem('typing_best', w); elB.textContent=w; }
+  }
+  function start(){
+    started=true;
+    tick=setInterval(()=>{ elT.textContent=t; if(--t<0){ end(); } },1000);
+  }
+  setText(); stats(); elT.textContent=60;
+
+  elIn.addEventListener('input', e=>{
+    if(!started) start();
+    const v=e.target.value; const ch=v.slice(-1); e.target.value=''; // 한 글자씩만 처리(IME 이슈↓)
+    const cur=target[i]||'';
+    if(!cur) return;
+    if(ch===cur){ elP.children[i]?.classList.add('done'); i++; }
+    else{ elP.children[i]?.classList.add('bad','done'); i++; mistakes++; }
+    if(i>=target.length) setText();
+    stats();
+  });
+
+  restart.onclick=()=>{ clearInterval(tick); t=60; started=false; elIn.disabled=false; elIn.value=''; setText(); stats(); elT.textContent=60; elIn.focus(); };
+
+  // 임베드 높이 자동 보고
+  function report(){ parent?.postMessage({type:'EMBED_SIZE',h:document.body.scrollHeight},'*'); }
+  addEventListener('load',report); addEventListener('resize',()=>setTimeout(report,0)); setTimeout(report,50);
+})();
 </script>
