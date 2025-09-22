@@ -1,457 +1,510 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>네온 사커 2D – 오프라인 2인 · AI</title>
-<style>
-  :root{
-    --bg:#0b1220; --ink:#e5e7eb; --muted:#94a3b8; --brand1:#06b6d4; --brand2:#7c3aed; --warn:#ef4444; --ok:#10b981;
-    --panel: rgba(255,255,255,.06); --glow:0 8px 24px rgba(124,58,237,.35);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Apple SD Gothic Neo","Noto Sans KR",Arial,sans-serif;background:radial-gradient(1200px 900px at 15% -10%,#0ea5e955,transparent 60%),radial-gradient(1000px 700px at 85% 10%,#7c3aed44,transparent 60%),#0b1220;color:var(--ink)}
-  .container{max-width:1100px;margin:20px auto;padding:0 16px}
-  .header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-  .brand{display:flex;align-items:center;gap:10px}
-  .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--brand1),var(--brand2));box-shadow:var(--glow);position:relative}
-  .logo:after{content:"";position:absolute;inset:6px;border-radius:10px;background:radial-gradient(circle at 70% 30%,rgba(255,255,255,.9),transparent 55%)}
-  h1{font-size:20px;margin:0}
-  .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;backdrop-filter:blur(10px);box-shadow:var(--glow)}
-  .toolbar{display:flex;gap:10px;align-items:center;padding:12px 14px;flex-wrap:wrap}
-  .seg{display:inline-grid;grid-auto-flow:column;gap:6px;padding:4px;border-radius:999px;background:rgba(255,255,255,.06)}
-  .seg button{border:0;padding:8px 12px;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;font-weight:700}
-  .seg button.active{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:white;box-shadow:var(--glow)}
-  .btn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:9px 12px;border-radius:10px;color:var(--ink);cursor:pointer;font-weight:700}
-  .btn.primary{border:0;background:linear-gradient(135deg,var(--brand1),var(--brand2));box-shadow:var(--glow)}
-  .btn.danger{background:linear-gradient(135deg,#ef4444,#f97316);border:0}
-  .hint{color:var(--muted);font-size:13px}
-  .grid{display:grid;grid-template-columns: 2fr 1fr;gap:12px;padding:14px}
-  @media(max-width:980px){.grid{grid-template-columns: 1fr}}
-  .side{padding:12px;display:grid;gap:10px}
-  .panel{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  canvas{width:100%;height:auto;background:#0a1220;border-radius:14px;border:1px solid rgba(255,255,255,.1)}
-  .score{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;margin-bottom:8px}
-  .score .team{display:flex;align-items:center;gap:8px}
-  .badge{display:inline-block;padding:4px 8px;font-size:12px;border-radius:999px;background:rgba(255,255,255,.08);color:#a5b4fc;border:1px solid rgba(255,255,255,.1)}
-  .cooldown{height:8px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}
-  .cooldown>span{display:block;height:100%;background:linear-gradient(90deg,var(--brand1),var(--brand2))}
-  .adbox{height:90px;border:1px dashed rgba(255,255,255,.2);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
-  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:2px 6px;background:rgba(255,255,255,.06)}
-  .license{font-size:12px;color:var(--muted)}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>5v5 축구 게임 (티스토리용 단일 파일)</title>
+  <style>
+    :root { --bg:#0e1117; --panel:#161b22; --ink:#e6edf3; --muted:#9da6b2; --accent:#23a559; --accent-2:#2d7ff9; --accent-3:#f3533b; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:16px; }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    #root{display:grid;grid-template-rows:auto 1fr;min-height:100dvh}
+    header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(0deg,#0d1016,#111622);border-bottom:1px solid #1f2631}
+    header h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
+    header .hint{color:var(--muted);font-size:12px}
+    .wrap{position:relative;display:grid;place-items:center;padding:12px}
+    .stage{position:relative;width:min(1200px,95vw);aspect-ratio:16/10;background:#0b5f2a radial-gradient(1000px 600px at 50% 40%,rgba(255,255,255,.06),transparent);border:12px solid #1a202c;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    canvas{width:100%;height:100%;display:block;background:transparent}
+    .hud{position:absolute;inset:10px 10px auto 10px;display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(0,0,0,.35);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.08);border-radius:12px;font-weight:600}
+    .badge{padding:4px 8px;border-radius:999px;font-size:12px}
+    .teamA{background:rgba(45,127,249,.25);border:1px solid rgba(45,127,249,.4)}
+    .teamB{background:rgba(243,83,59,.25);border:1px solid rgba(243,83,59,.4)}
+    .timer{color:#fff;opacity:.85;margin-left:6px;min-width:60px;text-align:center}
+    .menu{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.6);backdrop-filter:blur(6px)}
+    .card{width:min(860px,92%);background:var(--panel);border:1px solid #263142;border-radius:20px;box-shadow:var(--shadow);padding:16px;display:grid;gap:14px}
+    .row{display:grid;gap:12px}
+    .grid{display:grid;gap:10px;grid-template-columns:repeat(12,1fr);align-items:center}
+    .seg{grid-column:span 12;display:flex;gap:8px}
+    .seg button{flex:1;padding:12px;font-weight:700;border-radius:12px;border:1px solid #2a3546;background:#0f1520;color:var(--ink);cursor:pointer}
+    .seg button.active{outline:2px solid var(--accent)}
+    label{font-size:12px;color:var(--muted)}
+    .sl{display:contents}
+    .sl label{grid-column:span 3;text-align:right;padding-right:8px}
+    .sl input[type=range]{grid-column:span 7;width:100%;accent-color:var(--accent)}
+    .sl output{grid-column:span 2;text-align:center;font-variant-numeric:tabular-nums}
+    .teams{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .teams .panel{padding:12px;border-radius:14px;background:#0f1520;border:1px solid #2a3546}
+    .capline{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:0 0 6px 0;color:var(--muted);font-size:12px}
+    .capline strong{color:#e7ffef}
+    .actions{display:flex;gap:10px;justify-content:flex-end}
+    .btn{padding:12px 16px;border-radius:12px;border:1px solid #2a3546;background:#111a29;color:var(--ink);cursor:pointer;font-weight:800}
+    .btn.primary{background:var(--accent);border-color:#1f7e4a;color:#07160f}
+    .toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:12px;color:#e2f7eb;display:none}
+    .goalBanner{position:absolute;inset:0;display:none;place-items:center;color:white;font-weight:900;font-size:clamp(32px,6vw,72px);text-shadow:0 6px 30px rgba(0,0,0,.6)}
+  </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="brand"><div class="logo"></div><h1>네온 사커 2D <span class="hint">– 오프라인 2인 · AI</span></h1></div>
-      <div class="hint">티스토리에 그대로 붙여넣어 실행 가능 · 네온 UI · CC0/퍼블릭도메인 벡터</div>
-    </div>
+  <div id="root">
+    <header>
+      <h1>5v5 축구 게임</h1>
+      <div class="hint">티스토리 HTML 블록에 그대로 붙여넣어 실행</div>
+    </header>
 
-    <div class="card">
-      <div class="toolbar">
-        <div class="seg" id="modeSeg" role="tablist" aria-label="모드">
-          <button class="active" data-mode="p1-vs-ai" aria-pressed="true">P1 vs AI</button>
-          <button data-mode="p1-vs-p2" aria-pressed="false">P1 vs P2</button>
+    <div class="wrap">
+      <div class="stage" id="stage">
+        <canvas id="game" width="960" height="600" tabindex="0" aria-label="축구게임 캔버스"></canvas>
+        <div class="hud" id="hud">
+          <span class="badge teamA" id="scoreA">A 0</span>
+          <span class="badge teamB" id="scoreB">B 0</span>
+          <span class="timer" id="timer">03:00</span>
         </div>
-        <div class="seg" id="teamSeg" title="팀 크기">
-          <button class="active" data-size="1">1v1</button>
-          <button data-size="3">3v3</button>
-        </div>
-        <button class="btn primary" id="startBtn">경기 시작</button>
-        <button class="btn" id="pauseBtn">일시정지</button>
-        <button class="btn danger" id="resetBtn">리셋</button>
-        <span class="hint">조작: <span class="kbd">WASD</span> + <span class="kbd">J</span>(패스) <span class="kbd">K</span>(슛) <span class="kbd">L</span>(대시) · 2P: <span class="kbd">←→↑↓</span> + <span class="kbd">,</span>/<span class="kbd">.</span>/<span class="kbd">/</span></span>
-      </div>
+        <div class="goalBanner" id="goalBanner">GOAL!</div>
 
-      <div class="grid">
-        <div class="field panel">
-          <div class="score">
-            <div class="team"><span class="badge">블루</span><strong id="scoreA">0</strong></div>
-            <div><span class="badge" id="timer">90"</span></div>
-            <div class="team"><strong id="scoreB">0</strong><span class="badge" style="color:#fda4af">핑크</span></div>
-          </div>
-          <canvas id="game" width="960" height="540" aria-label="게임 필드"></canvas>
-        </div>
-        <div class="side">
-          <div class="panel">
-            <div class="row" style="justify-content:space-between">
-              <div>
-                <div class="hint">스킬 쿨다운 (P1)</div>
-                <div class="cooldown" title="대시"><span id="cdDash1" style="width:100%"></span></div>
-                <div class="cooldown" title="커브슛" style="margin-top:6px"><span id="cdCurve1" style="width:100%"></span></div>
-              </div>
-              <div>
-                <div class="hint">스킬 쿨다운 (P2/AI)</div>
-                <div class="cooldown" title="대시"><span id="cdDash2" style="width:100%"></span></div>
-                <div class="cooldown" title="커브슛" style="margin-top:6px"><span id="cdCurve2" style="width:100%"></span></div>
+        <div class="menu" id="menu">
+          <div class="card">
+            <h2>게임 시작</h2>
+            <div class="row">
+              <div class="seg" role="tablist" aria-label="플레이 모드 선택">
+                <button id="mode1" class="active" aria-pressed="true">혼자 플레이 (1P vs AI)</button>
+                <button id="mode2" aria-pressed="false">2인 (1P vs 2P)</button>
               </div>
             </div>
-          </div>
-          <div class="panel">
-            <div class="hint">수익화 자리(예시)</div>
-            <div class="adbox">Ad / 후원 버튼 / 다운로드 링크 자리</div>
-          </div>
-          <div class="panel">
-            <div class="hint">룰</div>
-            <ul class="hint" style="margin:6px 0 0 18px;line-height:1.5">
-              <li>전후반 없음, 90초 단판</li>
-              <li>대시(L / /) 0.6초, 쿨 3초</li>
-              <li>커브슛(K / .) 스핀 1초 지속</li>
-              <li>볼 피직스: 마찰/바운스/스핀감쇠</li>
-            </ul>
-          </div>
-          <div class="panel license">
-            <strong>라이선스</strong><br/>
-            이 파일의 코드/벡터 그래픽/아이콘/사운드 빌더(비프음)는 본 답변에서 신규 창작되었습니다. <u>CC0(퍼블릭 도메인)</u>으로 자유 사용/수정/수익화 가능합니다. 제3자 자산/상표/선수명/로고 불사용.
+
+            <div class="row teams">
+              <div class="panel">
+                <h3 style="margin:0 0 8px 0;color:#2d7ff9">팀 A (왼쪽, 파란색)</h3>
+                <div class="capline">총 배분치 <strong>400</strong> · 남은 <strong id="a_left">0</strong></div>
+                <div class="grid sl">
+                  <label for="a_spd">이동 속도</label>
+                  <input id="a_spd" type="range" min="50" max="150" value="100" />
+                  <output id="a_spd_o">100</output>
+                  <label for="a_pas">패스 정확</label>
+                  <input id="a_pas" type="range" min="50" max="150" value="100" />
+                  <output id="a_pas_o">100</output>
+                  <label for="a_sho">슛 파워</label>
+                  <input id="a_sho" type="range" min="50" max="150" value="100" />
+                  <output id="a_sho_o">100</output>
+                  <label for="a_def">수비 집중</label>
+                  <input id="a_def" type="range" min="50" max="150" value="100" />
+                  <output id="a_def_o">100</output>
+                </div>
+              </div>
+              <div class="panel">
+                <h3 style="margin:0 0 8px 0;color:#f3533b">팀 B (오른쪽, 빨간색)</h3>
+                <div class="capline">총 배분치 <strong>400</strong> · 남은 <strong id="b_left">0</strong></div>
+                <div class="grid sl">
+                  <label for="b_spd">이동 속도</label>
+                  <input id="b_spd" type="range" min="50" max="150" value="100" />
+                  <output id="b_spd_o">100</output>
+                  <label for="b_pas">패스 정확</label>
+                  <input id="b_pas" type="range" min="50" max="150" value="100" />
+                  <output id="b_pas_o">100</output>
+                  <label for="b_sho">슛 파워</label>
+                  <input id="b_sho" type="range" min="50" max="150" value="100" />
+                  <output id="b_sho_o">100</output>
+                  <label for="b_def">수비 집중</label>
+                  <input id="b_def" type="range" min="50" max="150" value="100" />
+                  <output id="b_def_o">100</output>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary" id="startBtn">게임 시작</button>
+            </div>
           </div>
         </div>
+
+        <div class="toast" id="toast">캔버스를 클릭해 포커스를 주세요 (키보드 조작 활성화)</div>
       </div>
     </div>
   </div>
 
-<script>
-(()=>{
-  // =========================
-  // Utils & Audio (tiny beeps)
-  // =========================
-  const rand = (a,b)=> a + Math.random()*(b-a);
-  const clamp = (v,min,max)=> Math.max(min, Math.min(max,v));
-  const len2 = (x,y)=> Math.hypot(x,y);
-  const norm = (x,y)=>{ const l=Math.hypot(x,y)||1; return [x/l,y/l]; };
-  const now = ()=> performance.now();
+  <script>
+  ;(function(){
+    "use strict";
 
-  // Minimal beep generator using WebAudio, procedurally created (CC0)
-  const Audio = (()=>{
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const beep = (freq=600, dur=0.08, type='sine', vol=0.03)=>{
-      const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.type=type; o.frequency.value=freq; g.gain.value=vol; o.connect(g); g.connect(ctx.destination);
-      o.start(); o.stop(ctx.currentTime+dur);
+    // 유틸
+    var clamp=function(v,lo,hi){return Math.max(lo,Math.min(hi,v));};
+    var lerp=function(a,b,t){return a+(b-a)*t;};
+    var rand=function(a,b){if(a===void 0){a=0;} if(b===void 0){b=1;} return Math.random()*(b-a)+a;};
+    var TAU=Math.PI*2;
+    function Vec2(x,y){this.x=x||0;this.y=y||0;}
+    Vec2.prototype.set=function(x,y){this.x=x;this.y=y;return this;};
+    Vec2.prototype.clone=function(){return new Vec2(this.x,this.y);};
+    Vec2.prototype.add=function(v){this.x+=v.x;this.y+=v.y;return this;};
+    Vec2.prototype.sub=function(v){this.x-=v.x;this.y-=v.y;return this;};
+    Vec2.prototype.mul=function(s){this.x*=s;this.y*=s;return this;};
+    Vec2.prototype.len=function(){return Math.hypot(this.x,this.y);};
+    Vec2.prototype.norm=function(){var l=this.len()||1;this.x/=l;this.y/=l;return this;};
+    Vec2.prototype.limit=function(m){var l=this.len();if(l>m){this.mul(m/l);}return this;};
+    Vec2.add=function(a,b){return new Vec2(a.x+b.x,a.y+b.y);};
+    Vec2.sub=function(a,b){return new Vec2(a.x-b.x,a.y-b.y);};
+
+    // 필드
+    var W=960,H=600,GOAL_W=140,GOAL_DEPTH=10;
+    var LBOX=[20,80], RBOX=[W-80,W-20];
+
+    // 물리/파라미터
+    var FRICTION=0.985,PLAYER_RADIUS=12,BALL_RADIUS=6,GRAB_DIST=14;
+    var PASS_SPEED=5.6,SHOT_SPEED=8.0;
+    var PLAYER_SPEED_SCALE=0.2;
+    var SEPARATION_DIST=PLAYER_RADIUS*2.1;
+
+    // AI 성향
+    var AI_SHOOT_DIST=200,AI_PASS_CHAIN=0.6,AI_CROSS_BIAS=0.7;
+
+    // 시간
+    var HALF_LEN=3*60;
+
+    // 색상
+    var TEAM_COLOR_A="#2d7ff9",TEAM_COLOR_B="#f3533b",PLAYER_OUTLINE="#0b0f16",BALL_COLOR="#f3f3f3";
+
+    // 입력
+    var Keys={
+      W:"KeyW",A:"KeyA",S:"KeyS",D:"KeyD",
+      PASS1:"KeyJ",SHOOT1:"KeyK",SWITCH1:"KeyL",CURVE1:"KeyU",
+      UP:"ArrowUp",DOWN:"ArrowDown",LEFT:"ArrowLeft",RIGHT:"ArrowRight",
+      PASS2:"Digit1",SHOOT2:"Digit2",SWITCH2:"Digit3",CURVE2:"Digit4"
     };
-    return { beep };
-  })();
 
-  // =========================
-  // Game State
-  // =========================
-  const cvs = document.getElementById('game');
-  const ctx = cvs.getContext('2d');
-  const W = cvs.width, H = cvs.height;
+    // 엘리먼트
+    var canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+    var hudScoreA=document.getElementById("scoreA"),hudScoreB=document.getElementById("scoreB"),hudTimer=document.getElementById("timer"),toast=document.getElementById("toast"),goalBanner=document.getElementById("goalBanner");
+    var menu=document.getElementById("menu"),mode1Btn=document.getElementById("mode1"),mode2Btn=document.getElementById("mode2"),startBtn=document.getElementById("startBtn");
 
-  const UI = {
-    scoreA: document.getElementById('scoreA'),
-    scoreB: document.getElementById('scoreB'),
-    timer:  document.getElementById('timer'),
-    cdDash1: document.getElementById('cdDash1'),
-    cdCurve1: document.getElementById('cdCurve1'),
-    cdDash2: document.getElementById('cdDash2'),
-    cdCurve2: document.getElementById('cdCurve2'),
-    startBtn: document.getElementById('startBtn'),
-    pauseBtn: document.getElementById('pauseBtn'),
-    resetBtn: document.getElementById('resetBtn'),
-    modeSeg: document.getElementById('modeSeg'),
-    teamSeg: document.getElementById('teamSeg'),
-  };
+    // 슬라이더
+    function bind(id,out){var el=document.getElementById(id),oo=document.getElementById(out),fn=function(){oo.textContent=el.value;}; el.addEventListener("input",fn); fn(); return el;}
+    var a_spd=bind("a_spd","a_spd_o"),a_pas=bind("a_pas","a_pas_o"),a_sho=bind("a_sho","a_sho_o"),a_def=bind("a_def","a_def_o");
+    var b_spd=bind("b_spd","b_spd_o"),b_pas=bind("b_pas","b_pas_o"),b_sho=bind("b_sho","b_sho_o"),b_def=bind("b_def","b_def_o");
+    var a_left=document.getElementById("a_left"),b_left=document.getElementById("b_left");
+    var STAT_CAP=400;
+    var sumA=function(){return +a_spd.value+ +a_pas.value+ +a_sho.value+ +a_def.value;};
+    var sumB=function(){return +b_spd.value+ +b_pas.value+ +b_sho.value+ +b_def.value;};
+    var updLeft=function(){a_left.textContent=Math.max(0,STAT_CAP-sumA());b_left.textContent=Math.max(0,STAT_CAP-sumB());};
+    function guard(el,team){el.addEventListener("input",function(){var s=team==="A"?sumA():sumB(); if(s>STAT_CAP){var over=s-STAT_CAP; el.value=Math.max(+el.min,+el.value-over);} document.getElementById(el.id+"_o").textContent=el.value; updLeft();});}
+    [a_spd,a_pas,a_sho,a_def].forEach(function(e){guard(e,"A");}); [b_spd,b_pas,b_sho,b_def].forEach(function(e){guard(e,"B");}); updLeft();
 
-  let GAME = { running:false, paused:false, mode:'p1-vs-ai', teamSize:1, timeLeft:90, lastTick:0, scoreA:0, scoreB:0 };
+    var game;
 
-  UI.modeSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    UI.modeSeg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active'); GAME.mode = b.dataset.mode;
-  });
-  UI.teamSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    UI.teamSeg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active'); GAME.teamSize = +b.dataset.size; reset();
-  });
-
-  UI.startBtn.onclick = ()=>{ if(!GAME.running){ start(); } };
-  UI.pauseBtn.onclick = ()=>{ GAME.paused = !GAME.paused; UI.pauseBtn.textContent = GAME.paused? '재개':'일시정지'; };
-  UI.resetBtn.onclick = ()=> reset();
-
-  // =========================
-  // Entities
-  // =========================
-  const PITCH = { left:60, right:W-60, top:40, bottom:H-40, mid: W/2 };
-  const GOAL = { width:10, height:120 };
-
-  class Ball{
-    constructor(){ this.x=W/2; this.y=H/2; this.vx=0; this.vy=0; this.spin=0; }
-    kick(ax,ay,power=7,spin=0){ const [nx,ny]=norm(ax,ay); this.vx=nx*power; this.vy=ny*power; this.spin=spin; Audio.beep(520,0.06,'triangle',0.04); }
-    update(dt){
-      // apply spin: perpendicular force (Magnus-like)
-      this.vx += -this.spin * this.vy * 0.02;
-      this.vy +=  this.spin * this.vx * 0.02;
-      // friction
-      this.vx *= 0.992; this.vy *= 0.992;
-      this.spin *= 0.985;
-      this.x += this.vx; this.y += this.vy;
-      // bounds
-      if(this.y< PITCH.top+10){ this.y=PITCH.top+10; this.vy*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
-      if(this.y> PITCH.bottom-10){ this.y=PITCH.bottom-10; this.vy*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
-      if(this.x< PITCH.left+10){ this.x=PITCH.left+10; this.vx*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
-      if(this.x> PITCH.right-10){ this.x=PITCH.right-10; this.vx*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
-    }
-  }
-
-  class Player{
-    constructor(team,id){
-      this.team=team; this.id=id;
-      this.x=0; this.y=0; this.vx=0; this.vy=0; this.speed=2.2; this.r=12;
-      this.hasBall=false; this.coolDash=0; this.coolCurve=0; this.ai=false; this.target={x:0,y:0};
-    }
-    spawn(x,y){ this.x=x; this.y=y; this.vx=this.vy=0; this.hasBall=false; }
-    update(dt,input){
-      // cooldowns
-      this.coolDash = Math.max(0, this.coolDash - dt);
-      this.coolCurve = Math.max(0, this.coolCurve - dt);
-
-      let ax=0, ay=0;
-      if(input){ ax = (input.right?1:0) - (input.left?1:0); ay = (input.down?1:0) - (input.up?1:0); }
-      if(this.ai){ [ax,ay] = aiMove(this); }
-      if(ax||ay){ const [nx,ny]=norm(ax,ay); this.vx += nx*this.speed; this.vy += ny*this.speed; }
-
-      // drag
-      this.vx *= 0.88; this.vy *= 0.88;
-
-      // position
-      this.x = clamp(this.x + this.vx, PITCH.left+this.r, PITCH.right-this.r);
-      this.y = clamp(this.y + this.vy, PITCH.top+this.r, PITCH.bottom-this.r);
-
-      // carry ball if owned
-      if(this.hasBall){ ball.x = this.x + (this.team===0? 14 : -14); ball.y = this.y; ball.vx=this.vx*0.5; ball.vy=this.vy*0.5; ball.spin*=0.98; }
-    }
-    tryDash(){ if(this.coolDash<=0){ const f=1.8; this.vx*=f; this.vy*=f; this.coolDash=3; Audio.beep(760,0.06,'sawtooth',0.05);} }
-    tryPassOrShoot(kind){
-      if(!this.hasBall) return;
-      const dir = (this.team===0? 1 : -1);
-      if(kind==='pass'){
-        const mate = pickPassTarget(this);
-        const tx = mate? mate.x : (this.x + dir*60);
-        const ty = mate? mate.y : this.y;
-        ball.kick(tx-this.x, ty-this.y, 7, 0);
-        this.hasBall=false;
-      }else if(kind==='shoot'){
-        const gx = (this.team===0? PITCH.right+40 : PITCH.left-40);
-        const gy = H/2 + rand(-40,40);
-        const spin = (this.coolCurve<=0)? (this.team===0?  0.25 : -0.25) : 0; // curve once per cooldown
-        ball.kick(gx-this.x, gy-this.y, 9, spin);
-        if(this.coolCurve<=0){ this.coolCurve=4; Audio.beep(640,0.08,'triangle',0.05);} else { Audio.beep(560,0.06,'triangle',0.04);} 
-        this.hasBall=false;
+    // 공
+    function Ball(){this.pos=new Vec2(W/2,H/2);this.vel=new Vec2();this.r=BALL_RADIUS;this.owner=null;this.curve=new Vec2(0,0);this.pk=0;}
+    Ball.prototype.resetAt=function(left){this.pos.set(W/2+(left?-40:40),H/2);this.vel.set(0,0);this.owner=null;this.curve.set(0,0);this.pk=0;};
+    Ball.prototype.update=function(dt){
+      if(this.pk>0){this.pk-=dt||0; if(this.pk<0)this.pk=0;}
+      if(this.owner){
+        var f=ownerFacing(this.owner).mul(10);
+        this.pos.set(this.owner.pos.x+f.x,this.owner.pos.y+f.y);
+        this.vel.mul(0); this.curve.mul(0); return;
       }
-    }
-  }
+      this.pos.add(this.vel);
+      if(this.curve){ this.vel.add(this.curve); this.curve.mul(0.985); }
+      this.vel.mul(FRICTION);
+      // 벽
+      if(this.pos.y<20+this.r){this.pos.y=20+this.r;this.vel.y*=-0.8;}
+      if(this.pos.y>H-20-this.r){this.pos.y=H-20-this.r;this.vel.y*=-0.8;}
+      if(this.pos.x<20+this.r){this.pos.x=20+this.r;this.vel.x*=-0.8;}
+      if(this.pos.x>W-20-this.r){this.pos.x=W-20-this.r;this.vel.x*=-0.8;}
+      // 골 체크
+      var wy=this.pos.y>H/2-GOAL_W/2&&this.pos.y<H/2+GOAL_W/2;
+      if(wy){
+        if(this.pos.x<=20+GOAL_DEPTH)game.goal("B");
+        else if(this.pos.x>=W-20-GOAL_DEPTH)game.goal("A");
+      }
+    };
+    Ball.prototype.kick=function(to,s){this.owner=null;this.pk=0.25;var d=new Vec2(to.x-this.pos.x,to.y-this.pos.y); var L=Math.hypot(d.x,d.y)||1; d.x/=L; d.y/=L; this.vel=d.mul(s);};
+    Ball.prototype.knock=function(dir,s){this.owner=null;this.pk=0.25;var d=dir.clone();var L=d.len()||1; d.x/=L; d.y/=L; this.vel=d.mul(s);};
+    Ball.prototype.draw=function(g){g.save();g.fillStyle=BALL_COLOR;g.beginPath();g.arc(this.pos.x,this.pos.y,this.r,0,TAU);g.fill();g.restore();};
 
-  // =========================
-  // Teams / Inputs / AI
-  // =========================
-  const ball = new Ball();
-  let teamA=[], teamB=[]; // 0: left (blue), 1: right (pink)
+    function ownerFacing(p){var f=p.facing?p.facing.clone():new Vec2(1,0); var L=f.len()||1; f.x/=L; f.y/=L; return f;}
 
-  const Input = {
-    p1:{up:false,down:false,left:false,right:false, pass:false, shoot:false, dash:false},
-    p2:{up:false,down:false,left:false,right:false, pass:false, shoot:false, dash:false},
-  };
+    // 선수
+    function Player(team,role,x,y,color){this.team=team;this.role=role;this.home=new Vec2(x,y);this.pos=new Vec2(x,y);this.vel=new Vec2();this.r=PLAYER_RADIUS;this.color=color;this.controlled=0;this.facing=new Vec2(team.side==="L"?1:-1,0);this.tackleCd=0;}
+    Object.defineProperty(Player.prototype,"stats",{get:function(){return this.team.stats;}});
+    Player.prototype.hasBall=function(){return game.ball.owner===this;};
+    Player.prototype.distBall=function(){return Math.hypot(game.ball.pos.x-this.pos.x,game.ball.pos.y-this.pos.y);};
+    Player.prototype.update=function(dt){
+      this.tackleCd=Math.max(0,this.tackleCd-dt);
+      if(this.controlled===1)this.updateHuman(1,dt);
+      else if(this.controlled===2)this.updateHuman(2,dt);
+      else this.updateAI(dt);
+      var baseMax=(this.stats.spd/100)*2.2+1.8;
+      var maxSpd=baseMax*PLAYER_SPEED_SCALE; if(this.hasBall()) maxSpd*=0.9;
+      if(this.vel.len()>maxSpd){this.vel.limit(maxSpd);}
+      this.pos.add(this.vel);
+      this.pos.x=clamp(this.pos.x,20+this.r,W-20-this.r);
+      this.pos.y=clamp(this.pos.y,20+this.r,H-20-this.r);
+      if(!game.ball.owner && game.ball.pk<=0 && this.distBall()<GRAB_DIST){
+        game.ball.owner=this; game.ball.vel.mul(0); game.ball.curve.set(0,0);
+      }
+    };
+    Player.prototype.tryTackle=function(){
+      if(this.tackleCd>0)return; this.tackleCd=0.8;
+      var d=this.distBall();
+      if(d<this.r+8){var dir=new Vec2(game.ball.pos.x-this.pos.x,game.ball.pos.y-this.pos.y); if(dir.len()>0)game.ball.knock(dir,7);}
+    };
+    Player.prototype.updateHuman=function(which,dt){
+      var input=(which===1)?game.input1:game.input2;
+      var dir=new Vec2((input.right?1:0)-(input.left?1:0),(input.down?1:0)-(input.up?1:0));
+      if(dir.x||dir.y){var L=Math.hypot(dir.x,dir.y)||1; this.facing.set(dir.x/L,dir.y/L);}
+      var accel=0.6*PLAYER_SPEED_SCALE; if(this.hasBall()) accel*=1.2;
+      this.vel.mul(0.85).add(new Vec2(this.facing.x*0,this.facing.y*0)); // damping
+      this.vel.add(dir.mul(accel));
+      // 액션
+      if(input.shootTap){
+        if(this.hasBall()){
+          if(input.curveHeld){ this.shootCurve(); } else { this.shoot(); }
+        }
+        input.shootTap=false;
+      }
+      if(input.pass){
+        if(this.hasBall()) this.pass(); input.pass=false;
+      }
+      if(input.switch){ game.manualSwitch(which); input.switch=false; }
+    };
+    Player.prototype.pass=function(){
+      var t=this.bestPassTarget(); if(!t)return;
+      var acc=this.stats.pas/100;
+      var aim=t.pos.clone().add(t.vel.clone().mul(10));
+      aim.x+=rand(-12,12)*(1-acc); aim.y+=rand(-12,12)*(1-acc);
+      game.ball.kick(aim,PASS_SPEED*acc+3);
+    };
+    Player.prototype.shoot=function(){
+      var gx=this.team.side==="L"?W-15:15, gy=H/2+rand(-14,14);
+      var pow=this.stats.sho/100; var acc=this.stats.pas/100;
+      var aim=new Vec2(gx,gy);
+      aim.x+=rand(-24,24)*(1-acc); aim.y+=rand(-24,24)*(1-acc);
+      game.ball.kick(aim,SHOT_SPEED*(0.8+pow*0.6)); game.ball.curve.set(0,0);
+    };
+    Player.prototype.shootCurve=function(){
+      var gx=this.team.side==="L"?W-15:15, gy=H/2+rand(-12,12);
+      var aim=new Vec2(gx,gy); game.ball.kick(aim,SHOT_SPEED*(0.95+this.stats.sho/100*0.4));
+      var f=ownerFacing(this), perp=new Vec2(-f.y,f.x); var side=(this.team.side==="L"?1:-1);
+      game.ball.curve=perp.mul(0.065*side);
+    };
+    Player.prototype.cross=function(){
+      var tx=this.team.side==="L"?W-80:80, ty=H/2+rand(-36,36);
+      var acc=this.stats.pas/100; var aim=new Vec2(tx,ty);
+      aim.x+=rand(-22,22)*(1-acc); aim.y+=rand(-22,22)*(1-acc);
+      game.ball.kick(aim,5.8*(0.9+acc*0.4)); game.ball.curve.set(0,0);
+    };
+    Player.prototype.bestPassTarget=function(){
+      var best=null,bScore=-1e9, self=this;
+      for(var i=0;i<this.team.players.length;i++){
+        var p=this.team.players[i]; if(p===this)continue;
+        var to=new Vec2(p.pos.x-this.pos.x,p.pos.y-this.pos.y);
+        var d=Math.hypot(to.x,to.y); if(d<38)continue;
+        var forward=this.team.side==="L"?(to.x>0?1:-1):(to.x<0?1:-1);
+        var open=this.spaceAround(p);
+        var roleBias=(p.role==="ST"?0.6:(p.role==="W"?0.35:(p.role==="CDM"?0.2:0)));
+        var s=forward*0.9 + open*0.7 + roleBias - d/520;
+        if(s>bScore){bScore=s;best=p;}
+      }
+      return best;
+    };
+    Player.prototype.spaceAround=function(p){
+      var near=0;
+      for(var i=0;i<this.team.oppo.players.length;i++){
+        var e=this.team.oppo.players[i];
+        var d=Math.hypot(p.pos.x-e.pos.x,p.pos.y-e.pos.y);
+        if(d<60)near++;
+      }
+      return 1-Math.min(1,near/3);
+    };
+    Player.prototype.updateAI=function(dt){
+      if(this.role==="GK"){this.updateGK();return;}
+      var ball=game.ball,have=(ball.owner&&ball.owner.team===this.team);
+      if(!ball.owner){
+        if(this.nearestToBall()) this.seek(ball.pos,0.8);
+        else this.offBallShape();
+        if(ball.pk<=0 && this.distBall()<GRAB_DIST){ball.owner=this;return;}
+        return;
+      }
+      if(have){
+        if(this.hasBall()){
+          var goal=new Vec2(this.team.side==="L"?W-40:40,H/2);
+          var d=Math.hypot(goal.x-this.pos.x,goal.y-this.pos.y);
+          if(Math.random()<AI_PASS_CHAIN){ var t=this.bestPassTarget(); if(t){this.pass();return;} }
+          if(this.role==="W"){
+            var nearSide=this.team.side==="L"?this.pos.x>W*0.65:this.pos.x<W*0.35;
+            if(nearSide&&Math.random()<AI_CROSS_BIAS){ this.cross(); return; }
+          }
+          if(d<AI_SHOOT_DIST && this.role!=="CDM"){ this.shoot(); return; }
+          this.seek(goal,0.58);
+        } else {
+          this.offBallRun();
+        }
+      } else {
+        var chase=this.shouldPress();
+        if(chase)this.seek(ball.pos,0.8*(this.stats.def/100)+0.2);
+        else this.offBallShape();
+        if(this.distBall()<22)this.tryTackle();
+      }
+    };
+    Player.prototype.offBallShape=function(){
+      var t=this.team.shapeTarget(this);
+      // 공간 벌리기
+      for(var i=0;i<this.team.oppo.players.length;i++){
+        var e=this.team.oppo.players[i], dv=new Vec2(t.x-e.pos.x,t.y-e.pos.y), L=Math.hypot(dv.x,dv.y);
+        if(L>0 && L<70){ dv.x/=L; dv.y/=L; t.x+=dv.x*(70-L)*0.12; t.y+=dv.y*(70-L)*0.12; }
+      }
+      this.seek(t,0.09);
+    };
+    Player.prototype.offBallRun=function(){
+      var dir=this.team.side==="L"?1:-1; var b=game.ball.pos; var t=this.home.clone();
+      if(this.role==="ST"){ t.x=b.x+90*dir; t.y=lerp(t.y,b.y,0.25); }
+      else if(this.role==="W"){ t.x=b.x+70*dir; t.y=this.team.side==="L"?H*0.22:H*0.78; }
+      else if(this.role==="CDM"){ t.x=b.x-20*dir; t.y=lerp(t.y,b.y,0.18); }
+      else if(this.role==="CB"){ t.x=lerp(t.x,this.team.side==="L"?190:W-190,0.85); t.y=lerp(t.y,H*0.55,0.15); }
+      for(var i=0;i<this.team.oppo.players.length;i++){
+        var e=this.team.oppo.players[i], dv=new Vec2(t.x-e.pos.x,t.y-e.pos.y), L=Math.hypot(dv.x,dv.y);
+        if(L>0 && L<70){ dv.x/=L; dv.y/=L; t.x+=dv.x*(70-L)*0.15; t.y+=dv.y*(70-L)*0.15; }
+      }
+      this.seek(t,0.12);
+    };
+    Player.prototype.updateGK=function(){
+      var left=this.team.side==="L", gx=left?26:W-26, goalY=clamp(game.ball.pos.y,H/2-GOAL_W/2+10,H/2+GOAL_W/2-10);
+      var box=left?LBOX:RBOX, ball=game.ball; var target=new Vec2(gx+(left?10:-10), goalY);
+      var inBox=ball.pos.x>box[0] && ball.pos.x<box[1]; if(inBox){ target.x=left?box[0]+18:box[1]-18; }
+      this.seek(target,0.14);
+      var d=this.distBall(); if(d<GRAB_DIST+4 && ball.pk<=0){ ball.owner=this; return; }
+      if(d<26 && !ball.owner){ var dir=new Vec2(ball.pos.x-this.pos.x,ball.pos.y-this.pos.y); if(Math.hypot(dir.x,dir.y)>0) ball.knock(dir,7.5); }
+    };
+    Player.prototype.nearestToBall=function(){
+      var min=1e9,m=false;
+      for(var i=0;i<this.team.players.length;i++){
+        var p=this.team.players[i]; var d=Math.hypot(game.ball.pos.x-p.pos.x,game.ball.pos.y-p.pos.y);
+        if(d<min){min=d;m=(p===this);}
+      } return m;
+    };
+    Player.prototype.shouldPress=function(){ var base=this.stats.def/100, rb=(this.role==="CB"||this.role==="CDM")?0.25:0; return Math.random()<(0.35+base*0.4+rb); };
+    Player.prototype.seek=function(t,k){ if(k===void 0){k=0.1;} var d=new Vec2(t.x-this.pos.x,t.y-this.pos.y); var L=Math.hypot(d.x,d.y); if(L>1){d.x/=L; d.y/=L;} this.vel.add(new Vec2(d.x*k*PLAYER_SPEED_SCALE,d.y*k*PLAYER_SPEED_SCALE)); if(d.x||d.y)this.facing=d; };
+    Player.prototype.draw=function(g){
+      g.save(); g.lineWidth=2; g.fillStyle=this.color; g.strokeStyle=PLAYER_OUTLINE;
+      g.beginPath(); g.arc(this.pos.x,this.pos.y,this.r,0,TAU); g.fill(); g.stroke();
+      var f=ownerFacing(this), nose=new Vec2(this.pos.x+f.x*this.r,this.pos.y+f.y*this.r);
+      g.beginPath(); g.moveTo(nose.x,nose.y);
+      var right=new Vec2(-f.y,f.x), p1=new Vec2(this.pos.x+right.x*this.r*0.7,this.pos.y+right.y*this.r*0.7), p2=new Vec2(this.pos.x-right.x*this.r*0.7,this.pos.y-right.y*this.r*0.7);
+      g.lineTo(p1.x,p1.y); g.lineTo(p2.x,p2.y); g.closePath(); g.globalAlpha=0.15; g.fillStyle="#000"; g.fill(); g.globalAlpha=1;
+      if(this.controlled>0){ g.strokeStyle="#fff"; g.lineWidth=2; g.setLineDash([4,4]); g.beginPath(); g.arc(this.pos.x,this.pos.y,this.r+6,0,TAU); g.stroke(); g.setLineDash([]); }
+      if(this.hasBall()){ g.fillStyle="#ffd84d"; g.beginPath(); g.arc(this.pos.x,this.pos.y-this.r-6,3.5,0,TAU); g.fill(); }
+      g.fillStyle="#fff"; g.globalAlpha=0.85; g.font="10px sans-serif"; g.textAlign="center"; g.fillText(this.role,this.pos.x,this.pos.y+3.4); g.restore();
+    };
 
-  const keymap = new Map([
-    ['KeyW',['p1','up']], ['KeyS',['p1','down']], ['KeyA',['p1','left']], ['KeyD',['p1','right']],
-    ['KeyJ',['p1','pass']], ['KeyK',['p1','shoot']], ['KeyL',['p1','dash']],
-    ['ArrowUp',['p2','up']], ['ArrowDown',['p2','down']], ['ArrowLeft',['p2','left']], ['ArrowRight',['p2','right']],
-    ['Comma',['p2','pass']], ['Period',['p2','shoot']], ['Slash',['p2','dash']],
-  ]);
-  addEventListener('keydown',e=>{ const m=keymap.get(e.code); if(m){ const [p,k]=m; Input[p][k]=true; }});
-  addEventListener('keyup',e=>{ const m=keymap.get(e.code); if(m){ const [p,k]=m; Input[p][k]=false; }});
+    // 팀
+    function Team(name,side,color){this.name=name;this.side=side;this.color=color;this.players=[];this.score=0;this.stats={spd:100,pas:100,sho:100,def:100};this.oppo=null;}
+    Team.prototype.formation=function(){var L=this.side==="L",sx=function(x){return L?x:(W-x);}; return [["GK",sx(60),H/2],["CB",sx(210),H*0.55],["CDM",sx(350),H*0.45],["W",sx(420),L?H*0.28:H*0.72],["ST",sx(540),H*0.50]]; };
+    Team.prototype.spawn=function(){this.players=[]; var f=this.formation(); for(var i=0;i<f.length;i++){var r=f[i]; this.players.push(new Player(this,r[0],r[1],r[2],this.color));} };
+    Team.prototype.shapeTarget=function(p){
+      var t=p.home.clone(),has=(game.ball.owner&&game.ball.owner.team===this),dir=this.side==="L"?1:-1;
+      if(has){ if(p.role==="ST")t.x+=28*dir; if(p.role==="W")t.x+=24*dir; if(p.role==="CDM")t.x+=10*dir; }
+      else { if(p.role==="CB")t.x-=18*dir; if(p.role==="CDM")t.x-=8*dir; }
+      t.y=lerp(t.y,game.ball.pos.y,0.08); return t;
+    };
+    Team.prototype.nearestForSwitch=function(){
+      var best=null,sc=-1e9;
+      for(var i=0;i<this.players.length;i++){
+        var pl=this.players[i];
+        var d=Math.hypot(game.ball.pos.x-pl.pos.x,game.ball.pos.y-pl.pos.y);
+        var tow=this.side==="L"?(game.ball.pos.x-pl.pos.x):(pl.pos.x-game.ball.pos.x);
+        var s=-d+tow*0.4+(pl.role==="ST"?6:0);
+        if(s>sc){sc=s;best=pl;}
+      } return best;
+    };
 
-  function pickPassTarget(pl){
-    const mates = pl.team===0? teamA : teamB;
-    let best=null, bestScore=-1;
-    for(const m of mates){ if(m===pl) continue; const s = (pl.team===0? m.x : (W-m.x)) - Math.abs(m.y-pl.y)*0.3; if(s>bestScore){ best=m; bestScore=s; } }
-    return best;
-  }
+    // 입력 상태
+    function Input(){this.reset();}
+    Input.prototype.reset=function(){this.up=false;this.down=false;this.left=false;this.right=false;this.pass=false;this.switch=false;this.shootTap=false;this.curveHeld=false;};
 
-  function nearestToBall(players){
-    let best=null, d=1e9; for(const p of players){ const dd=len2(p.x-ball.x, p.y-ball.y); if(dd<d){d=dd; best=p;} } return best;
-  }
-
-  function aiMove(pl){
-    // very light FSM: if own ball -> go shoot line; else chase or mark
-    const team = pl.team===0? teamA : teamB; const foe = pl.team===0? teamB : teamA;
-    const dir = (pl.team===0? 1 : -1);
-    // if teammate has ball, support forward
-    const carrier = [...team].find(t=>t.hasBall);
-    if(carrier && carrier!==pl){ const tx = carrier.x + dir*40; const ty = carrier.y + (pl.id%2? -40:40); return steer(pl, tx, ty); }
-    // if self has ball: advance and occasionally shoot
-    if(pl.hasBall){ const gx = pl.team===0? PITCH.right-30 : PITCH.left+30; const gy = clamp(H/2 + (pl.id-1)*30, PITCH.top+30, PITCH.bottom-30); 
-      const toGoal = len2(gx-pl.x, gy-pl.y);
-      if(toGoal<140){ pl.tryPassOrShoot('shoot'); }
-      // dash sometimes
-      if(pl.coolDash<=0 && Math.random()<0.02) pl.tryDash();
-      return steer(pl, gx, gy); }
-    // else: contest ball
-    const owner = [...teamA, ...teamB].find(t=>t.hasBall);
-    if(owner){ // mark owner
-      return steer(pl, owner.x - dir*30, owner.y);
-    } else {
-      const target = {x:ball.x - dir*8, y:ball.y};
-      return steer(pl, target.x, target.y);
-    }
-  }
-
-  function steer(pl, tx,ty){ const dx=tx-pl.x, dy=ty-pl.y; const d=len2(dx,dy); if(d<5) return [0,0]; return norm(dx,dy); }
-
-  // =========================
-  // Init / Reset / Kickoff / Goal
-  // =========================
-  function createTeam(side, n, isAI){ const arr=[]; for(let i=0;i<n;i++){ const p=new Player(side,i); p.ai=isAI; arr.push(p);} return arr; }
-
-  function placeTeams(){
-    const n = GAME.teamSize;
-    teamA = createTeam(0,n, false);
-    const aiForB = (GAME.mode==='p1-vs-ai');
-    teamB = createTeam(1,n, !aiForB? false:true);
-
-    for(let i=0;i<n;i++){
-      const ay = H/2 + (i-(n-1)/2)*40; teamA[i].spawn(PITCH.left+120, ay);
-      const by = H/2 + (i-(n-1)/2)*40; teamB[i].spawn(PITCH.right-120, by);
-    }
-    ball.x=W/2; ball.y=H/2; ball.vx=ball.vy=ball.spin=0;
-    // give center to teamA
-    teamA[0].hasBall=true; ball.x=teamA[0].x+14; ball.y=teamA[0].y;
-  }
-
-  function reset(){ GAME.running=false; GAME.paused=false; GAME.timeLeft=90; GAME.scoreA=0; GAME.scoreB=0; UI.pauseBtn.textContent='일시정지'; placeTeams(); syncUI(); draw(0); }
-
-  function start(){ GAME.running=true; GAME.lastTick=now(); loop(); }
-
-  function goal(side){ // side=0 scored by A to B goal or reverse? We'll detect by ball crossing
-    if(side==='A'){ GAME.scoreA++; Audio.beep(880,0.12,'square',0.06); }
-    else { GAME.scoreB++; Audio.beep(440,0.12,'square',0.06); }
-    UI.scoreA.textContent=GAME.scoreA; UI.scoreB.textContent=GAME.scoreB;
-    // kickoff other team
-    const giveA = (side!=='A');
-    placeTeams();
-    if(giveA){ teamA[0].hasBall=true; } else { teamB[0].hasBall=true; }
-  }
-
-  function syncUI(){ UI.scoreA.textContent=GAME.scoreA; UI.scoreB.textContent=GAME.scoreB; UI.timer.textContent = Math.ceil(GAME.timeLeft)+'"'; }
-
-  // =========================
-  // Game Loop
-  // =========================
-  function loop(){
-    if(!GAME.running) return; requestAnimationFrame(loop);
-    const t=now(); const dt = Math.min(0.05,(t-GAME.lastTick)/1000); GAME.lastTick=t;
-    if(GAME.paused) { draw(dt); return; }
-
-    // update timer
-    GAME.timeLeft -= dt; if(GAME.timeLeft<=0){ GAME.timeLeft=0; GAME.running=false; UI.timer.textContent='종료'; return; }
-
-    // inputs to players
-    const leadA = teamA[0]; const leadB = teamB[0];
-    tickTeam(teamA, Input.p1, leadA);
-    if(GAME.mode==='p1-vs-p2'){ tickTeam(teamB, Input.p2, leadB); }
-    else { tickTeam(teamB, null, leadB); }
-
-    // ball update & collisions
-    if(!ownerOfBall()) ball.update(dt);
-    handleCollisions();
-
-    // goals
-    if(ball.x< PITCH.left-8 && Math.abs(ball.y-H/2)<GOAL.height/2){ goal('B'); }
-    if(ball.x> PITCH.right+8 && Math.abs(ball.y-H/2)<GOAL.height/2){ goal('A'); }
-
-    // UI cooldown bars
-    UI.cdDash1.style.width = (leadA.coolDash/3*100)+'%'; UI.cdCurve1.style.width = (leadA.coolCurve/4*100)+'%';
-    UI.cdDash2.style.width = (leadB.coolDash/3*100)+'%'; UI.cdCurve2.style.width = (leadB.coolCurve/4*100)+'%';
-
-    syncUI();
-    draw(dt);
-  }
-
-  function tickTeam(team, input, lead){
-    // control lead with input/AI; others AI if needed
-    for(const p of team){ const inp = (p===lead? input : null); p.update(1/60, inp); }
-
-    // actions
-    if(input){ if(input.dash) { lead.tryDash(); } if(input.pass){ lead.tryPassOrShoot('pass'); } if(input.shoot){ lead.tryPassOrShoot('shoot'); } }
-
-    // auto tackle/pickup if close
-    for(const p of team){
-      if(len2(p.x-ball.x, p.y-ball.y) < p.r+10){
-        // if ball slow enough, take possession
-        if(Math.hypot(ball.vx,ball.vy)<5){ takeBall(p); }
-        else { // bump
-          const [nx,ny]=norm(ball.x-p.x, ball.y-p.y); ball.vx += nx*0.8; ball.vy += ny*0.8;
+    // 게임
+    function Game(){this.state="menu";this.mode="1P";this.t=0;this.timeLeft=HALF_LEN;this.ball=new Ball();this.teamA=new Team("A","L",TEAM_COLOR_A);this.teamB=new Team("B","R",TEAM_COLOR_B);this.teamA.oppo=this.teamB;this.teamB.oppo=this.teamA;this.input1=new Input();this.input2=new Input();this.humanTeam1=this.teamA;this.humanTeam2=null;this.lastTs=0;this.dt=0;}
+    Game.prototype.applyStats=function(){this.teamA.stats={spd:+a_spd.value,pas:+a_pas.value,sho:+a_sho.value,def:+a_def.value};this.teamB.stats={spd:+b_spd.value,pas:+b_pas.value,sho:+b_sho.value,def:+b_def.value};};
+    Game.prototype.start=function(){this.applyStats();this.state="play";menu.style.display="none";this.teamA.spawn();this.teamB.spawn();for(var i=0;i<this.teamA.players.length;i++){this.teamA.players[i].controlled=0;} for(var j=0;j<this.teamB.players.length;j++){this.teamB.players[j].controlled=0;} this.humanTeam1=this.teamA;this.humanTeam2=this.mode==="2P"?this.teamB:null;this.resetAfterGoal(true);this.updateHUD();toast.style.display="block";canvas.focus();};
+    Game.prototype.goal=function(who){if(this.state!=="play")return; if(who==="A")this.teamA.score++; else this.teamB.score++; this.updateHUD();var self=this; goalBanner.style.display="grid"; setTimeout(function(){goalBanner.style.display="none"; var leftKick=(who==="B"); self.resetAfterGoal(leftKick);},900); };
+    Game.prototype.resetAfterGoal=function(leftKick){this.ball.resetAt(leftKick);this.teamA.spawn();this.teamB.spawn();var kicker=(leftKick?this.teamA:this.teamB).players.filter(function(p){return p.role==="CDM";})[0]; this.ball.owner=kicker; this.ball.pk=0; this.assignControllers(); };
+    Game.prototype.assignControllers=function(){for(var i=0;i<this.teamA.players.length;i++){this.teamA.players[i].controlled=0;} for(var j=0;j<this.teamB.players.length;j++){this.teamB.players[j].controlled=0;} var p1=this.humanTeam1.nearestForSwitch(); p1.controlled=1; if(this.mode==="2P"){var p2=this.teamB.nearestForSwitch(); p2.controlled=2;} };
+    Game.prototype.manualSwitch=function(which){var team=which===1?this.humanTeam1:this.teamB; var n=team.nearestForSwitch(); for(var i=0;i<team.players.length;i++){if(team.players[i].controlled===which)team.players[i].controlled=0;} n.controlled=which; };
+    Game.prototype.possessionChanged=function(){var o=this.ball.owner; if(!o)return; if(o.team===this.humanTeam1){for(var i=0;i<o.team.players.length;i++){if(o.team.players[i].controlled===1)o.team.players[i].controlled=0;} o.controlled=1;} else if(this.mode==="2P"&&o.team===this.teamB){for(var j=0;j<o.team.players.length;j++){if(o.team.players[j].controlled===2)o.team.players[j].controlled=0;} o.controlled=2;} };
+    Game.prototype.updateHUD=function(){hudScoreA.textContent="A "+this.teamA.score;hudScoreB.textContent="B "+this.teamB.score;};
+    Game.prototype.tick=function(ts){var dt=Math.min(0.033,(ts-this.lastTs)/1000||0);this.lastTs=ts;this.dt=dt;if(this.state==="play"){this.update(dt);this.render();}else{this.render();}requestAnimationFrame(this.tick.bind(this));};
+    Game.prototype.update=function(dt){
+      this.t+=dt; this.timeLeft=Math.max(0,this.timeLeft-dt); hudTimer.textContent=this.formatTime(this.timeLeft); if(this.timeLeft<=0){this.timeLeft=HALF_LEN}
+      for(var i=0;i<this.teamA.players.length;i++){this.teamA.players[i].update(dt);}
+      for(var j=0;j<this.teamB.players.length;j++){this.teamB.players[j].update(dt);}
+      this.separate(this.teamA.players.concat(this.teamB.players));
+      var prev=this.ball.owner; this.ball.update(dt); if(prev!==this.ball.owner)this.possessionChanged();
+      this.ballPlayerCollisions();
+    };
+    Game.prototype.separate=function(arr){for(var i=0;i<arr.length;i++)for(var j=i+1;j<arr.length;j++){var a=arr[i],b=arr[j];var dx=b.pos.x-a.pos.x,dy=b.pos.y-a.pos.y;var L=Math.hypot(dx,dy),min=SEPARATION_DIST;if(L>0&&L<min){dx/=L;dy/=L;var push=(min-L)/2;a.pos.x-=dx*push;a.pos.y-=dy*push;b.pos.x+=dx*push;b.pos.y+=dy*push;a.vel.mul(0.95);b.vel.mul(0.95);}}};
+    Game.prototype.ballPlayerCollisions=function(){
+      var all=this.teamA.players.concat(this.teamB.players);
+      for(var i=0;i<all.length;i++){
+        var p=all[i]; var dx=this.ball.pos.x-p.pos.x,dy=this.ball.pos.y-p.pos.y; var L=Math.hypot(dx,dy),min=p.r+this.ball.r;
+        if(L>0&&L<min){
+          if(!this.ball.owner && this.ball.pk<=0){
+            this.ball.owner=p; this.ball.vel.mul(0); this.ball.curve.set(0,0);
+            var f=ownerFacing(p).mul(10); this.ball.pos.set(p.pos.x+f.x,p.pos.y+f.y);
+          }
         }
       }
+    };
+    Game.prototype.render=function(){var g=ctx;g.clearRect(0,0,canvas.width,canvas.height);this.pitch(g);this.goals(g);this.ball.draw(g);for(var i=0;i<this.teamA.players.length;i++){this.teamA.players[i].draw(g);}for(var j=0;j<this.teamB.players.length;j++){this.teamB.players[j].draw(g);}};
+    Game.prototype.pitch=function(g){g.save();g.strokeStyle="#e7f5e9";g.globalAlpha=0.6;g.lineWidth=2;g.strokeRect(20,20,W-40,H-40);g.beginPath();g.moveTo(W/2,20);g.lineTo(W/2,H-20);g.stroke();g.beginPath();g.arc(W/2,H/2,60,0,TAU);g.stroke();g.strokeRect(20,H/2-H*0.25,60,H*0.5);g.strokeRect(W-80,H/2-H*0.25,60,H*0.5);g.restore();};
+    Game.prototype.goals=function(g){g.save();g.fillStyle="rgba(255,255,255,0.25)";g.fillRect(17,H/2-GOAL_W/2,6,GOAL_W);g.fillRect(W-23,H/2-GOAL_W/2,6,GOAL_W);g.restore();};
+    Game.prototype.formatTime=function(t){var m=Math.floor(t/60), s=Math.floor(t%60);var mm=("0"+m).slice(-2), ss=("0"+s).slice(-2);return mm+":"+ss;};
+
+    function init(){game=new Game();resize();requestAnimationFrame(function(ts){game.tick(ts);});}
+    function resize(){var dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}
+    canvas.addEventListener("pointerdown",function(){canvas.focus();toast.style.display="none";});
+    window.addEventListener("resize",resize);
+    mode1Btn.addEventListener("click",function(){mode1Btn.classList.add("active");mode2Btn.classList.remove("active");game.mode="1P";});
+    mode2Btn.addEventListener("click",function(){mode2Btn.classList.add("active");mode1Btn.classList.remove("active");game.mode="2P";});
+    startBtn.addEventListener("click",function(){game.start();});
+
+    // 키 입력
+    function setKey(e,down){
+      var k=e.code; var i1=(game && game.input1),i2=(game && game.input2); if(!i1||!i2) return;
+      if(k===Keys.W)i1.up=down; if(k===Keys.S)i1.down=down; if(k===Keys.A)i1.left=down; if(k===Keys.D)i1.right=down;
+      if(k===Keys.PASS1 && down) i1.pass=true; if(k===Keys.SHOOT1 && down) i1.shootTap=true; if(k===Keys.SWITCH1 && down) i1.switch=true; if(k===Keys.CURVE1) i1.curveHeld=down;
+      if(k===Keys.UP)i2.up=down; if(k===Keys.DOWN)i2.down=down; if(k===Keys.LEFT)i2.left=down; if(k===Keys.RIGHT)i2.right=down;
+      if(k===Keys.PASS2 && down) i2.pass=true; if(k===Keys.SHOOT2 && down) i2.shootTap=true; if(k===Keys.SWITCH2 && down) i2.switch=true; if(k===Keys.CURVE2) i2.curveHeld=down;
+      e.preventDefault();
     }
-  }
+    window.addEventListener("keydown",function(e){setKey(e,true);},{passive:false});
+    window.addEventListener("keyup",function(e){setKey(e,false);},{passive:false});
 
-  function ownerOfBall(){ return [...teamA,...teamB].find(p=>p.hasBall); }
-  function takeBall(p){ [...teamA,...teamB].forEach(x=>x.hasBall=false); p.hasBall=true; Audio.beep(700,0.06,'square',0.05); }
+    // --- 자가 테스트 ---
+    function runTests(){
+      var results=[]; var assert=function(ok,msg){results.push({ok:!!ok,msg:msg});};
+      // 기본
+      assert(clamp(5,0,10)===5,"clamp mid");
+      assert(clamp(-1,0,9)===0,"clamp low");
+      assert(clamp(11,0,9)===9,"clamp high");
+      var v=new Vec2(3,4); assert(Math.abs(v.len()-5)<1e-6,"Vec2 len"); v.norm(); assert(Math.abs(v.len()-1)<1e-6,"Vec2 norm->unit");
+      // 분리
+      var a={pos:new Vec2(0,0),vel:new Vec2(),r:PLAYER_RADIUS}, b={pos:new Vec2(PLAYER_RADIUS*1.1,0),vel:new Vec2(),r:PLAYER_RADIUS};
+      var dummy={separate:Game.prototype.separate}; dummy.separate([a,b]); var dist=Math.hypot(a.pos.x-b.pos.x,a.pos.y-b.pos.y); assert(dist>=SEPARATION_DIST-0.1,"players separate");
+      // 스탯 캡
+      var keep=[a_spd.value,a_pas.value,a_sho.value,a_def.value]; a_spd.value=150;a_pas.value=150;a_sho.value=150;a_def.value=150; ["a_spd","a_pas","a_sho","a_def"].forEach(function(id){document.getElementById(id).dispatchEvent(new Event("input"));}); var sum=+a_spd.value+ +a_pas.value+ +a_sho.value+ +a_def.value; assert(sum<=STAT_CAP,"stat cap enforced"); [a_spd,a_pas,a_sho,a_def].forEach(function(el,i){el.value=keep[i];}); ["a_spd","a_pas","a_sho","a_def"].forEach(function(id){document.getElementById(id).dispatchEvent(new Event("input"));});
+      // 소유 중 볼 위치 유지
+      var g3=new Game(); g3.teamA.spawn(); g3.teamB.spawn(); var p0=g3.teamA.players[0]; g3.ball.owner=p0; g3.ball.update(0.016); var f=ownerFacing(p0).mul(10); var dx=Math.abs(g3.ball.pos.x-(p0.pos.x+f.x)); var dy=Math.abs(g3.ball.pos.y-(p0.pos.y+f.y)); assert(dx<0.01 && dy<0.01,"ball sticks to owner");
+      // 무소유 패스 무시
+      var g4=new Game(); g4.teamA.spawn(); g4.teamB.spawn(); var p1=g4.teamA.players[1]; g4.ball.owner=null; p1.controlled=1; g4.input1=new Input(); g4.input1.pass=true; p1.updateHuman(1,0.016); assert(g4.ball.owner===null,"pass ignored when no possession");
+      // 일반슛 vs 커브 + 픽업락
+      var g2=new Game(); g2.teamA.spawn(); g2.teamB.spawn(); var st=g2.teamA.players.filter(function(p){return p.role==="ST";})[0]; g2.ball.owner=st; st.shoot(); var c1=g2.ball.curve.len?g2.ball.curve.len():Math.hypot(g2.ball.curve.x,g2.ball.curve.y); assert(c1<0.005 && g2.ball.pk>0,"normal shot: small spin and pickup lock");
+      g2.ball.owner=st; st.shootCurve(); var c2=g2.ball.curve.len?g2.ball.curve.len():Math.hypot(g2.ball.curve.x,g2.ball.curve.y); assert(c2>0.01,"curve shot applies side spin");
+      // 락이 있으면 충돌 소유 불가 → 해제 후 소유 가능
+      var g5=new Game(); g5.teamA.spawn(); g5.teamB.spawn(); var st2=g5.teamA.players.filter(function(p){return p.role==="ST";})[0]; g5.ball.owner=st2; st2.shoot(); assert(g5.ball.owner===null && g5.ball.pk>0,"post-shoot: no owner & lock");
+      g5.ball.update(0.1); var mate=g5.teamA.players[1]; g5.ball.pos=mate.pos.clone?mate.pos.clone():new Vec2(mate.pos.x,mate.pos.y); g5.ballPlayerCollisions(); assert(g5.ball.owner===null,"lock blocks collision pickup");
+      g5.ball.pk=0; g5.ballPlayerCollisions(); assert(g5.ball.owner===mate,"pickup after lock expires");
 
-  function handleCollisions(){
-    const all=[...teamA,...teamB];
-    // player vs player separation
-    for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++){
-      const a=all[i], b=all[j]; const dx=b.x-a.x, dy=b.y-a.y; const d=len2(dx,dy); const min=a.r+b.r;
-      if(d<min){ const [nx,ny]=norm(dx||1,dy||0); const push=(min-d)/2; a.x-=nx*push; a.y-=ny*push; b.x+=nx*push; b.y+=ny*push; }
+      var fail=results.filter(function(r){return !r.ok;}); var msg="테스트 완료: "+(results.length-fail.length)+"/"+results.length+" 성공\n"+(fail.length? ("x "+fail.map(function(r){return r.msg;}).join("\n")) : "모두 성공");
+      alert(msg); console.log("Self-tests:",results);
     }
-  }
+    if(location.hash.indexOf("test")>-1){ try{ runTests(); }catch(e){ console.warn("tests failed",e); } }
+    window.addEventListener("keydown",function(e){ if(e.code==="KeyT" && e.shiftKey){ runTests(); } });
 
-  // =========================
-  // Rendering (neon style)
-  // =========================
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    drawPitch();
-    drawGoal('L'); drawGoal('R');
-    // ball trail
-    ctx.save();
-    ctx.shadowColor = '#22d3ee'; ctx.shadowBlur=15;
-    ctx.fillStyle = '#67e8f9';
-    ctx.beginPath(); ctx.arc(ball.x, ball.y, 8, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-
-    // players
-    drawTeam(teamA, '#60a5fa','#0ea5e9');
-    drawTeam(teamB, '#f472b6','#e879f9');
-  }
-
-  function drawPitch(){
-    // base
-    ctx.fillStyle = '#0a1628'; ctx.fillRect(0,0,W,H);
-    // grass stripes
-    for(let i=0;i<10;i++){ ctx.fillStyle = `rgba(255,255,255,${i%2?0.02:0.04})`; const y=PITCH.top + i*((PITCH.bottom-PITCH.top)/10); ctx.fillRect(PITCH.left,y,PITCH.right-PITCH.left,(PITCH.bottom-PITCH.top)/10); }
-    // outline
-    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=2; ctx.strokeRect(PITCH.left,PITCH.top,PITCH.right-PITCH.left,PITCH.bottom-PITCH.top);
-    // mid
-    ctx.beginPath(); ctx.moveTo(W/2,PITCH.top); ctx.lineTo(W/2,PITCH.bottom); ctx.stroke();
-    ctx.beginPath(); ctx.arc(W/2,H/2,60,0,Math.PI*2); ctx.stroke();
-  }
-  function drawGoal(side){
-    const x = side==='L'? PITCH.left-5 : PITCH.right+5; const y= H/2 - GOAL.height/2;
-    ctx.save(); ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x, y+GOAL.height); ctx.stroke(); ctx.restore();
-  }
-  function drawTeam(arr, c1,c2){
-    for(const p of arr){
-      // glow body
-      ctx.save(); ctx.shadowColor=c2; ctx.shadowBlur=12; ctx.fillStyle=c1; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
-      // ring
-      ctx.lineWidth=3; ctx.strokeStyle=c2; ctx.stroke();
-      // indicator if ball owner
-      if(p.hasBall){ ctx.fillStyle='#fff'; ctx.fillRect(p.x-6,p.y-p.r-14,12,6); }
-      ctx.restore();
-    }
-  }
-
-  // =========================
-  // Boot
-  // =========================
-  reset();
-})();
-</script>
+    init();
+  })();
+  </script>
 </body>
 </html>
