@@ -3,32 +3,44 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>6v6 STREET FOOTBALL · ES5 Fix + Auto-Restarts</title>
+<title>6v6 STREET FOOTBALL · Robust ES5 + Debug</title>
 <style>
   html,body{margin:0;height:100%;background:#0c0f15;color:#e6edf3;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
   .wrap{display:grid;place-items:center;padding:10px}
-  canvas{width:min(1200px,95vw);background:transparent;display:block;border:12px solid #1a202c;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
-  #err{position:fixed;left:12px;right:12px;bottom:12px;background:rgba(0,0,0,.75);color:#ffdede;padding:10px 12px;border:1px solid #ff7b7b;border-radius:10px;font:12px/1.5 ui-sans-serif;display:none;white-space:pre-wrap;max-height:45vh;overflow:auto}
+  /* JS가 죽어도 초록 잔디가 보이게 CSS 배경 지정 */
+  canvas{
+    width:min(1200px,95vw);
+    display:block;border:12px solid #1a202c;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);
+    background:
+      repeating-linear-gradient(0deg, #0c6a30 0, #0c6a30 24px, #0b5f2a 24px, #0b5f2a 48px);
+  }
+  #dbg{
+    position:fixed;left:12px;right:12px;bottom:12px;
+    background:rgba(0,0,0,.78);color:#e7f7ff;
+    padding:10px 12px;border:1px solid rgba(255,255,255,.2);border-radius:10px;
+    font:12px/1.5 ui-sans-serif;white-space:pre-wrap;max-height:45vh;overflow:auto
+  }
 </style>
 </head>
 <body>
 <div class="wrap"><canvas id="game" width="1100" height="680" tabindex="0" aria-label="축구게임 캔버스"></canvas></div>
-<div id="err"></div>
+<div id="dbg">[boot] 준비중…</div>
 
 <script>
 (function(){
 "use strict";
 
-/* ===== 에러 오버레이 ===== */
-var $err=document.getElementById('err');
-function showErr(e){
-  try{
-    $err.style.display='block';
-    $err.textContent='⚠ 실행 중 오류가 발생했습니다:\\n\\n'+(e&&e.stack?e.stack:e);
-  }catch(_){}
-}
-window.addEventListener('error',function(ev){ showErr(ev.error||ev.message); });
-window.addEventListener('unhandledrejection',function(ev){ showErr(ev.reason||'Unhandled promise rejection'); });
+/* ===== 디버그 오버레이 ===== */
+var $dbg=document.getElementById('dbg');
+function log(){ try{
+  var msg=[].slice.call(arguments).join(' ');
+  $dbg.textContent += ( ($dbg.textContent ? "\n" : "") + msg );
+  $dbg.scrollTop = $dbg.scrollHeight;
+} catch(_){ }}
+
+/* 전역 에러도 무조건 표시 */
+window.addEventListener('error',function(ev){ log('⚠ window.error:', (ev.error && ev.error.stack) || ev.message || ev); });
+window.addEventListener('unhandledrejection',function(ev){ log('⚠ unhandledrejection:', ev.reason || ev); });
 
 /* ===== 상수/유틸 ===== */
 var W=1100,H=680,GOAL_W=120;
@@ -71,20 +83,32 @@ function rrect(g,x,y,w,h,r){
   g.closePath();
 }
 
-/* ===== 캔버스 ===== */
+/* ===== 캔버스/RAF 폴백 ===== */
 var canvas=document.getElementById('game');
 var g=canvas.getContext('2d');
-if(!g){ showErr("2D 캔버스를 초기화할 수 없습니다."); }
+if(!g){ log('❌ 2D 컨텍스트 생성 실패'); return; }
+log('✔ 2D 컨텍스트 OK');
+
 function resize(){
-  var dpr=Math.min(2,window.devicePixelRatio||1);
+  var dpr=1;
+  try{ dpr=Math.min(2,window.devicePixelRatio||1); }catch(_){ dpr=1; }
   canvas.width=W*dpr; canvas.height=H*dpr;
-  g.setTransform(dpr,0,0,dpr,0,0);
+  if(g && g.setTransform) g.setTransform(dpr,0,0,dpr,0,0);
+  log('[resize] dpr=', dpr);
 }
 resize();
 window.addEventListener('resize',resize);
-canvas.addEventListener('pointerdown',function(){canvas.focus();});
 
-/* ===== 입력 ===== */
+var RAF = window.requestAnimationFrame || function(cb){ return setTimeout(function(){ cb(Date.now()); },16); };
+var CAF = window.cancelAnimationFrame || clearTimeout;
+
+/* ===== 입력 처리 (passive 지원 감지) ===== */
+var supportsPassive=false;
+try{ var opts={get passive(){ supportsPassive=true; return false; }}; window.addEventListener('test',null,opts); window.removeEventListener('test',null,opts);}catch(_){}
+function addEvt(el,type,fn,opt){ try{ el.addEventListener(type,fn, supportsPassive ? (opt||false) : !!(opt&&opt.capture)); }catch(e){ el.addEventListener(type,fn,false); } }
+
+canvas.addEventListener('pointerdown',function(){ canvas.focus(); });
+
 var Keys={W:"KeyW",A:"KeyA",S:"KeyS",D:"KeyD",PASS1:"KeyJ",SHOOT1:"KeyK",SWITCH1:"KeyL",CURVE1:"KeyU",TACKLE1:"KeyH"};
 function Input(){this.reset();}
 Input.prototype.reset=function(){
@@ -231,7 +255,6 @@ Player.prototype.isWideArea=function(){
 Player.prototype.pass=function(type){
   var from=game.ball.pos.clone(); var t=null;
   var dir=this.facing.clone();
-  // 앞쪽 원뿔 내 동료 선택
   var bestAng=9, bestDist=1e9, i;
   for(i=0;i<this.team.players.length;i++){
     var p=this.team.players[i]; if(p===this) continue;
@@ -345,7 +368,6 @@ Player.prototype.updateGK=function(){
   var d=this.distBall();
   var owner=game.ball.owner;
 
-  // 펀칭
   if(!owner){
     var towardGoal = left? (game.ball.pos.x<80) : (game.ball.pos.x>W-80);
     var speed=Math.sqrt(game.ball.vel.x*game.ball.vel.x+game.ball.vel.y*game.ball.vel.y);
@@ -355,7 +377,6 @@ Player.prototype.updateGK=function(){
       return;
     }
   }
-  // 인터셉트/돌진
   if(owner && owner.team!==this.team){
     var toOwner = Vec2.sub(owner.pos,this.pos);
     var inZone = toOwner.len()<GK_ZONE_RADIUS;
@@ -366,7 +387,6 @@ Player.prototype.updateGK=function(){
       return;
     }
   }
-  // 캐치 → 분배
   if(d<GRAB_DIST+4 && (game.ball.pk||0)<=0){ game.ball.owner=this; this._holdT=(game.t||0); return; }
   if(this.hasBall()){
     if((game.t - (this._holdT||0))>0.35){
@@ -391,7 +411,6 @@ Player.prototype.draw=function(g){
   g.lineWidth=2; g.fillStyle=this.color; g.strokeStyle=PLAYER_OUTLINE;
   g.beginPath(); g.arc(this.pos.x,this.pos.y,this.r,0,TAU); g.fill(); g.stroke();
 
-  // 방향 삼각
   var f=this.facing.clone().norm(), right=new Vec2(-f.y,f.x);
   var nose=Vec2.add(this.pos,f.clone().mul(this.r));
   var p1=Vec2.add(this.pos,right.clone().mul(this.r*0.7));
@@ -399,7 +418,6 @@ Player.prototype.draw=function(g){
   g.beginPath(); g.moveTo(nose.x,nose.y); g.lineTo(p1.x,p1.y); g.lineTo(p2.x,p2.y); g.closePath();
   g.globalAlpha=0.15; g.fillStyle="#000"; g.fill(); g.globalAlpha=1;
 
-  // 컨트롤/골키퍼 링 (GK는 두께 2배)
   var controlled=this.controlled>0;
   if(controlled || this.role==="GK"){
     g.strokeStyle=controlled ? "#fff" : "rgba(255,255,255,.35)";
@@ -408,31 +426,24 @@ Player.prototype.draw=function(g){
     g.beginPath(); g.arc(this.pos.x,this.pos.y,this.r+6,0,TAU); g.stroke();
     if(controlled){ g.setLineDash([]); }
   }
-  // GK 영향 범위
   if(this.role==="GK"){
     g.strokeStyle="rgba(255,255,255,.08)";
     g.lineWidth=4; g.beginPath(); g.arc(this.pos.x,this.pos.y,GK_ZONE_RADIUS,0,TAU); g.stroke();
   }
-
-  // 원 안에 포지션 텍스트
   g.font="bold 10px ui-sans-serif"; g.textAlign="center"; g.textBaseline="middle";
   g.shadowColor="rgba(0,0,0,.4)"; g.shadowBlur=2; g.fillStyle="#e8f2ff";
   g.fillText(this.role, this.pos.x, this.pos.y);
   g.shadowBlur=0;
 
-  // 볼 점등
   if(this.hasBall()){
     g.fillStyle="#ffd84d"; g.beginPath(); g.arc(this.pos.x,this.pos.y-this.r-6,3.5,0,TAU); g.fill();
   }
   g.restore();
 };
 
-/* ===== 팀(전역 참조 제거) ===== */
+/* ===== 팀(전역 의존 제거) ===== */
 function Team(name,side,color){ this.name=name; this.side=side; this.color=color; this.players=[]; this.score=0; this.oppo=null; this.game=null; }
-Team.prototype._ball = function(){
-  var gme=this.game || (typeof window!=="undefined" && window.game) || null;
-  return gme ? gme.ball : { pos:new Vec2(W/2,H/2) };
-};
+Team.prototype._ball = function(){ var gme=this.game || (typeof window!=="undefined" && window.game) || null; return gme ? gme.ball : { pos:new Vec2(W/2,H/2) }; };
 Team.prototype.formation=function(){ var L=this.side==="L",sx=function(x){return L?x:(W-x)}; return [["GK",sx(60),H/2],["CB",sx(210),H*0.55],["CDM",sx(330),H*0.45],["LW",sx(420),L?H*0.28:H*0.72],["RW",sx(420),L?H*0.72:H*0.28],["ST",sx(560),H*0.50]]; };
 Team.prototype.spawn=function(){ this.players=[]; var f=this.formation(), i; for(i=0;i<f.length;i++){ var r=f[i]; this.players.push(new Player(this,r[0],r[1],r[2],this.color)); } };
 Team.prototype.shapeTarget=function(p){ var bpos=this._ball().pos; var t=p.home.clone(),has=(this.game && this.game.ball.owner && this.game.ball.owner.team===this),dir=this.side==="L"?1:-1; if(has){ if(p.role==="ST")t.x+=32*dir; if(p.role==="LW"||p.role==="RW")t.x+=26*dir; if(p.role==="CDM")t.x+=10*dir; } else { if(p.role==="CB")t.x-=20*dir; if(p.role==="CDM")t.x-=10*dir; } t.y=lerp(t.y,bpos.y,0.08); return t; };
@@ -448,7 +459,7 @@ function Game(){
   this.teamA=new Team("A","L",TEAM_COLOR_A);
   this.teamB=new Team("B","R",TEAM_COLOR_B);
   this.teamA.oppo=this.teamB; this.teamB.oppo=this.teamA;
-  this.teamA.game=this; this.teamB.game=this;  /* ← 전역 의존 제거 */
+  this.teamA.game=this; this.teamB.game=this;
   this.input1=new Input();
   this.humanTeam1=this.teamA;
   this.lastTs=0; this.dt=0;
@@ -458,6 +469,7 @@ function Game(){
   this.teamA.spawn(); this.teamB.spawn();
   this.assignControllers();
   this.resetAfterGoal(true);
+  log('✔ Game 생성 OK');
 }
 Game.prototype.assignControllers=function(){
   var i; for(i=0;i<this.teamA.players.length;i++) this.teamA.players[i].controlled=0;
@@ -484,6 +496,7 @@ Game.prototype.resetAfterGoal=function(leftKick){
   this.assignControllers();
   this.offside=null; this.restart=null;
   this.kickoffIdleAutoAt=this.t+1.2;
+  log('[kickoff] side=', leftKick?'L':'R');
 };
 Game.prototype.onBallKicked=function(attTeam,passer,isForward){ this.ball.lastKickInfo={team:attTeam,pos:passer.pos.clone()}; this.ball.lastTouchTeam=attTeam; };
 Game.prototype.ballPlayerCollisions=function(){
@@ -499,17 +512,17 @@ Game.prototype.ballPlayerCollisions=function(){
     }
   }
 };
-/* 재시작 큐 & 자동 킥 */
+/* 재시작 & 자동킥 */
 Game.prototype.queueThrowIn=function(side){
   var defend = (this.ball.lastTouchTeam===this.teamA)? this.teamB : this.teamA;
   var pos={x:(side==="LEFT"?28:side==="RIGHT"?W-28:clamp(this.ball.pos.x,40,W-40)),
            y:(side==="TOP"?28:side==="BOT"?H-28:clamp(this.ball.pos.y,40,H-40))};
-  var taker = defend.players[2]; // CDM 대리
+  var taker = defend.players[2];
   this.startRestart("THROW-IN", defend, taker, pos);
 };
 Game.prototype.queueCorner=function(outSide,attackTeam){
   var x=(outSide==="LEFT")?24:W-24; var y=(this.ball.pos.y<H/2)?24:H-24;
-  var taker = attackTeam.players[3]; // LW/RW 느낌
+  var taker = attackTeam.players[3];
   this.startRestart("CORNER", attackTeam, taker, {x:x,y:y});
 };
 Game.prototype.queueGoalKick=function(defendTeam){
@@ -520,10 +533,10 @@ Game.prototype.startRestart=function(kind,team,taker,pos){
   this.state="restart";
   this.restart={kind:kind,team:team,taker:taker,pos:new Vec2(pos.x,pos.y),autoKickAt:this.t+(kind==="CORNER"?1.1:0.9)};
   taker.pos.set(pos.x,pos.y); this.ball.owner=taker; this.ball.pos.set(pos.x,pos.y);
-  // 모두 정지(키커 고정)
   var all=team.players.concat(team.oppo.players), i;
   for(i=0;i<all.length;i++){ all[i].frozen=true; all[i].vel.mul(0); }
   taker.frozen=true;
+  log('[restart]',kind,'@',pos.x,pos.y);
 };
 Game.prototype.autoKickNow=function(){
   var r=this.restart; if(!r) return; var k=r.taker;
@@ -532,6 +545,7 @@ Game.prototype.autoKickNow=function(){
   else k.pass("normal");
   this.state="play"; this.restart=null;
   var all=this.teamA.players.concat(this.teamB.players), i; for(i=0;i<all.length;i++) all[i].frozen=false;
+  log('[auto-kick] done');
 };
 Game.prototype.maybeAutoRestart=function(){
   var r=this.restart; if(!r) return;
@@ -542,7 +556,7 @@ Game.prototype.endRestartIfKicked=function(){
   var k=this.restart.taker, i=this.input1, acted=false;
   if(i.shootRelease){ var pow=clamp(i.shotCharge,0,1); if(i.curveHeld) k.shootCurve(pow); else k.shoot(pow); acted=true; i.shootRelease=false; i.shotCharge=0; }
   if(i.passTrigger){ var type=i.passIsThrough ? (k.isWideArea()?"cross":"through") : "normal"; k.pass(type); i.passTrigger=false; acted=true; }
-  if(acted){ this.state="play"; this.restart=null; var all=this.teamA.players.concat(this.teamB.players), j; for(j=0;j<all.length;j++) all[j].frozen=false; }
+  if(acted){ this.state="play"; this.restart=null; var all=this.teamA.players.concat(this.teamB.players), j; for(j=0;j<all.length;j++) all[j].frozen=false; log('[restart] manual kick'); }
 };
 Game.prototype.separate=function(arr){
   var i,j;
@@ -559,7 +573,7 @@ Game.prototype.separate=function(arr){
 Game.prototype.tick=function(ts){
   var dt=Math.min(0.033,(ts-this.lastTs)/1000||0); this.lastTs=ts; this.dt=dt;
   this.update(dt); this.render();
-  window.requestAnimationFrame(this.tick.bind(this));
+  this._raf = RAF(this.tick.bind(this));
 };
 Game.prototype.update=function(dt){
   this.t+=dt; this.timeLeft=Math.max(0,this.timeLeft-dt); if(this.timeLeft<=0) this.timeLeft=HALF_LEN;
@@ -580,7 +594,6 @@ Game.prototype.update=function(dt){
   }
   this.ballPlayerCollisions();
 
-  // 킥오프 시 무입력 → 자동 패스
   if(this.ball.owner && this.ball.owner.controlled===1 && (this.t>this.kickoffIdleAutoAt)){
     this.ball.owner.pass("normal");
     this.kickoffIdleAutoAt = 1e9;
@@ -608,7 +621,6 @@ Game.prototype.goal3D=function(g){
 };
 Game.prototype.banner=function(text){ this._banner={text:text, until:this.t+0.85}; };
 Game.prototype.drawUI=function(g){
-  // 중앙 상단 박스(타이머 + 점수)
   var boxW=270, boxH=40, x=(W-boxW)/2, y=10;
   g.save();
   g.fillStyle="rgba(0,0,0,.45)"; g.strokeStyle="rgba(255,255,255,.12)"; g.lineWidth=1.5;
@@ -617,18 +629,12 @@ Game.prototype.drawUI=function(g){
   g.fillText((("0"+((this.timeLeft/60)|0)).slice(-2))+":"+(("0"+((this.timeLeft%60)|0)).slice(-2)), W/2, y+boxH/2);
   g.font="900 15px ui-sans-serif"; g.fillStyle=TEAM_COLOR_A; g.fillText("A "+this.teamA.score, x+48, y+boxH/2);
   g.fillStyle=TEAM_COLOR_B; g.fillText("B "+this.teamB.score, x+boxW-48, y+boxH/2);
-
-  // 소유 표시
   var o=this.ball.owner; g.font="bold 12px ui-sans-serif"; g.textAlign="left"; g.fillStyle="#a7ffe0";
   g.fillText("POS: "+(o?(o.team.name+"-"+o.role):"-"), 26, 22);
-
-  // 배너(골/오프사이드 등)
   if(this._banner && this.t<this._banner.until){
     g.font="900 56px ui-sans-serif"; g.textAlign="center"; g.textBaseline="middle";
     g.fillStyle="#fff"; g.fillText(this._banner.text, W/2, H/2);
   }
-
-  // 통합 게이지(PASS/SHOT)
   var i1=game.input1; var value=clamp(Math.max(i1.passCharge,i1.shotCharge),0,1);
   if(value>0.02){
     var gw=320, gh=14, gx=(W-gw)/2, gy=H-26;
@@ -642,20 +648,22 @@ Game.prototype.drawUI=function(g){
 };
 Game.prototype.render=function(){
   g.clearRect(0,0,canvas.width,canvas.height);
-  g.fillStyle="#0b5f2a"; g.fillRect(0,0,W,H); // 잔디
+  g.fillStyle="#0b5f2a"; g.fillRect(0,0,W,H); /* JS 그리기도 초록 잔디 */
   this.pitch(g); this.goal3D(g);
   this.ball.draw(g);
   var i; for(i=0;i<this.teamA.players.length;i++) this.teamA.players[i].draw(g);
   for(i=0;i<this.teamB.players.length;i++) this.teamB.players[i].draw(g);
   this.drawUI(g);
+  this._frames=(this._frames||0)+1;
 };
 
 /* ===== 실행 ===== */
+log('[boot] Game 생성 시도…');
 window.game=new Game();
-window.requestAnimationFrame(function(ts){ game.tick(ts); });
+RAF(function(ts){ game.tick(ts); log('✔ RAF 루프 시작'); });
 
 /* ===== 키보드 ===== */
-window.addEventListener("keydown",function(e){
+function onKeyDown(e){
   var k=e.code; var t=game.t; var i1=game.input1;
   if(k===Keys.W)i1.up=true; if(k===Keys.S)i1.down=true; if(k===Keys.A)i1.left=true; if(k===Keys.D)i1.right=true;
   if(k===Keys.PASS1){ handlePassKey(i1,true,t); game.endRestartIfKicked(); }
@@ -663,18 +671,29 @@ window.addEventListener("keydown",function(e){
   if(k===Keys.SWITCH1) i1.switch=true;
   if(k===Keys.CURVE1) i1.curveHeld=true;
   if(k===Keys.TACKLE1) i1.tackleTap=true;
-  e.preventDefault();
-},{passive:false});
-
-window.addEventListener("keyup",function(e){
+  if(e && e.preventDefault) e.preventDefault();
+}
+function onKeyUp(e){
   var k=e.code; var t=game.t; var i1=game.input1;
   if(k===Keys.W)i1.up=false; if(k===Keys.S)i1.down=false; if(k===Keys.A)i1.left=false; if(k===Keys.D)i1.right=false;
   if(k===Keys.PASS1){ handlePassKey(i1,false,t); game.endRestartIfKicked(); }
   if(k===Keys.SHOOT1){ handleShootKey(i1,false,t); game.endRestartIfKicked(); }
   if(k===Keys.SWITCH1) i1.switch=false;
   if(k===Keys.CURVE1) i1.curveHeld=false;
-  e.preventDefault();
-},{passive:false});
+  if(e && e.preventDefault) e.preventDefault();
+}
+addEvt(window,"keydown",onKeyDown,{capture:false,passive:false});
+addEvt(window,"keyup",onKeyUp,{capture:false,passive:false});
+
+/* ===== 헬스 체크: 1초 뒤 프레임이 늘었는지 확인 ===== */
+setTimeout(function(){
+  var f = game && game._frames || 0;
+  if(f<=0){
+    log('❌ 1초 후에도 프레임이 0입니다. 환경이 RAF를 막거나 JS가 중단됐을 수 있습니다.');
+  }else{
+    log('✔ 프레임 진행중: ', f, 'frames');
+  }
+}, 1000);
 
 })();
 </script>
