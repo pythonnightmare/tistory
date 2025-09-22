@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>숫자야구 – 혼자/친구/AI 3모드</title>
+  <style>
+    :root{
+      --bg1:#0ea5e9; /* primary */
+      --bg2:#7c3aed; /* accent */
+      --text:#0f172a;
+      --muted:#475569;
+      --card: rgba(255,255,255,.75);
+      --cardBorder: rgba(0,0,0,.06);
+      --shadow: 0 10px 30px rgba(2,6,23,.15);
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --text:#e5e7eb;
+        --muted:#94a3b8;
+        --card: rgba(15,23,42,.7);
+        --cardBorder: rgba(255,255,255,.08);
+        --shadow: 0 10px 30px rgba(0,0,0,.4);
+      }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Noto Sans KR", Arial, "맑은 고딕", sans-serif;
+      color:var(--text);
+      background: radial-gradient(1200px 900px at 10% 0%, rgba(14,165,233,.25), transparent 60%),
+                  radial-gradient(1000px 700px at 90% 10%, rgba(124,58,237,.20), transparent 60%),
+                  linear-gradient(160deg, #f0f9ff, #faf5ff 60%);
+      min-height:100%;
+    }
+    .container{max-width:980px;margin:32px auto;padding:0 16px}
+    .header{
+      display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px
+    }
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--bg1),var(--bg2));box-shadow:var(--shadow);position:relative}
+    .brand .logo:after{content:"";position:absolute;inset:6px;border-radius:10px;background:radial-gradient(circle at 70% 30%, rgba(255,255,255,.9), transparent 55%)}
+    .brand h1{font-size:20px;margin:0}
+    .card{background:var(--card);backdrop-filter: blur(10px);border:1px solid var(--cardBorder);box-shadow:var(--shadow);border-radius:16px}
+    .toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 16px}
+    .toolbar .group{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:1px dashed var(--cardBorder)}
+    .label{font-size:13px;color:var(--muted)}
+    .seg{
+      display:inline-grid;grid-auto-flow:column;gap:6px;background:rgba(2,6,23,.05);padding:4px;border-radius:999px
+    }
+    .seg button{border:0;padding:8px 12px;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;font-weight:600}
+    .seg button.active{background:linear-gradient(135deg,var(--bg1),var(--bg2));color:white;box-shadow:0 4px 16px rgba(124,58,237,.35)}
+    .switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+    .switch input{display:none}
+    .switch .track{width:44px;height:26px;border-radius:999px;background:rgba(2,6,23,.15);position:relative;transition:.2s}
+    .switch .thumb{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:999px;background:white;box-shadow:0 2px 8px rgba(0,0,0,.25);transition:.2s}
+    .switch input:checked + .track{background:linear-gradient(135deg,var(--bg1),var(--bg2))}
+    .switch input:checked + .track .thumb{left:21px}
+
+    .tabs{display:flex;gap:6px;padding:10px;border-top:1px solid var(--cardBorder)}
+    .tab-btn{flex:1;border:0;border-radius:12px;padding:12px;background:transparent;cursor:pointer;color:var(--muted);font-weight:700}
+    .tab-btn.active{background:linear-gradient(135deg,var(--bg1),var(--bg2));color:white}
+
+    .panel{display:none;padding:18px}
+    .panel.active{display:block}
+
+    .grid{display:grid;gap:14px}
+    .grid.two{grid-template-columns: 1fr 1fr}
+    @media (max-width:860px){.grid.two{grid-template-columns: 1fr}}
+
+    .subcard{border:1px solid var(--cardBorder);border-radius:14px;padding:14px;background:rgba(255,255,255,.55)}
+    @media (prefers-color-scheme: dark){
+      .subcard{background:rgba(15,23,42,.55)}
+    }
+    .subhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input[type="text"], input[type="password"], input[type="number"]{
+      appearance:none;border:1px solid var(--cardBorder);background:rgba(255,255,255,.7);
+      padding:10px 12px;border-radius:10px;font-size:16px;outline:none;min-width:140px
+    }
+    @media (prefers-color-scheme: dark){
+      input[type="text"], input[type="password"], input[type="number"]{background:rgba(2,6,23,.2);color:var(--text)}
+    }
+    .btn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .btn.primary{background:linear-gradient(135deg,var(--bg1),var(--bg2));color:white;box-shadow:0 6px 18px rgba(124,58,237,.35)}
+    .btn.ghost{background:transparent;border:1px dashed var(--cardBorder);color:var(--muted)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+
+    .history{width:100%;border-collapse:collapse;font-size:14px}
+    .history th,.history td{border-bottom:1px dashed var(--cardBorder);padding:8px 6px;text-align:center}
+
+    .kbd{display:inline-block;min-width:34px;text-align:center;padding:8px;border-radius:10px;border:1px solid var(--cardBorder);cursor:pointer;user-select:none}
+    .kbd:hover{background:rgba(2,6,23,.05)}
+    .keypad{display:grid;grid-template-columns: repeat(5, 1fr);gap:8px}
+
+    .hint{font-size:13px;color:var(--muted)}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;background:rgba(14,165,233,.15);color:#0369a1}
+
+    .winner{font-weight:800;font-size:18px}
+    .flex{display:flex;gap:8px;align-items:center}
+    .right{margin-left:auto}
+    .muted{color:var(--muted)}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <h1>숫자야구 <span class="muted" style="font-weight:500">– 혼자 · 친구 · AI</span></h1>
+      </div>
+      <div class="hint">Tistory에 그대로 붙여넣어 실행하세요 ✨</div>
+    </div>
+
+    <div class="card">
+      <!-- Global toolbar -->
+      <div class="toolbar">
+        <div class="group" role="group" aria-label="자릿수">
+          <span class="label">자릿수</span>
+          <div class="seg" id="lenSeg">
+            <button class="active" data-len="3" aria-pressed="true">3자리</button>
+            <button data-len="4" aria-pressed="false">4자리</button>
+          </div>
+        </div>
+        <label class="group switch" title="0을 숫자에 포함시킬지 설정 (첫 자리 포함)">
+          <span class="label">0 포함</span>
+          <input id="allowZero" type="checkbox" checked>
+          <span class="track"><span class="thumb"></span></span>
+        </label>
+        <button class="btn ghost" id="resetAll">설정 초기화</button>
+        <span class="right hint">규칙: 중복 숫자 없음, S(정확한 자리) / B(자리만 다름)</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs" role="tablist" aria-label="게임 모드">
+        <button class="tab-btn active" data-tab="solo" role="tab" aria-selected="true">🎯 혼자 하기</button>
+        <button class="tab-btn" data-tab="friend" role="tab" aria-selected="false">🤝 친구랑</button>
+        <button class="tab-btn" data-tab="ai" role="tab" aria-selected="false">🤖 AI 대결</button>
+      </div>
+
+      <!-- Panels -->
+      <section id="panel-solo" class="panel active" role="tabpanel" aria-labelledby="solo">
+        <div class="grid two">
+          <div class="subcard">
+            <div class="subhead">
+              <div>
+                <strong>플레이어 vs 비밀 숫자</strong>
+                <div class="hint">시스템이 만든 숫자를 맞혀보세요</div>
+              </div>
+              <div class="flex">
+                <span id="soloAttempts" class="badge" title="시도 횟수">0 시도</span>
+              </div>
+            </div>
+            <div class="row" style="margin:6px 0 10px">
+              <input id="soloGuess" type="text" inputmode="numeric" placeholder="숫자 입력" maxlength="4" />
+              <button class="btn primary" id="soloSubmit">제출</button>
+              <button class="btn ghost" id="soloClear">지우기</button>
+              <button class="btn ghost" id="soloNew">새 게임</button>
+              <button class="btn ghost" id="soloReveal">정답 보기</button>
+            </div>
+            <div class="keypad" id="soloPad" aria-label="숫자 키패드"></div>
+          </div>
+
+          <div class="subcard">
+            <div class="subhead">
+              <strong>기록</strong>
+              <div class="flex">
+                <button class="btn ghost" id="soloCopy">결과 복사</button>
+              </div>
+            </div>
+            <table class="history" id="soloHistory" aria-label="혼자 하기 기록">
+              <thead><tr><th>#</th><th>추측</th><th>S</th><th>B</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-friend" class="panel" role="tabpanel" aria-labelledby="friend">
+        <div class="grid two">
+          <div class="subcard">
+            <div class="subhead"><strong>비밀 숫자 설정</strong><span class="hint">(서로 보이지 않게 입력)</span></div>
+            <div class="row">
+              <label>플레이어 A: <input id="p1Secret" type="password" inputmode="numeric" maxlength="4" placeholder="비밀 숫자" /></label>
+              <label>플레이어 B: <input id="p2Secret" type="password" inputmode="numeric" maxlength="4" placeholder="비밀 숫자" /></label>
+              <button class="btn primary" id="friendStart">게임 시작</button>
+              <button class="btn ghost" id="friendReset">다시 설정</button>
+            </div>
+            <div class="hint" id="friendHint">자릿수/중복 규칙을 지켜 입력하세요</div>
+            <hr style="border:none;border-top:1px dashed var(--cardBorder);margin:14px 0"/>
+            <div class="row">
+              <strong>현재 턴: <span id="turnLabel">A</span></strong>
+              <input id="friendGuess" type="text" inputmode="numeric" placeholder="추측 입력" maxlength="4" disabled/>
+              <button class="btn primary" id="friendSubmit" disabled>제출</button>
+            </div>
+          </div>
+          <div class="subcard">
+            <div class="subhead">
+              <strong>기록</strong>
+              <div class="flex">
+                <span class="badge" id="roundBadge">라운드 0</span>
+                <span class="badge" id="scoreBadge">A:0회 · B:0회</span>
+              </div>
+            </div>
+            <table class="history" id="friendHistory" aria-label="친구랑 기록">
+              <thead><tr><th>턴</th><th>플레이어</th><th>추측</th><th>S</th><th>B</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div id="friendWinner" class="winner"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-ai" class="panel" role="tabpanel" aria-labelledby="ai">
+        <div class="grid two">
+          <div class="subcard">
+            <div class="subhead"><strong>AI가 맞혀볼게요</strong></div>
+            <div class="row">
+              <label>당신의 비밀 숫자: <input id="aiSecret" type="password" inputmode="numeric" maxlength="4" placeholder="비밀 숫자" /></label>
+              <button class="btn primary" id="aiStart">시작</button>
+              <button class="btn ghost" id="aiReset">초기화</button>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn primary" id="aiStep" disabled>한 번 추측</button>
+              <button class="btn ghost" id="aiAuto" disabled>자동 진행</button>
+              <span class="hint" id="aiStatus">대기 중</span>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <span class="badge" id="candBadge">후보: -</span>
+              <span class="badge" id="aiAttempts">0 시도</span>
+            </div>
+          </div>
+          <div class="subcard">
+            <div class="subhead"><strong>AI 기록</strong></div>
+            <table class="history" id="aiHistory" aria-label="AI 기록">
+              <thead><tr><th>#</th><th>AI 추측</th><th>S</th><th>B</th><th>남은 후보</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div id="aiWinner" class="winner"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="hint" style="margin:10px 6px 30px">Tip: 모바일에선 키패드로 입력해보세요. 숫자는 중복 불가, 0 포함 여부는 상단에서 변경할 수 있어요.</p>
+  </div>
+
+  <script>
+  (function(){
+    // ---------- Helpers ----------
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+    let gameLen = 3;
+    let allowZero = true; // 0 포함
+
+    function digitsAllowed(){
+      return allowZero ? ['0','1','2','3','4','5','6','7','8','9'] : ['1','2','3','4','5','6','7','8','9'];
+    }
+
+    function makeSecret(len=gameLen){
+      const pool = [...digitsAllowed()];
+      // 무작위 비복원 추출
+      let s = '';
+      while(s.length < len){
+        const idx = Math.floor(Math.random()*pool.length);
+        s += pool[idx];
+        pool.splice(idx,1);
+      }
+      return s;
+    }
+
+    function validGuess(str, len=gameLen){
+      if(!str || str.length !== len) return false;
+      if(!/^\d+$/.test(str)) return false;
+      // 0 허용 옵션 반영
+      if(!allowZero && /0/.test(str)) return false;
+      // 중복 금지
+      const set = new Set(str.split(''));
+      return set.size === len;
+    }
+
+    function score(guess, secret){
+      let S = 0, B = 0;
+      for(let i=0;i<guess.length;i++){
+        if(guess[i] === secret[i]) S++;
+        else if(secret.includes(guess[i])) B++;
+      }
+      return {S,B};
+    }
+
+    function toast(msg){
+      // lightweight toast
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.style.position = 'fixed';
+      t.style.left = '50%';
+      t.style.top = '20px';
+      t.style.transform = 'translateX(-50%)';
+      t.style.background = 'rgba(0,0,0,.8)';
+      t.style.color = 'white';
+      t.style.padding = '10px 14px';
+      t.style.borderRadius = '10px';
+      t.style.zIndex = 99999;
+      document.body.appendChild(t);
+      setTimeout(()=>{ t.style.transition='opacity .3s'; t.style.opacity='0'; }, 1200);
+      setTimeout(()=>t.remove(), 1600);
+    }
+
+    function setInputMaxLenAll(){
+      $('#soloGuess').maxLength = gameLen;
+      $('#p1Secret').maxLength = gameLen;
+      $('#p2Secret').maxLength = gameLen;
+      $('#friendGuess').maxLength = gameLen;
+      $('#aiSecret').maxLength = gameLen;
+    }
+
+    function onlyDigits(el){
+      el.addEventListener('input',()=>{
+        el.value = el.value.replace(/\D/g,'');
+      });
+    }
+
+    [ '#soloGuess', '#p1Secret', '#p2Secret', '#friendGuess', '#aiSecret' ].forEach(sel=>{
+      const el = $(sel); if(el) onlyDigits(el);
+    });
+
+    // ---------- Global toolbar ----------
+    $$('#lenSeg button').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        $$('#lenSeg button').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        gameLen = Number(btn.dataset.len);
+        localStorage.setItem('numBaseball.len', gameLen);
+        setInputMaxLenAll();
+        // 새 게임 초기화
+        solo.newGame();
+        friend.resetAll();
+        ai.reset();
+      });
+    });
+
+    $('#allowZero').addEventListener('change', (e)=>{
+      allowZero = e.target.checked;
+      localStorage.setItem('numBaseball.allowZero', allowZero? '1':'0');
+      solo.newGame();
+      friend.resetAll();
+      ai.reset();
+    });
+
+    $('#resetAll').addEventListener('click',()=>{
+      gameLen = 3; allowZero = true;
+      $$('#lenSeg button').forEach(b=> b.classList.toggle('active', b.dataset.len==='3'));
+      $('#allowZero').checked = true;
+      setInputMaxLenAll();
+      solo.newGame(); friend.resetAll(); ai.reset();
+      localStorage.removeItem('numBaseball.len');
+      localStorage.removeItem('numBaseball.allowZero');
+    });
+
+    // Load saved prefs
+    const savedLen = localStorage.getItem('numBaseball.len');
+    const savedZero = localStorage.getItem('numBaseball.allowZero');
+    if(savedLen){ gameLen = Number(savedLen); $$('#lenSeg button').forEach(b=> b.classList.toggle('active', b.dataset.len===String(gameLen))); }
+    if(savedZero){ allowZero = savedZero==='1'; $('#allowZero').checked = allowZero; }
+    setInputMaxLenAll();
+
+    // ---------- Tabs ----------
+    $$('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        $$('.tab-btn').forEach(b=>{b.classList.remove('active'); b.setAttribute('aria-selected','false')});
+        btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+        [ '#panel-solo', '#panel-friend', '#panel-ai' ].forEach(id=> $(id).classList.remove('active'));
+        if(btn.dataset.tab==='solo') $('#panel-solo').classList.add('active');
+        if(btn.dataset.tab==='friend') $('#panel-friend').classList.add('active');
+        if(btn.dataset.tab==='ai') $('#panel-ai').classList.add('active');
+      });
+    });
+
+    // ---------- Solo Mode ----------
+    const solo = (function(){
+      let secret = '';
+      let attempts = 0;
+      const guessEl = $('#soloGuess');
+      const tbody = $('#soloHistory tbody');
+      function renderPad(){
+        const pad = $('#soloPad');
+        pad.innerHTML = '';
+        const digits = ['1','2','3','4','5','6','7','8','9','0'];
+        const keys = [...digits, '←', '지움', '제출'];
+        keys.forEach(k=>{
+          const b = document.createElement('button');
+          b.className = 'kbd'; b.textContent = k;
+          b.addEventListener('click',()=>{
+            if(k==='←'){ guessEl.value = guessEl.value.slice(0,-1); return; }
+            if(k==='지움'){ guessEl.value=''; return; }
+            if(k==='제출'){ submit(); return; }
+            if(guessEl.value.includes(k)) return; // 중복 방지
+            if(!allowZero && k==='0') return;
+            if(guessEl.value.length < gameLen) guessEl.value += k;
+          });
+          pad.appendChild(b);
+        });
+      }
+      function newGame(){
+        secret = makeSecret();
+        attempts = 0; tbody.innerHTML='';
+        $('#soloAttempts').textContent = '0 시도';
+        $('#soloWinner')?.remove();
+        guessEl.value='';
+        renderPad();
+      }
+      function submit(){
+        const g = guessEl.value;
+        if(!validGuess(g)){
+          toast(`잘못된 입력: ${gameLen}자리, 중복 없고 ${allowZero? '0 포함 가능':'0 제외'}`);
+          return;
+        }
+        attempts++;
+        const {S,B} = score(g, secret);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${attempts}</td><td>${g}</td><td>${S}</td><td>${B}</td>`;
+        tbody.appendChild(tr);
+        $('#soloAttempts').textContent = `${attempts} 시도`;
+        guessEl.value = '';
+        if(S===gameLen){
+          const msg = document.createElement('div');
+          msg.id='soloWinner';
+          msg.className='winner';
+          msg.textContent=`정답! ${attempts}번 만에 성공 🎉  (정답: ${secret})`;
+          $('#panel-solo .grid').appendChild(msg);
+        }
+      }
+      function reveal(){
+        alert(`정답은 ${secret}`);
+      }
+      function copy(){
+        const rows = Array.from(tbody.querySelectorAll('tr')).map(tr=>{
+          const tds = tr.querySelectorAll('td');
+          return `${tds[0].textContent}. ${tds[1].textContent}  →  ${tds[2].textContent}S ${tds[3].textContent}B`;
+        }).join('\n');
+        const text = `숫자야구 (${gameLen}자리, ${allowZero? '0 포함':'0 제외'})\n${rows}`;
+        navigator.clipboard.writeText(text).then(()=>toast('복사 완료'));
+      }
+      // events
+      $('#soloSubmit').addEventListener('click', submit);
+      $('#soloClear').addEventListener('click', ()=> guessEl.value='');
+      $('#soloNew').addEventListener('click', newGame);
+      $('#soloReveal').addEventListener('click', reveal);
+      $('#soloCopy').addEventListener('click', copy);
+      guessEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter') submit(); });
+      renderPad();
+      newGame();
+      return { newGame };
+    })();
+
+    // ---------- Friend Mode ----------
+    const friend = (function(){
+      let p1='', p2='';
+      let turn='A';
+      let round=0; let triesA=0, triesB=0;
+      const tbody = $('#friendHistory tbody');
+      function resetAll(){
+        p1=''; p2=''; turn='A'; round=0; triesA=0; triesB=0; tbody.innerHTML='';
+        $('#p1Secret').value=''; $('#p2Secret').value='';
+        $('#friendGuess').value=''; $('#friendGuess').disabled=true; $('#friendSubmit').disabled=true;
+        $('#turnLabel').textContent='A';
+        $('#roundBadge').textContent='라운드 0';
+        $('#scoreBadge').textContent='A:0회 · B:0회';
+        $('#friendWinner').textContent='';
+      }
+      function start(){
+        const s1 = $('#p1Secret').value; const s2 = $('#p2Secret').value;
+        if(!validGuess(s1) || !validGuess(s2)){
+          toast(`각 비밀 숫자는 ${gameLen}자리, 중복 없음, ${allowZero? '0 포함 가능':'0 제외'}`);
+          return;
+        }
+        p1 = s1; p2 = s2; round = 1; turn='A';
+        $('#friendGuess').disabled=false; $('#friendSubmit').disabled=false; $('#turnLabel').textContent='A';
+        $('#roundBadge').textContent=`라운드 ${round}`;
+        toast('게임 시작! 플레이어 A부터');
+      }
+      function submit(){
+        if(!p1 || !p2) return;
+        const g = $('#friendGuess').value;
+        if(!validGuess(g)){
+          toast('올바른 추측을 입력하세요'); return;
+        }
+        let S=0,B=0;
+        if(turn==='A'){ ({S,B} = score(g, p2)); triesA++; }
+        else { ({S,B} = score(g, p1)); triesB++; }
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${round}</td><td>${turn}</td><td>${g}</td><td>${S}</td><td>${B}</td>`;
+        tbody.appendChild(tr);
+        $('#scoreBadge').textContent=`A:${triesA}회 · B:${triesB}회`;
+        $('#friendGuess').value='';
+        if(S===gameLen){
+          $('#friendWinner').textContent = `승리! 플레이어 ${turn}가 정답을 맞혔습니다 🎉`;
+          $('#friendGuess').disabled=true; $('#friendSubmit').disabled=true;
+          return;
+        }
+        // 턴 교체
+        turn = (turn==='A' ? 'B' : 'A');
+        $('#turnLabel').textContent = turn;
+        if(turn==='A') round++;
+        $('#roundBadge').textContent=`라운드 ${round}`;
+      }
+      $('#friendStart').addEventListener('click', start);
+      $('#friendReset').addEventListener('click', resetAll);
+      $('#friendSubmit').addEventListener('click', submit);
+      $('#friendGuess').addEventListener('keydown',(e)=>{ if(e.key==='Enter') submit(); });
+      resetAll();
+      return {resetAll};
+    })();
+
+    // ---------- AI Mode ----------
+    const ai = (function(){
+      let secret = '';
+      let candidates = [];
+      let attempts = 0;
+      let running = false;
+      const tbody = $('#aiHistory tbody');
+
+      function genCandidates(){
+        const pool = digitsAllowed();
+        const res = [];
+        function dfs(path, used){
+          if(path.length === gameLen){ res.push(path.join('')); return; }
+          for(const d of pool){
+            if(!allowZero && d==='0') continue; // already ensured by pool but double guard
+            if(used.has(d)) continue;
+            path.push(d); used.add(d);
+            dfs(path, used);
+            path.pop(); used.delete(d);
+          }
+        }
+        dfs([], new Set());
+        return res;
+      }
+
+      function chooseNext(){
+        // Heuristic: frequency-based scoring per position to pick most informative candidate
+        const posFreq = Array.from({length: gameLen}, ()=> Object.fromEntries('0123456789'.split('').map(d=>[d,0])));
+        for(const cand of candidates){
+          for(let i=0;i<gameLen;i++) posFreq[i][cand[i]]++;
+        }
+        let best = candidates[0];
+        let bestScore = -1;
+        for(const cand of candidates){
+          let s=0; for(let i=0;i<gameLen;i++){ s += posFreq[i][cand[i]]; }
+          if(s>bestScore){ bestScore=s; best=cand; }
+        }
+        // First guess defaults for speed
+        if(attempts===0){
+          if(gameLen===3) return allowZero? '012' : '123';
+          if(gameLen===4) return allowZero? '0123' : '1234';
+        }
+        return best;
+      }
+
+      function filterBy(guess, S, B){
+        candidates = candidates.filter(c=>{ const r=score(guess,c); return r.S===S && r.B===B; });
+      }
+
+      function updateBadges(){
+        $('#candBadge').textContent = `후보: ${candidates.length}`;
+        $('#aiAttempts').textContent = `${attempts} 시도`;
+      }
+
+      function reset(){
+        secret=''; attempts=0; candidates=[]; running=false;
+        $('#aiSecret').value='';
+        $('#aiStatus').textContent='대기 중';
+        $('#aiStep').disabled=true; $('#aiAuto').disabled=true;
+        $('#aiWinner').textContent='';
+        tbody.innerHTML='';
+        updateBadges();
+      }
+
+      function start(){
+        const s = $('#aiSecret').value;
+        if(!validGuess(s)){
+          toast(`비밀 숫자는 ${gameLen}자리, 중복 없음, ${allowZero? '0 포함 가능':'0 제외'}`);
+          return;
+        }
+        secret = s;
+        candidates = genCandidates();
+        attempts = 0; tbody.innerHTML='';
+        $('#aiStatus').textContent='시작됨';
+        $('#aiStep').disabled=false; $('#aiAuto').disabled=false;
+        updateBadges();
+      }
+
+      function step(){
+        if(!secret) return;
+        if(candidates.length===0){ $('#aiStatus').textContent='모순 발생: 후보 0'; return; }
+        const guess = chooseNext();
+        attempts++;
+        const {S,B} = score(guess, secret);
+        filterBy(guess, S, B);
+        const tr=document.createElement('tr');
+        tr.innerHTML = `<td>${attempts}</td><td>${guess}</td><td>${S}</td><td>${B}</td><td>${candidates.length}</td>`;
+        tbody.appendChild(tr);
+        updateBadges();
+        if(S===gameLen){
+          $('#aiWinner').textContent = `AI 성공! ${attempts}번 만에 정답 ${secret} 🎉`;
+          $('#aiStep').disabled=true; $('#aiAuto').disabled=true;
+          $('#aiStatus').textContent='완료';
+          return true;
+        }
+        return false;
+      }
+
+      async function auto(){
+        if(running) return; running=true; $('#aiStatus').textContent='자동 진행 중...';
+        while(!step()){
+          await new Promise(r=>setTimeout(r, 350));
+        }
+        running=false;
+      }
+
+      $('#aiStart').addEventListener('click', start);
+      $('#aiReset').addEventListener('click', reset);
+      $('#aiStep').addEventListener('click', step);
+      $('#aiAuto').addEventListener('click', auto);
+      reset();
+      return { reset };
+    })();
+
+  })();
+  </script>
+</body>
+</html>
