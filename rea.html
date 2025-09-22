@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>6v6 축구 게임 · 롤별 능력치 · 오프사이드 · 스로인/코너 · 방향기반 패스/슛</title>
+  <title>6v6 축구 게임 · 롤별 능력치 · 쓰루/크로스 · 오프사이드 · 스로인/코너 · 향상 UI/AI</title>
   <style>
     :root { --bg:#0c0f15; --panel:#111624; --panel-2:#0f1520; --ink:#e6edf3; --muted:#9da6b2; --accent:#23a559; --accent-2:#2d7ff9; --accent-3:#f3533b; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:16px; }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -24,9 +24,11 @@
     .timer{color:#fff;opacity:.9;margin-left:6px;min-width:62px;text-align:center}
     .pos{padding:2px 8px;border-radius:10px;border:1px dashed rgba(255,255,255,.15);font-size:11px;color:#d6ffe9}
 
+    /* Menus */
     .menu{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.6);backdrop-filter:blur(6px)}
     .card{width:min(920px,92%);background:var(--panel);border:1px solid #263142;border-radius:20px;box-shadow:var(--shadow);padding:18px;display:grid;gap:14px}
     .titleRow{display:flex;align-items:center;justify-content:space-between}
+    .title{font-weight:900;letter-spacing:.6px}
     .seg{display:flex;gap:8px}
     .seg button{flex:1;padding:12px 14px;font-weight:900;border-radius:12px;border:1px solid #2a3546;background:#0f1520;color:var(--ink);cursor:pointer}
     .seg button.active{outline:2px solid var(--accent)}
@@ -55,7 +57,7 @@
   <div id="root">
     <header>
       <h1>⚽ 6v6 STREET FOOTBALL</h1>
-      <div class="hint">1P: WASD · <b>슛 J</b>(길게=파워, U=커브) · <b>패스 K</b>(길게=쓰루) · 태클 H · 변경 L | 2P: 화살표/1·2·3·4·5</div>
+      <div class="hint">1P: 이동 WASD · <b>슛 J</b>(길게=파워/커브) · <b>패스 K</b>(길게=쓰루) · 커브 U · 태클 H · 변경 L | 2P: 화살표/1·2·3·4·5</div>
     </header>
 
     <div class="wrap">
@@ -82,8 +84,8 @@
               <div class="kb">
                 <h3>조작</h3>
                 <div class="grid2">
-                  <div class="t">1P</div><div>이동 WASD · <b>슛 J</b> · <b>패스 K</b> · 커브 U · 태클 H · 변경 L</div>
-                  <div class="t">2P</div><div>←↑→↓ · 패스 1(길게=쓰루) · 커브 4 · 슛 2(길게=파워) · 태클 5 · 변경 3</div>
+                  <div class="t">1P</div><div>이동 WASD · <b>슛 J</b>(길게=파워) · <b>패스 K</b>(길게=쓰루) · 커브 U · 태클 H · 변경 L</div>
+                  <div class="t">2P</div><div>이동 ←↑→↓ · 패스 1(넘패드1, 길게=쓰루) · 커브 4(넘패드4) · 슛 2(넘패드2) · 태클 5(넘패드5) · 변경 3(넘패드3)</div>
                 </div>
               </div>
               <div class="kb">
@@ -91,7 +93,7 @@
                 <div class="grid2">
                   <div class="t">CB</div><div>빠른 이동 · 강한 태클 · 약한 슛</div>
                   <div class="t">CDM</div><div>느린 이동 · 강한 태클 · 좋은 슛</div>
-                  <div class="t">LW/RW</div><div>빠른 이동(상향) · 좋은 슛 · 약한 태클</div>
+                  <div class="t">LW/RW</div><div>빠른 이동 · 좋은 슛 · 약한 태클</div>
                   <div class="t">ST</div><div>빠른 이동 · 매우 좋은 슛 · 약한 태클</div>
                 </div>
               </div>
@@ -102,6 +104,7 @@
           </div>
         </div>
 
+        <!-- 게이지 -->
         <div class="gwrap">
           <div class="gpanel" id="g1">
             <div class="gtitle">1P</div>
@@ -150,20 +153,31 @@
     // ==== 필드/상수 ====
     var W=1100,H=680,GOAL_W=120; var CENTER=new Vec2(W/2,H/2);
     var FRICTION=0.982,PLAYER_RADIUS=12,BALL_RADIUS=6,GRAB_DIST=16;
-    var PASS_SPEED=5.6; var PASS_SPEED_FACTOR=0.25;
 
-    var SHOT_SPEED_MAX=6.1, SHOT_SPEED_MIN=3.2; var SHOT_CHARGE_MAX=0.9;
+    // 패스/슛/필드 안전 마진
+    var PASS_SPEED_FACTOR=0.25;
+    var SHOT_BOOST=1.2;
+    var SHOT_SPEED_MAX=6.1*SHOT_BOOST, SHOT_SPEED_MIN=3.2*SHOT_BOOST;
+    var SHOT_CHARGE_MAX=0.9;
 
     var PLAYER_SPEED_SCALE=0.2; var SEPARATION_DIST=PLAYER_RADIUS*2.6;
-    var CURVE_DECAY=0.982; // 직선/일반
+    var CURVE_DECAY=0.982; // 기본
+    var AI_SHOOT_DIST=200,AI_PASS_CHAIN=0.78,AI_CROSS_BIAS=0.82;
     var HALF_LEN=3*60;
     var TEAM_COLOR_A="#2d7ff9",TEAM_COLOR_B="#f3533b",PLAYER_OUTLINE="#0b0f16",BALL_COLOR="#f3f3f3";
-    var STEAL_BASE=11;
+    var STEAL_BASE=11, STEAL_ANGLE=0.55;
 
     var PASS_HOLD_THROUGH=0.35; var PASS_HOLD_MAX=0.8;
-    var FIELD_MARGIN=28; // 패스/슛 목표 클램프
 
-    // 키매핑: 1P 슛=J, 패스=K
+    // 필드 경계(클램프용)
+    var FIELD={MINX:20, MAXX:W-20, MINY:20, MAXY:H-20, SAFE:28};
+    function clampPoint(p){
+      p.x=clamp(p.x, FIELD.MINX+FIELD.SAFE, FIELD.MAXX-FIELD.SAFE);
+      p.y=clamp(p.y, FIELD.MINY+FIELD.SAFE, FIELD.MAXY-FIELD.SAFE);
+      return p;
+    }
+
+    // 키매핑
     var Keys={W:"KeyW",A:"KeyA",S:"KeyS",D:"KeyD",PASS1:"KeyK",SHOOT1:"KeyJ",SWITCH1:"KeyL",CURVE1:"KeyU",TACKLE1:"KeyH",
               UP:"ArrowUp",DOWN:"ArrowDown",LEFT:"ArrowLeft",RIGHT:"ArrowRight",PASS2:"Digit1",SHOOT2:"Digit2",SWITCH2:"Digit3",CURVE2:"Digit4",TACKLE2:"Digit5"};
 
@@ -177,18 +191,20 @@
     var g1_pass=get("g1_pass"), g2_pass=get("g2_pass"), g1_shot=get("g1_shot"), g2_shot=get("g2_shot");
     var g1_pass_pct=get("g1_pass_pct"), g2_pass_pct=get("g2_pass_pct"), g1_shot_pct=get("g1_shot_pct"), g2_shot_pct=get("g2_shot_pct");
 
-    // ==== 롤별 능력치 (LW/RW 속도 상향: CDM의 1.3배 ≈ 1.235) ====
+    // ==== 롤별 능력치 ====
+    var CDM_SPD=0.95;             // 기준 수미 속도
+    var WING_SPD=CDM_SPD*1.30;    // 요구사항: 윙 = 수미×1.3
     var RoleProfile={
-      GK:{spd:0.95, shot:0.5,  tackle:0.95},
-      CB:{spd:1.10, shot:0.6,  tackle:1.28},
-      CDM:{spd:0.95, shot:1.05, tackle:1.22},
-      LW:{spd:1.235, shot:1.12, tackle:0.80},
-      RW:{spd:1.235, shot:1.12, tackle:0.80},
-      ST:{spd:1.16, shot:1.18, tackle:0.75}
+      GK:{spd:0.95,  shot:0.5,  tackle:0.95},
+      CB:{spd:1.10,  shot:0.6,  tackle:1.28},
+      CDM:{spd:CDM_SPD, shot:1.05, tackle:1.22},
+      LW:{spd:WING_SPD, shot:1.12, tackle:0.8},
+      RW:{spd:WING_SPD, shot:1.12, tackle:0.8},
+      ST:{spd:1.16,  shot:1.18, tackle:0.75}
     };
 
     // ==== 엔진 ====
-    function Ball(){ this.pos=CENTER.clone(); this.vel=new Vec2(); this.r=BALL_RADIUS; this.owner=null; this.curve=new Vec2(0,0); this.curveDecay=CURVE_DECAY; this.pk=0; this.assistTo=null; this.assistT=0; this.lastTouchTeam=null; this.lastKickInfo=null; }
+    function Ball(){ this.pos=CENTER.clone(); this.vel=new Vec2(); this.r=BALL_RADIUS; this.owner=null; this.curve=new Vec2(0,0); this.curveDecay=CURVE_DECAY; this.pk=0; this.assistTo=null; this.assistT=0; this.lastTouchTeam=null; this.lastKickInfo=null; this.prevX=0; }
     Ball.prototype.resetAt=function(left){ this.pos.set(CENTER.x+(left?-40:40),CENTER.y); this.vel.set(0,0); this.owner=null; this.curve.set(0,0); this.curveDecay=CURVE_DECAY; this.pk=0; this.assistTo=null; this.assistT=0; };
     Ball.prototype.update=function(dt){
       this.pk=Math.max(0,(this.pk||0)-(dt||0));
@@ -198,26 +214,24 @@
         this.pos.set(this.owner.pos.x+f.x,this.owner.pos.y+f.y);
         this.vel.mul(0); this.curve.mul(0); this.curveDecay=CURVE_DECAY; this.assistTo=null; this.assistT=0; return;
       }
+      this.prevX=this.pos.x;
       this.pos.add(this.vel);
       if(this.curve){ this.vel.add(this.curve); this.curve.mul(this.curveDecay); }
       this.vel.mul(FRICTION);
       this.boundary();
     };
-    Ball.prototype.boundary=function(){
-      // 골 판정 (중복 득점 방지)
-      var inGoalY = (this.pos.y>H/2-GOAL_W/2 && this.pos.y<H/2+GOAL_W/2);
-      if(!game.justScoredUntil || game.t >= game.justScoredUntil){
-        if(inGoalY){
-          if(this.pos.x<=20+10) game.goal("B");
-          else if(this.pos.x>=W-20-10) game.goal("A");
-        }
+    Ball.prototype.boundary=function(){ // 골 체크 강화: 골문 사이 + 라인 완전 통과 + 진입방향 확인
+      var inMouth=(this.pos.y>H/2-GOAL_W/2 && this.pos.y<H/2+GOAL_W/2);
+      if(inMouth){
+        if(this.pos.x<=14 && this.vel.x<0) game.goal("B");
+        else if(this.pos.x>=W-14 && this.vel.x>0) game.goal("A");
       }
-      // 라인 아웃 → 재시작
+      // 라인 아웃 → 스로인/코너/골킥
       var outSide=null;
-      if(this.pos.y<FIELD_MARGIN+this.r) outSide="TOP";
-      else if(this.pos.y>H-FIELD_MARGIN-this.r) outSide="BOT";
-      else if(this.pos.x<FIELD_MARGIN+this.r) outSide="LEFT";
-      else if(this.pos.x>W-FIELD_MARGIN-this.r) outSide="RIGHT";
+      if(this.pos.y<FIELD.MINY+this.r) outSide="TOP";
+      else if(this.pos.y>FIELD.MAXY-this.r) outSide="BOT";
+      else if(this.pos.x<FIELD.MINX+this.r) outSide="LEFT";
+      else if(this.pos.x>FIELD.MAXX-this.r) outSide="RIGHT";
       if(outSide){
         var endLine = (outSide==="LEFT"||outSide==="RIGHT");
         if(endLine){
@@ -230,22 +244,43 @@
         }
       }
     };
-    Ball.prototype.kick=function(to,s){
-      // 목표를 필드 안으로 클램프
-      var aim=new Vec2(
-        clamp(to.x, FIELD_MARGIN, W-FIELD_MARGIN),
-        clamp(to.y, FIELD_MARGIN, H-FIELD_MARGIN)
-      );
-      this.owner=null; this.pk=0.25; this.assistTo=null; this.assistT=0;
-      var d=Vec2.sub(aim,this.pos).norm();
-      this.vel=d.mul(s);
-    };
+    Ball.prototype.kick=function(to,s){ this.owner=null; this.pk=0.25; this.assistTo=null; this.assistT=0; var d=Vec2.sub(to,this.pos).norm(); this.vel=d.mul(s); };
     Ball.prototype.knock=function(dir,s){ this.owner=null; this.pk=0.2; this.vel=dir.clone().norm().mul(s); };
     Ball.prototype.draw=function(g){ g.save(); g.fillStyle=BALL_COLOR; g.beginPath(); g.arc(this.pos.x,this.pos.y,this.r,0,TAU); g.fill(); g.restore(); };
 
     function Player(team,role,x,y,color){ this.team=team; this.role=role; this.home=new Vec2(x,y); this.pos=new Vec2(x,y); this.vel=new Vec2(); this.r=PLAYER_RADIUS; this.color=color; this.controlled=0; this.facing=new Vec2(team.side==="L"?1:-1,0); this.tackleCd=0; this.prof=RoleProfile[role]; this.frozen=false; }
     Player.prototype.hasBall=function(){ return game && game.ball.owner===this; };
     Player.prototype.distBall=function(){ return Vec2.sub(game.ball.pos,this.pos).len(); };
+
+    // --- 스마트 패스(타깃 조준 + 경계클램프 + 어시스트 타임) ---
+    Player.prototype.passTo=function(target, type, which){
+      if(!target) return;
+      var from=game.ball.pos.clone();
+      var dirTo=Vec2.sub(target.pos, from); var dist=dirTo.len(); var dir=dirTo.len()?dirTo.norm():this.facing.clone().norm();
+
+      // 리드(앞으로 조금)
+      var lead = (type==="through") ? clamp(dist*0.18, 16, 36) : clamp(dist*0.10, 6, 16);
+      var leadDir = (target.facing && (target.facing.x||target.facing.y)) ? target.facing.clone().norm() : dir.clone();
+      var aim=Vec2.add(target.pos, leadDir.mul(lead));
+      clampPoint(aim);
+
+      var baseDist=Vec2.sub(aim, from).len();
+      var speed=clamp(baseDist/0.6, 4.2, 8.0)*PASS_SPEED_FACTOR;
+
+      game.ball.kick(aim, speed);
+      game.ball.assistTo=target;
+      game.ball.assistT=(type==="through")?1.2:0.8;
+
+      var isForward = this.team.side==="L" ? (aim.x>from.x) : (aim.x<from.x);
+      game.onBallKicked(this.team, this, isForward);
+    };
+
+    // 재시작 시 인간도 쉬운 패스
+    Player.prototype.passRestartSmart=function(type, which){
+      var r=game.restart; var target=null;
+      if(r && r.allyMover) target=r.allyMover; else target=this.bestPassTarget();
+      this.passTo(target, type, which);
+    };
 
     Player.prototype.update=function(dt){
       if(this.frozen){ this.vel.mul(0); return; }
@@ -256,170 +291,173 @@
       var baseMax=(2.5+1.5)*PLAYER_SPEED_SCALE*this.prof.spd;
       var maxSpd=baseMax; if(this.hasBall()) maxSpd*=0.9;
       this.vel.limit(maxSpd); this.pos.add(this.vel);
-      this.pos.x=clamp(this.pos.x,FIELD_MARGIN+this.r,W-FIELD_MARGIN-this.r);
-      this.pos.y=clamp(this.pos.y,FIELD_MARGIN+this.r,H-FIELD_MARGIN-this.r);
+      this.pos.x=clamp(this.pos.x,FIELD.MINX+this.r,FIELD.MAXX-this.r);
+      this.pos.y=clamp(this.pos.y,FIELD.MINY+this.r,FIELD.MAXY-this.r);
       if(game && !game.ball.owner && (game.ball.pk||0)<=0 && this.distBall()<GRAB_DIST){
         game.ball.owner=this; game.ball.vel.mul(0); game.ball.curve.set(0,0); game.ball.curveDecay=CURVE_DECAY;
       }
     };
     Player.prototype.tryTackle=function(){ if(this.tackleCd>0)return; var range=STEAL_BASE + (this.prof.tackle-1)*6; this.tackleCd=0.48 + (1-this.prof.tackle)*0.25; var d=this.distBall(); if(d<this.r+range){ var dir=Vec2.sub(game.ball.pos,this.pos); if(dir.len()>0) game.ball.knock(dir,7.0*this.prof.tackle); } };
 
-    // 현재 입력 방향
-    Player.prototype._inputDir=function(which){
+    // 입력/행동
+    Player.prototype._currentDir=function(which){
       var input=(which===1)?game.input1:game.input2;
       var dir=new Vec2((input.right?1:0)-(input.left?1:0),(input.down?1:0)-(input.up?1:0));
       if(dir.x||dir.y){ this.facing=dir.clone().norm(); return this.facing.clone(); }
       return this.facing.clone();
     };
 
-    // 방향 콘에 있는 아군 타깃 찾기
-    Player.prototype.findMateInDir=function(dir, coneRad, preferThrough){
-      var best=null, bestAng=9, bestDist=1e9;
-      for(var k=0;k<this.team.players.length;k++){
-        var p=this.team.players[k]; if(p===this) continue;
-        var v=Vec2.sub(p.pos,this.pos); var d=v.len(); if(d<28) continue;
-        var vn=v.clone().norm();
-        var ang=Math.acos(clamp(vn.x*dir.x+vn.y*dir.y,-1,1));
-        if(ang<=coneRad){
-          // through는 약간 전방가산
-          var fwd=this.team.side==="L"?(v.x>0?1:-1):(v.x<0?1:-1);
-          var score = -ang*2 - d/500 + (preferThrough? fwd*0.3 : 0);
-          if(ang<bestAng || (Math.abs(ang-bestAng)<0.04 && d<bestDist)){ bestAng=ang; bestDist=d; best=p; }
-        }
-      }
-      return best;
-    };
-
     Player.prototype.updateHuman=function(which,dt){
       var input=(which===1)?game.input1:game.input2;
-      var moveDir=this._inputDir(which);
+      var move=this._currentDir(which);
       var accel=0.6*PLAYER_SPEED_SCALE*this.prof.spd; if(this.hasBall()) accel*=1.2;
       var raw=new Vec2((input.right?1:0)-(input.left?1:0),(input.down?1:0)-(input.up?1:0));
       this.vel.mul(0.85).add(raw.mul(accel));
-
       if(input.tackleTap){ this.tryTackle(); input.tackleTap=false; }
-
       if(input.shootRelease){
         if(this.hasBall()){
           var pow=clamp(input.shotCharge,0,1);
-          if(input.curveHeld){ this.shootCurve(pow, moveDir); } else { this.shoot(pow, moveDir); }
+          if(input.curveHeld){ this.shootCurve(pow, move); } else { this.shoot(pow, move); }
           game.onBallKicked(this.team, this, true);
         }
         input.shootRelease=false; input.shotCharge=0;
       }
-
       if(input.passTrigger){
         if(this.hasBall()){
-          var preferThrough = input.passIsThrough;
-          this.smartPass(preferThrough, moveDir, which);
+          var type = input.passIsThrough ? "through" : "normal";
+          // 재시작 상황이면 스마트 패스, 평소엔 방향 패스 유지
+          if(game.state==="restart") this.passRestartSmart(type, which);
+          else this.pass(type, move, which);
         }
         input.passTrigger=false;
       }
-
       if(input.switch){ game.manualSwitch(which); input.switch=false; }
     };
 
-    // 사람 조작용: 방향 기반 자동 타깃 패스
-    Player.prototype.smartPass=function(preferThrough, dir, which){
-      dir = (dir&& (dir.x||dir.y)) ? dir.clone().norm() : this.facing.clone().norm();
-      var cone = Math.PI/3; // 60도 콘
-      var mate = this.findMateInDir(dir, cone, preferThrough) || this.bestPassTarget();
-      if(!mate){ // 마지막 보루: 방향으로 직선 패스
-        return this.directPass(preferThrough, dir);
-      }
-      return this.passTo(mate, preferThrough);
-    };
-
-    // 타깃 지향 패스
-    Player.prototype.passTo=function(target, through){
+    // 기존 방향 패스(인간용 기본 유지)
+    Player.prototype.pass=function(type, aimDir, which){
       var from=game.ball.pos.clone();
-      // 간단 리드: 목표 속도/방향 반영
-      var lead=target.vel.clone();
-      var tt = through ? 0.65 : 0.5;
-      var pred = target.pos.clone().add(lead.mul(tt*12));
-      var dist = Vec2.sub(pred, from).len();
-      var speed = clamp(dist/0.55, 4.2, 8.0) * PASS_SPEED_FACTOR * (through?1.15:1.0);
-      game.ball.kick(pred, speed);
-      game.ball.assistTo=target; game.ball.assistT=0.65;
-      var isForward = this.team.side==="L" ? (pred.x>from.x) : (pred.x<from.x);
-      game.onBallKicked(this.team, this, isForward);
-    };
+      var input=(which===1)?game.input1:game.input2;
+      var dir = (aimDir && (aimDir.x||aimDir.y)) ? aimDir.clone().norm() : this.facing.clone().norm();
+      var ch=clamp(input.passCharge,0,1);
+      var baseDist = (type==="through") ? lerp(140,220,ch) : lerp(90,150,ch);
+      var aim=Vec2.add(from, dir.clone().mul(baseDist));
+      clampPoint(aim);
+      var speed=clamp(baseDist/0.6,4.2,8.0)*PASS_SPEED_FACTOR;
 
-    // 방향 직선 패스(타깃 없을 때만)
-    Player.prototype.directPass=function(through, dir){
-      var from=game.ball.pos.clone();
-      var baseDist = through ? 180 : 120;
-      var aim = Vec2.add(from, dir.clone().mul(baseDist));
-      var speed = clamp(baseDist/0.55,4.2,8.0)*PASS_SPEED_FACTOR*(through?1.1:1.0);
       game.ball.kick(aim, speed);
-      game.ball.assistTo=null; game.ball.assistT=0;
+      // 방향 패스에는 약한 어시스트만
+      game.ball.assistTo=null; game.ball.assistT=0.0;
+
       var isForward = this.team.side==="L" ? (aim.x>from.x) : (aim.x<from.x);
       game.onBallKicked(this.team, this, isForward);
     };
 
-    // 슛: 방향의 Y성분으로 골대 상/하단 조준
-    Player.prototype.shoot=function(pow, dir){
+    // 슛
+    Player.prototype.shoot=function(pow, aimDir){
       pow = (pow===undefined)?0.6:pow;
-      dir = (dir&& (dir.x||dir.y)) ? dir.clone().norm() : this.facing.clone().norm();
-      var gx = (this.team.side==="L")? (W-15) : 15;
-      var margin=8;
-      var gy = H/2 + clamp(dir.y,-1,1) * (GOAL_W/2 - margin); // 위(-1)면 상단, 아래(+1)면 하단
-      gy += rand(-4,4);
-      var aim=new Vec2(gx, gy);
+      var dir = (aimDir && (aimDir.x||aimDir.y)) ? aimDir.clone().norm() : null;
+      if(!dir){
+        var gx=this.team.side==="L"?W-15:15, gy=H/2;
+        var aim=new Vec2(gx, gy+rand(-12,12));
+        var speed=SHOT_SPEED_MIN + (SHOT_SPEED_MAX-SHOT_SPEED_MIN)*pow;
+        speed*=this.prof.shot; speed=Math.min(speed,SHOT_SPEED_MAX);
+        game.ball.kick(aim,speed); game.ball.curve.set(0,0); game.ball.curveDecay=CURVE_DECAY;
+        return;
+      }
+      var aimFar = Vec2.add(this.pos, dir.clone().mul(900));
       var speed=SHOT_SPEED_MIN + (SHOT_SPEED_MAX-SHOT_SPEED_MIN)*pow;
       speed*=this.prof.shot; speed=Math.min(speed,SHOT_SPEED_MAX);
-      game.ball.kick(aim, speed);
+      game.ball.kick(aimFar, speed);
       game.ball.curve.set(0,0); game.ball.curveDecay=CURVE_DECAY;
     };
 
-    // 커브슛: 곡률 1/2
-    Player.prototype.shootCurve=function(pow, dir){
+    // 커브슛(궤적 1/2)
+    Player.prototype.shootCurve=function(pow, aimDir){
       pow = (pow===undefined)?0.6:pow;
-      dir = (dir&& (dir.x||dir.y)) ? dir.clone().norm() : this.facing.clone().norm();
-      var gx = (this.team.side==="L")? (W-18) : 18;
-      var margin=10;
-      var gy = H/2 + clamp(dir.y,-1,1) * (GOAL_W/2 - margin);
-      var aim=new Vec2(gx, gy);
+      var dir = (aimDir && (aimDir.x||aimDir.y)) ? aimDir.clone().norm() : this.facing.clone().norm();
+      var aimFar = Vec2.add(this.pos, dir.clone().mul(900));
       var speed = SHOT_SPEED_MIN + (SHOT_SPEED_MAX-SHOT_SPEED_MIN)*pow;
-      speed = Math.min(SHOT_SPEED_MAX, speed*this.prof.shot*1.02);
-      game.ball.kick(aim, speed);
+      speed = Math.min(SHOT_SPEED_MAX, speed*this.prof.shot*1.03);
+      game.ball.kick(aimFar, speed);
 
       var perp=new Vec2(-dir.y, dir.x);
       var side=(this.team.side==="L"?1:-1);
-      // 이전 대비 절반
-      var base=( (0.36+0.22*pow)*0.5 )*(0.8+this.prof.shot*0.5)*side;
+      // 초기 횡력 절반
+      var base=(0.36+0.22*pow)*(0.8+this.prof.shot*0.5)*side*0.5;
       game.ball.curve=perp.mul(base);
-      game.ball.curve.y+=0.02*(rand(0.8,1.2));
-      game.ball.curveDecay=0.996; // 더 빨리 감쇠 → 전체 곡률 약화
+      // 미세 난수도 절반 수준
+      game.ball.curve.y+=0.01*(rand(0.8,1.2));
+      // 감쇠 약간 빠르게 -> 체감 궤적 절반
+      game.ball.curveDecay=0.988;
     };
+
+    // 패스 타깃 스코어(사이드라인 패널티 추가)
+    Player.prototype.bestPassTarget=function(){
+      var best=null,bScore=-1e9;
+      for(var i=0;i<this.team.players.length;i++){
+        var p=this.team.players[i]; if(p===this)continue;
+        var to=Vec2.sub(p.pos,this.pos); var d=to.len(); if(d<32)continue;
+        var fwd=this.team.side==="L"?(to.x>0?1:-1):(to.x<0?1:-1);
+        var open=this.spaceAround(p);
+        var lane=this.laneClearScore(p);
+        var roleBias=(p.role==="ST"?0.9:(p.role==="LW"||p.role==="RW"?0.6:(p.role==="CDM"?0.5:0)));
+        var offPen = this.team.isOffsidePos(p) ? -0.9 : 0;
+        var sideDist = Math.min(p.pos.y-FIELD.MINY, FIELD.MAXY-p.pos.y);
+        var sidePen = (sideDist<36 ? -0.7 : (sideDist<54 ? -0.3 : 0));
+        var s=fwd*0.9 + open*0.7 + lane*0.6 + roleBias + sidePen - d/520 + offPen;
+        if(s>bScore){bScore=s;best=p;}
+      }
+      return best;
+    };
+    Player.prototype.spaceAround=function(p){ var near=0; for(var i=0;i<this.team.oppo.players.length;i++){ var e=this.team.oppo.players[i]; var d=Vec2.sub(p.pos,e.pos).len(); if(d<60)near++; } return 1-Math.min(1,near/3); };
+    Player.prototype.laneClearScore=function(target){ var lane=0; var to=Vec2.sub(target.pos,this.pos).norm(); for(var i=0;i<this.team.oppo.players.length;i++){ var e=this.team.oppo.players[i]; var ap=Vec2.sub(e.pos,this.pos); var proj=(ap.x*to.x+ap.y*to.y); if(proj>0){ var perp=Math.abs(ap.x*(-to.y)+ap.y*(to.x)); if(proj<220 && perp<20) lane+=0.2; } } return 1-Math.min(1,lane/3); };
 
     // AI
     Player.prototype.updateAI=function(dt){
       if(game.state==="restart"){ this.vel.mul(0); return; }
-      if(this.role==="GK"){ this.updateGK(); return; }
+      if(this.role==="GK"){this.updateGK();return;}
       var ball=game.ball;
       var pressInfo=this.team.pickPressers();
-
       if(!ball.owner){
         if(pressInfo.primary===this || pressInfo.secondary===this) this.seek(ball.pos,0.88*this.prof.spd);
         else this.zoneHold();
         if(this.distBall()<GRAB_DIST && (ball.pk||0)<=0){ ball.owner=this; return; }
         return;
       }
-
       if(ball.owner.team===this.team){
         if(this.hasBall()){
-          // 패스 우선: 명시 타깃 기반
-          if(this.role==="CB" || this.role==="CDM"){
-            var t=this.bestPassTarget(); if(t){ this.passTo(t, Math.random()<0.45); return; }
-          }
-          if(this.role==="LW"||this.role==="RW"){
-            var t2=this.bestPassTarget(); if(t2 && Math.random()<0.7){ this.passTo(t2, Math.random()<0.5); return; }
-          }
           var goal=new Vec2(this.team.side==="L"?W-40:40,H/2);
           var d=Vec2.sub(goal,this.pos).len();
-          if(d<200 && (this.role!=="CB")){
-            if(Math.random()<0.6) this.shoot(rand(0.5,0.9), this.facing.clone());
+
+          // 포지션별 의사결정 개선: 타깃 패스 우선
+          if(this.role==="CDM"){
+            var t=this.bestPassTarget();
+            if(t && Math.random()<0.85){
+              var through = Math.random()<0.55;
+              this.passTo(t, through?"through":"normal", (this.controlled===1)?1:2);
+              return;
+            }
+          } else if(this.role==="LW"||this.role==="RW"){
+            // 가장 좋은 건 ST, 없으면 best
+            var st=this.team.players.find(pp=>pp.role==="ST");
+            var t=(st||this.bestPassTarget());
+            if(t && Math.random()<AI_CROSS_BIAS){
+              this.passTo(t, "through", (this.controlled===1)?1:2);
+              return;
+            }
+          } else if(this.role==="CB"){
+            // CB는 안쪽(CDM 위주) 짧은 패스
+            var cdm=this.team.players.find(pp=>pp.role==="CDM");
+            var t=cdm||this.bestPassTarget();
+            if(t && Math.random()<0.9){
+              this.passTo(t, "normal", (this.controlled===1)?1:2);
+              return;
+            }
+          }
+
+          if(d<AI_SHOOT_DIST && (this.role!=="CB")){
+            if(Math.random()<0.65) this.shoot(rand(0.5,0.9), this.facing.clone());
             else this.shootCurve(rand(0.5,0.9), this.facing.clone());
             return;
           }
@@ -435,18 +473,16 @@
       }
     };
 
+    Player.prototype.isWideArea=function(){ var wing=(this.pos.y< H*0.30 || this.pos.y> H*0.70); var forwardThird = this.team.side==="L" ? (this.pos.x>W*0.62) : (this.pos.x<W*0.38); return wing && forwardThird; };
     Player.prototype.zoneHold=function(){ var t=this.team.shapeTarget(this); this.seek(t,0.11*this.prof.spd); };
     Player.prototype.supportRun=function(){ var dir=this.team.side==="L"?1:-1; var b=game.ball.pos; var t=this.home.clone(); if(this.role==="ST"){ t.x=b.x+95*dir; t.y=lerp(t.y,b.y,0.28); } else if(this.role==="LW"){ t.x=b.x+80*dir; t.y=this.team.side==="L"?H*0.22:H*0.78; } else if(this.role==="RW"){ t.x=b.x+80*dir; t.y=this.team.side==="L"?H*0.78:H*0.22; } else if(this.role==="CDM"){ t.x=b.x-20*dir; t.y=lerp(t.y,b.y,0.24); } else if(this.role==="CB"){ t.x=lerp(t.x,this.team.side==="L"?190:W-190,0.85); t.y=lerp(t.y,H*0.55,0.18); } this.stayOnside(t); this.seek(t,0.12*this.prof.spd); };
     Player.prototype.blockLane=function(owner){ var mid=new Vec2((owner.pos.x+game.ball.pos.x)/2,(owner.pos.y+game.ball.pos.y)/2); this.seek(mid,0.12*this.prof.spd); };
     Player.prototype.stayOnside=function(t){ var line=this.team.computeOffsideLine(); if(this.team.side==="L" && t.x>line-8) t.x=line-8; if(this.team.side==="R" && t.x<line+8) t.x=line+8; };
 
-    // GK: 아군에게 확실한 타깃 패스
     Player.prototype.updateGK=function(){
-      var left=this.team.side==="L", gx=left?26:W-26;
-      var goalY=clamp(game.ball.pos.y,H/2-GOAL_W/2+10,H/2+GOAL_W/2-10);
+      var left=this.team.side==="L", gx=left?26:W-26, goalY=clamp(game.ball.pos.y,H/2-GOAL_W/2+10,H/2+GOAL_W/2-10);
       var target=new Vec2(gx+(left?10:-10), goalY);
       this.seek(target,0.16*this.prof.spd);
-
       var d=this.distBall();
       if(!game.ball.owner){
         var towardGoal = left? (game.ball.pos.x<80) : (game.ball.pos.x>W-80);
@@ -459,14 +495,19 @@
       if(d<GRAB_DIST+4 && (game.ball.pk||0)<=0){ game.ball.owner=this; this._holdT=(game.t||0); return; }
       if(this.hasBall()){
         if((game.t - (this._holdT||0))>0.35){
-          // 가까운 측면/미드에게 안전 패스
-          var order=["CDM","LW","RW","ST","CB"];
-          for(var oi=0;oi<order.length;oi++){
-            var p=this.team.players.find(pp=>pp.role===order[oi]);
+          // GK: 안전 타깃 우선순위
+          var candidates=["CDM","LW","RW","ST"];
+          for(var oi=0;oi<candidates.length;oi++){
+            var p=this.team.players.find(pp=>pp.role===candidates[oi]);
             if(p){
-              // 팀 방향으로 있는지 확인
-              var forward = left? p.pos.x>this.pos.x-5 : p.pos.x<this.pos.x+5;
-              if(forward){ this.passTo(p, false); break; }
+              var forward = left? p.pos.x>this.pos.x : p.pos.x<this.pos.x;
+              var sideDist = Math.min(p.pos.y-FIELD.MINY, FIELD.MAXY-p.pos.y);
+              var notEdge = sideDist>32;
+              var notOff = !this.team.isOffsidePos(p);
+              if(forward && notEdge && notOff){
+                this.passTo(p, "normal", (this.controlled===1)?1:2);
+                break;
+              }
             }
           }
         }
@@ -495,14 +536,13 @@
     function Input(){ this.reset(); }
     Input.prototype.reset=function(){ this.up=false; this.down=false; this.left=false; this.right=false; this.passHeld=false; this.passStart=0; this.passCharge=0; this.passTrigger=false; this.passIsThrough=false; this.switch=false; this.shootHeld=false; this.shootStart=0; this.shotCharge=0; this.shootRelease=false; this.curveHeld=false; this.tackleTap=false; };
 
-    function Game(){ this.state="menu"; this.mode="1P"; this.t=0; this.timeLeft=HALF_LEN; this.ball=new Ball(); this.teamA=new Team("A","L",TEAM_COLOR_A); this.teamB=new Team("B","R",TEAM_COLOR_B); this.teamA.oppo=this.teamB; this.teamB.oppo=this.teamA; this.input1=new Input(); this.input2=new Input(); this.humanTeam1=this.teamA; this.humanTeam2=null; this.lastTs=0; this.kickoffSide="L"; this.dt=0; this.offside=null; this.restart=null; this.justScoredUntil=0; }
+    function Game(){ this.state="menu"; this.mode="1P"; this.t=0; this.timeLeft=HALF_LEN; this.ball=new Ball(); this.teamA=new Team("A","L",TEAM_COLOR_A); this.teamB=new Team("B","R",TEAM_COLOR_B); this.teamA.oppo=this.teamB; this.teamB.oppo=this.teamA; this.input1=new Input(); this.input2=new Input(); this.humanTeam1=this.teamA; this.humanTeam2=null; this.lastTs=0; this.kickoffSide="L"; this.dt=0; this.offside=null; this.restart=null; }
 
-    Game.prototype.start=function(){ this.state="play"; menu.style.display="none"; this.teamA.spawn(); this.teamB.spawn(); this.humanTeam1=this.teamA; this.humanTeam2=this.mode==="2P"?this.teamB:null; this.resetAfterGoal(this.kickoffSide==="L"); this.updateHUD(); toast.style.display="block"; canvas.focus(); };
+    Game.prototype.start=function(){ this.state="play"; menu.style.display="none"; this.teamA.spawn(); this.teamB.spawn(); this.teamA.players.forEach(p=>p.controlled=0); this.teamB.players.forEach(p=>p.controlled=0); this.humanTeam1=this.teamA; this.humanTeam2=this.mode==="2P"?this.teamB:null; this.resetAfterGoal(this.kickoffSide==="L"); this.updateHUD(); toast.style.display="block"; canvas.focus(); };
 
     Game.prototype.goal=function(who){
       if(this.state!=="play")return;
-      if(who==="A")this.teamA.score++; else this.teamB.score++; // 득점은 여기서만
-      this.justScoredUntil = this.t + 1.0; // 중복 득점 쿨다운
+      if(who==="A")this.teamA.score++; else this.teamB.score++;
       this.updateHUD();
       banner("GOAL!");
       var self=this;
@@ -618,17 +658,18 @@
     Game.prototype.queueThrowIn=function(side){
       if(this.state!=="play") return;
       var defend = (this.ball.lastTouchTeam===this.teamA)? this.teamB : this.teamA;
-      var pos={x:(side==="LEFT"? FIELD_MARGIN : side==="RIGHT"? W-FIELD_MARGIN : clamp(this.ball.pos.x,FIELD_MARGIN,W-FIELD_MARGIN)), y:(side==="TOP"? FIELD_MARGIN : side==="BOT"? H-FIELD_MARGIN : clamp(this.ball.pos.y,FIELD_MARGIN,H-FIELD_MARGIN))};
+      var pos={x:(side==="LEFT"? FIELD.MINX+8 : side==="RIGHT"? FIELD.MAXX-8 : clamp(this.ball.pos.x,40,W-40)),
+               y:(side==="TOP"? FIELD.MINY+8 : side==="BOT"? FIELD.MAXY-8 : clamp(this.ball.pos.y,40,H-40))};
       var taker = defend.players.find(p=>p.role===(side==="LEFT"? (defend.side==="L"?"LW":"RW") : side==="RIGHT"? (defend.side==="L"?"RW":"LW") : "CDM")) || defend.players[0];
       this.startRestart("THROW-IN", defend, taker, pos);
     };
     Game.prototype.queueCorner=function(outSide, attackTeam){
       if(this.state!=="play") return;
-      var x = (outSide==="LEFT")? FIELD_MARGIN : W-FIELD_MARGIN; var y = (this.ball.pos.y<H/2)? FIELD_MARGIN : H-FIELD_MARGIN;
+      var x = (outSide==="LEFT")? FIELD.MINX+4 : FIELD.MAXX-4; var y = (this.ball.pos.y<H/2)? FIELD.MINY+4 : FIELD.MAXY-4;
       var taker = attackTeam.players.find(p=>p.role===( (y< H/2)? (attackTeam.side==="L"?"LW":"RW") : (attackTeam.side==="L"?"RW":"LW") )) || attackTeam.players[0];
       this.startRestart("CORNER", attackTeam, taker, {x:x,y:y});
     };
-    Game.prototype.queueGoalKick=function(defendTeam){
+    Game.prototype.queueGoalKick=function(defendTeam, outSide){
       if(this.state!=="play") return;
       var taker = defendTeam.players.find(p=>p.role==="GK") || defendTeam.players[0];
       var x = (defendTeam.side==="L")? 60 : W-60; var y = H/2;
@@ -662,20 +703,44 @@
     };
 
     Game.prototype.freezeForRestart=function(){ if(!this.restart || !this.restart.taker) return; var r=this.restart; var all=this.teamA.players.concat(this.teamB.players); all.forEach(p=>{ var allow=(p===r.allyMover||p===r.oppMover); p.frozen=!allow; if(!allow){ p.vel.mul(0); } }); r.taker.frozen=true; r.taker.vel.mul(0); this.ball.owner=r.taker; this.ball.pos.set(r.pos.x,r.pos.y); };
-    Game.prototype.updateRestartAllowedMovers=function(){ var r=this.restart; if(!r || !r.taker) return; [r.allyMover,r.oppMover].forEach(m=>{ if(!m) return; if(m.team===r.team){ var t=m.home.clone(); t.x += (m.team.side==="L"?30:-30); m.seek(t,0.08*m.prof.spd); } else { m.blockLane(r.taker); } }); };
-    Game.prototype.maybeAIRestart=function(){ var r=this.restart; if(!r || r.isHuman || r._aiActed) return; if(this.t >= r.aiKickTime){ var k=r.taker; // 재시작은 안전 패스
-        var order=["CDM","LW","RW","ST","CB"];
-        var picked = order.map(role=>k.team.players.find(pp=>pp.role===role)).find(Boolean) || k.team.players[0];
-        if(picked){ k.passTo(picked, false); }
-        r._aiActed=true; this.state="play"; this.restart=null; k.team.players.concat(k.team.oppo.players).forEach(p=>p.frozen=false); } };
-    Game.prototype.endRestartIfKicked=function(){ if(this.state!=="restart" || !this.restart || !this.restart.taker) return; var k=this.restart.taker; var i=(k.team===this.teamA)?this.input1:this.input2; if(!i) return; var acted=false; if(i.shootRelease){ var pow=clamp(i.shotCharge,0,1); if(i.curveHeld) k.shootCurve(pow, k.facing.clone()); else k.shoot(pow, k.facing.clone()); acted=true; i.shootRelease=false; i.shotCharge=0; } if(i.passTrigger){ k.smartPass(i.passIsThrough, k.facing.clone(), (k.controlled===1)?1:2); i.passTrigger=false; acted=true; } if(acted){ this.state="play"; this.restart=null; k.team.players.concat(k.team.oppo.players).forEach(p=>p.frozen=false); } };
+
+    Game.prototype.updateRestartAllowedMovers=function(){
+      var r=this.restart; if(!r || !r.taker) return;
+      [r.allyMover,r.oppMover].forEach(m=>{
+        if(!m) return;
+        if(m.team===r.team){
+          var t=m.home.clone();
+          // 스로인일 때 동료를 안쪽으로 당겨 받기 쉽게
+          if(r.kind==="THROW-IN"){
+            var inwardX = m.team.side==="L" ? r.pos.x + 40 : r.pos.x - 40;
+            t.x=inwardX; t.y=clamp(r.pos.y, FIELD.MINY+40, FIELD.MAXY-40);
+          } else {
+            t.x += (m.team.side==="L"?30:-30);
+          }
+          m.seek(t,0.12*m.prof.spd);
+        } else {
+          m.blockLane(r.taker);
+        }
+      });
+    };
+
+    Game.prototype.maybeAIRestart=function(){ var r=this.restart; if(!r || r.isHuman || r._aiActed) return; if(this.t >= r.aiKickTime){ var k=r.taker; if(r.kind==="CORNER"){ var st=k.team.players.find(pp=>pp.role==="ST"); k.passTo(st||k.bestPassTarget(),"through",(k.controlled===1)?1:2); } else { k.passRestartSmart("normal",(k.controlled===1)?1:2); } r._aiActed=true; this.state="play"; this.restart=null; k.team.players.concat(k.team.oppo.players).forEach(p=>p.frozen=false); } };
+
+    Game.prototype.endRestartIfKicked=function(){
+      if(this.state!=="restart" || !this.restart || !this.restart.taker) return;
+      var k=this.restart.taker; var i=(k.team===this.teamA)?this.input1:this.input2; if(!i) return;
+      var acted=false;
+      if(i.shootRelease){ var pow=clamp(i.shotCharge,0,1); if(i.curveHeld) k.shootCurve(pow, k.facing.clone()); else k.shoot(pow, k.facing.clone()); acted=true; i.shootRelease=false; i.shotCharge=0; }
+      if(i.passTrigger){ var type = i.passIsThrough ? "through" : "normal"; k.passRestartSmart(type, (k.controlled===1)?1:2); i.passTrigger=false; acted=true; }
+      if(acted){ this.state="play"; this.restart=null; k.team.players.concat(k.team.oppo.players).forEach(p=>p.frozen=false); }
+    };
 
     Game.prototype.separate=function(arr){ for(var i=0;i<arr.length;i++) for(var j=i+1;j<arr.length;j++){ var a=arr[i],b=arr[j]; var d=Vec2.sub(b.pos,a.pos); var L=d.len(); var min=SEPARATION_DIST; if(L>0&&L<min){ d.norm(); var push=(min-L)/2; a.pos.add(new Vec2(-d.x*push,-d.y*push)); b.pos.add(new Vec2(d.x*push,d.y*push)); a.vel.mul(0.8); b.vel.mul(0.8);} } };
 
     Game.prototype.render=function(){ var g=ctx; g.clearRect(0,0,canvas.width,canvas.height); this.pitch(g); this.goal3D(g); this.ball.draw(g); this.teamA.players.forEach(p=>p.draw(g)); this.teamB.players.forEach(p=>p.draw(g)); if(this.state==="restart" && this.restart && this.restart.taker){ var k=this.restart.taker; g.save(); g.strokeStyle="#ffe38a"; g.setLineDash([6,4]); g.lineWidth=2; g.beginPath(); g.arc(k.pos.x,k.pos.y,k.r+10,0,TAU); g.stroke(); g.setLineDash([]); g.restore(); } };
 
-    Game.prototype.pitch=function(g){ g.save(); g.strokeStyle="#e7f5e9"; g.globalAlpha=0.6; g.lineWidth=2; g.strokeRect(FIELD_MARGIN,FIELD_MARGIN,W-2*FIELD_MARGIN,H-2*FIELD_MARGIN); g.beginPath(); g.moveTo(W/2,FIELD_MARGIN); g.lineTo(W/2,H-FIELD_MARGIN); g.stroke(); g.beginPath(); g.arc(W/2,H/2,70,0,TAU); g.stroke(); g.strokeRect(FIELD_MARGIN,H/2-H*0.25,70,H*0.5); g.strokeRect(W-70-FIELD_MARGIN,H/2-H*0.25,70,H*0.5); g.restore(); };
-    Game.prototype.goal3D=function(g){ var y1=H/2-GOAL_W/2, y2=H/2+GOAL_W/2, lw=6; g.save(); g.fillStyle="rgba(255,255,255,0.9)"; g.fillRect(14,y1,lw,GOAL_W); g.fillRect(14, y1-6, 50, 6); g.globalAlpha=0.25; g.fillStyle="#fff"; g.fillRect(14+lw, y1, 12, GOAL_W); g.globalAlpha=0.15; g.fillRect(14, y1, 50, 2); g.fillRect(14, y2-2, 50, 2); g.globalAlpha=1; g.fillStyle="rgba(255,255,255,0.9)"; g.fillRect(W-20-lw,y1,lw,GOAL_W); g.fillRect(W-20-50, y1-6, 50, 6); g.globalAlpha=0.25; g.fillStyle="#fff"; g.fillRect(W-20-lw-12, y1, 12, GOAL_W); g.globalAlpha=0.15; g.fillRect(W-20-50, y1, 50, 2); g.fillRect(W-20-50, y2-2, 50, 2); g.restore(); };
+    Game.prototype.pitch=function(g){ g.save(); g.strokeStyle="#e7f5e9"; g.globalAlpha=0.6; g.lineWidth=2; g.strokeRect(FIELD.MINX,FIELD.MINY,FIELD.MAXX-FIELD.MINX,FIELD.MAXY-FIELD.MINY); g.beginPath(); g.moveTo(W/2,FIELD.MINY); g.lineTo(W/2,FIELD.MAXY); g.stroke(); g.beginPath(); g.arc(W/2,H/2,70,0,TAU); g.stroke(); g.strokeRect(FIELD.MINX,H/2-H*0.25,70,H*0.5); g.strokeRect(W-90,H/2-H*0.25,70,H*0.5); g.restore(); };
+    Game.prototype.goal3D=function(g){ var y1=H/2-GOAL_W/2, y2=H/2+GOAL_W/2; var lw=6; g.save(); g.fillStyle="rgba(255,255,255,0.9)"; g.fillRect(14,y1,lw,GOAL_W); g.fillRect(14, y1-6, 50, 6); g.globalAlpha=0.25; g.fillStyle="#fff"; g.fillRect(14+lw, y1, 12, GOAL_W); g.globalAlpha=0.15; g.fillRect(14, y1, 50, 2); g.fillRect(14, y2-2, 50, 2); g.globalAlpha=1; g.fillStyle="rgba(255,255,255,0.9)"; g.fillRect(W-20-lw,y1,lw,GOAL_W); g.fillRect(W-20-50, y1-6, 50, 6); g.globalAlpha=0.25; g.fillStyle="#fff"; g.fillRect(W-20-lw-12, y1, 12, GOAL_W); g.globalAlpha=0.15; g.fillRect(W-20-50, y1, 50, 2); g.fillRect(W-20-50, y2-2, 50, 2); g.restore(); };
     Game.prototype.formatTime=function(t){ var m=Math.floor(t/60), s=Math.floor(t%60); var mm=("0"+m).slice(-2), ss=("0"+s).slice(-2); return mm+":"+ss; };
 
     function resize(){ var dpr=Math.min(2,window.devicePixelRatio||1); canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); }
