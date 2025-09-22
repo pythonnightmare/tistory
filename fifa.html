@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>네온 사커 2D – 오프라인 2인 · AI</title>
+<style>
+  :root{
+    --bg:#0b1220; --ink:#e5e7eb; --muted:#94a3b8; --brand1:#06b6d4; --brand2:#7c3aed; --warn:#ef4444; --ok:#10b981;
+    --panel: rgba(255,255,255,.06); --glow:0 8px 24px rgba(124,58,237,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Apple SD Gothic Neo","Noto Sans KR",Arial,sans-serif;background:radial-gradient(1200px 900px at 15% -10%,#0ea5e955,transparent 60%),radial-gradient(1000px 700px at 85% 10%,#7c3aed44,transparent 60%),#0b1220;color:var(--ink)}
+  .container{max-width:1100px;margin:20px auto;padding:0 16px}
+  .header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--brand1),var(--brand2));box-shadow:var(--glow);position:relative}
+  .logo:after{content:"";position:absolute;inset:6px;border-radius:10px;background:radial-gradient(circle at 70% 30%,rgba(255,255,255,.9),transparent 55%)}
+  h1{font-size:20px;margin:0}
+  .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;backdrop-filter:blur(10px);box-shadow:var(--glow)}
+  .toolbar{display:flex;gap:10px;align-items:center;padding:12px 14px;flex-wrap:wrap}
+  .seg{display:inline-grid;grid-auto-flow:column;gap:6px;padding:4px;border-radius:999px;background:rgba(255,255,255,.06)}
+  .seg button{border:0;padding:8px 12px;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;font-weight:700}
+  .seg button.active{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:white;box-shadow:var(--glow)}
+  .btn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:9px 12px;border-radius:10px;color:var(--ink);cursor:pointer;font-weight:700}
+  .btn.primary{border:0;background:linear-gradient(135deg,var(--brand1),var(--brand2));box-shadow:var(--glow)}
+  .btn.danger{background:linear-gradient(135deg,#ef4444,#f97316);border:0}
+  .hint{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns: 2fr 1fr;gap:12px;padding:14px}
+  @media(max-width:980px){.grid{grid-template-columns: 1fr}}
+  .side{padding:12px;display:grid;gap:10px}
+  .panel{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  canvas{width:100%;height:auto;background:#0a1220;border-radius:14px;border:1px solid rgba(255,255,255,.1)}
+  .score{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;margin-bottom:8px}
+  .score .team{display:flex;align-items:center;gap:8px}
+  .badge{display:inline-block;padding:4px 8px;font-size:12px;border-radius:999px;background:rgba(255,255,255,.08);color:#a5b4fc;border:1px solid rgba(255,255,255,.1)}
+  .cooldown{height:8px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}
+  .cooldown>span{display:block;height:100%;background:linear-gradient(90deg,var(--brand1),var(--brand2))}
+  .adbox{height:90px;border:1px dashed rgba(255,255,255,.2);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:2px 6px;background:rgba(255,255,255,.06)}
+  .license{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand"><div class="logo"></div><h1>네온 사커 2D <span class="hint">– 오프라인 2인 · AI</span></h1></div>
+      <div class="hint">티스토리에 그대로 붙여넣어 실행 가능 · 네온 UI · CC0/퍼블릭도메인 벡터</div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="seg" id="modeSeg" role="tablist" aria-label="모드">
+          <button class="active" data-mode="p1-vs-ai" aria-pressed="true">P1 vs AI</button>
+          <button data-mode="p1-vs-p2" aria-pressed="false">P1 vs P2</button>
+        </div>
+        <div class="seg" id="teamSeg" title="팀 크기">
+          <button class="active" data-size="1">1v1</button>
+          <button data-size="3">3v3</button>
+        </div>
+        <button class="btn primary" id="startBtn">경기 시작</button>
+        <button class="btn" id="pauseBtn">일시정지</button>
+        <button class="btn danger" id="resetBtn">리셋</button>
+        <span class="hint">조작: <span class="kbd">WASD</span> + <span class="kbd">J</span>(패스) <span class="kbd">K</span>(슛) <span class="kbd">L</span>(대시) · 2P: <span class="kbd">←→↑↓</span> + <span class="kbd">,</span>/<span class="kbd">.</span>/<span class="kbd">/</span></span>
+      </div>
+
+      <div class="grid">
+        <div class="field panel">
+          <div class="score">
+            <div class="team"><span class="badge">블루</span><strong id="scoreA">0</strong></div>
+            <div><span class="badge" id="timer">90"</span></div>
+            <div class="team"><strong id="scoreB">0</strong><span class="badge" style="color:#fda4af">핑크</span></div>
+          </div>
+          <canvas id="game" width="960" height="540" aria-label="게임 필드"></canvas>
+        </div>
+        <div class="side">
+          <div class="panel">
+            <div class="row" style="justify-content:space-between">
+              <div>
+                <div class="hint">스킬 쿨다운 (P1)</div>
+                <div class="cooldown" title="대시"><span id="cdDash1" style="width:100%"></span></div>
+                <div class="cooldown" title="커브슛" style="margin-top:6px"><span id="cdCurve1" style="width:100%"></span></div>
+              </div>
+              <div>
+                <div class="hint">스킬 쿨다운 (P2/AI)</div>
+                <div class="cooldown" title="대시"><span id="cdDash2" style="width:100%"></span></div>
+                <div class="cooldown" title="커브슛" style="margin-top:6px"><span id="cdCurve2" style="width:100%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="hint">수익화 자리(예시)</div>
+            <div class="adbox">Ad / 후원 버튼 / 다운로드 링크 자리</div>
+          </div>
+          <div class="panel">
+            <div class="hint">룰</div>
+            <ul class="hint" style="margin:6px 0 0 18px;line-height:1.5">
+              <li>전후반 없음, 90초 단판</li>
+              <li>대시(L / /) 0.6초, 쿨 3초</li>
+              <li>커브슛(K / .) 스핀 1초 지속</li>
+              <li>볼 피직스: 마찰/바운스/스핀감쇠</li>
+            </ul>
+          </div>
+          <div class="panel license">
+            <strong>라이선스</strong><br/>
+            이 파일의 코드/벡터 그래픽/아이콘/사운드 빌더(비프음)는 본 답변에서 신규 창작되었습니다. <u>CC0(퍼블릭 도메인)</u>으로 자유 사용/수정/수익화 가능합니다. 제3자 자산/상표/선수명/로고 불사용.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(()=>{
+  // =========================
+  // Utils & Audio (tiny beeps)
+  // =========================
+  const rand = (a,b)=> a + Math.random()*(b-a);
+  const clamp = (v,min,max)=> Math.max(min, Math.min(max,v));
+  const len2 = (x,y)=> Math.hypot(x,y);
+  const norm = (x,y)=>{ const l=Math.hypot(x,y)||1; return [x/l,y/l]; };
+  const now = ()=> performance.now();
+
+  // Minimal beep generator using WebAudio, procedurally created (CC0)
+  const Audio = (()=>{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const beep = (freq=600, dur=0.08, type='sine', vol=0.03)=>{
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type=type; o.frequency.value=freq; g.gain.value=vol; o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime+dur);
+    };
+    return { beep };
+  })();
+
+  // =========================
+  // Game State
+  // =========================
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  const W = cvs.width, H = cvs.height;
+
+  const UI = {
+    scoreA: document.getElementById('scoreA'),
+    scoreB: document.getElementById('scoreB'),
+    timer:  document.getElementById('timer'),
+    cdDash1: document.getElementById('cdDash1'),
+    cdCurve1: document.getElementById('cdCurve1'),
+    cdDash2: document.getElementById('cdDash2'),
+    cdCurve2: document.getElementById('cdCurve2'),
+    startBtn: document.getElementById('startBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    modeSeg: document.getElementById('modeSeg'),
+    teamSeg: document.getElementById('teamSeg'),
+  };
+
+  let GAME = { running:false, paused:false, mode:'p1-vs-ai', teamSize:1, timeLeft:90, lastTick:0, scoreA:0, scoreB:0 };
+
+  UI.modeSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    UI.modeSeg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); GAME.mode = b.dataset.mode;
+  });
+  UI.teamSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    UI.teamSeg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); GAME.teamSize = +b.dataset.size; reset();
+  });
+
+  UI.startBtn.onclick = ()=>{ if(!GAME.running){ start(); } };
+  UI.pauseBtn.onclick = ()=>{ GAME.paused = !GAME.paused; UI.pauseBtn.textContent = GAME.paused? '재개':'일시정지'; };
+  UI.resetBtn.onclick = ()=> reset();
+
+  // =========================
+  // Entities
+  // =========================
+  const PITCH = { left:60, right:W-60, top:40, bottom:H-40, mid: W/2 };
+  const GOAL = { width:10, height:120 };
+
+  class Ball{
+    constructor(){ this.x=W/2; this.y=H/2; this.vx=0; this.vy=0; this.spin=0; }
+    kick(ax,ay,power=7,spin=0){ const [nx,ny]=norm(ax,ay); this.vx=nx*power; this.vy=ny*power; this.spin=spin; Audio.beep(520,0.06,'triangle',0.04); }
+    update(dt){
+      // apply spin: perpendicular force (Magnus-like)
+      this.vx += -this.spin * this.vy * 0.02;
+      this.vy +=  this.spin * this.vx * 0.02;
+      // friction
+      this.vx *= 0.992; this.vy *= 0.992;
+      this.spin *= 0.985;
+      this.x += this.vx; this.y += this.vy;
+      // bounds
+      if(this.y< PITCH.top+10){ this.y=PITCH.top+10; this.vy*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
+      if(this.y> PITCH.bottom-10){ this.y=PITCH.bottom-10; this.vy*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
+      if(this.x< PITCH.left+10){ this.x=PITCH.left+10; this.vx*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
+      if(this.x> PITCH.right-10){ this.x=PITCH.right-10; this.vx*=-0.6; Audio.beep(300,0.04,'square',0.03);} 
+    }
+  }
+
+  class Player{
+    constructor(team,id){
+      this.team=team; this.id=id;
+      this.x=0; this.y=0; this.vx=0; this.vy=0; this.speed=2.2; this.r=12;
+      this.hasBall=false; this.coolDash=0; this.coolCurve=0; this.ai=false; this.target={x:0,y:0};
+    }
+    spawn(x,y){ this.x=x; this.y=y; this.vx=this.vy=0; this.hasBall=false; }
+    update(dt,input){
+      // cooldowns
+      this.coolDash = Math.max(0, this.coolDash - dt);
+      this.coolCurve = Math.max(0, this.coolCurve - dt);
+
+      let ax=0, ay=0;
+      if(input){ ax = (input.right?1:0) - (input.left?1:0); ay = (input.down?1:0) - (input.up?1:0); }
+      if(this.ai){ [ax,ay] = aiMove(this); }
+      if(ax||ay){ const [nx,ny]=norm(ax,ay); this.vx += nx*this.speed; this.vy += ny*this.speed; }
+
+      // drag
+      this.vx *= 0.88; this.vy *= 0.88;
+
+      // position
+      this.x = clamp(this.x + this.vx, PITCH.left+this.r, PITCH.right-this.r);
+      this.y = clamp(this.y + this.vy, PITCH.top+this.r, PITCH.bottom-this.r);
+
+      // carry ball if owned
+      if(this.hasBall){ ball.x = this.x + (this.team===0? 14 : -14); ball.y = this.y; ball.vx=this.vx*0.5; ball.vy=this.vy*0.5; ball.spin*=0.98; }
+    }
+    tryDash(){ if(this.coolDash<=0){ const f=1.8; this.vx*=f; this.vy*=f; this.coolDash=3; Audio.beep(760,0.06,'sawtooth',0.05);} }
+    tryPassOrShoot(kind){
+      if(!this.hasBall) return;
+      const dir = (this.team===0? 1 : -1);
+      if(kind==='pass'){
+        const mate = pickPassTarget(this);
+        const tx = mate? mate.x : (this.x + dir*60);
+        const ty = mate? mate.y : this.y;
+        ball.kick(tx-this.x, ty-this.y, 7, 0);
+        this.hasBall=false;
+      }else if(kind==='shoot'){
+        const gx = (this.team===0? PITCH.right+40 : PITCH.left-40);
+        const gy = H/2 + rand(-40,40);
+        const spin = (this.coolCurve<=0)? (this.team===0?  0.25 : -0.25) : 0; // curve once per cooldown
+        ball.kick(gx-this.x, gy-this.y, 9, spin);
+        if(this.coolCurve<=0){ this.coolCurve=4; Audio.beep(640,0.08,'triangle',0.05);} else { Audio.beep(560,0.06,'triangle',0.04);} 
+        this.hasBall=false;
+      }
+    }
+  }
+
+  // =========================
+  // Teams / Inputs / AI
+  // =========================
+  const ball = new Ball();
+  let teamA=[], teamB=[]; // 0: left (blue), 1: right (pink)
+
+  const Input = {
+    p1:{up:false,down:false,left:false,right:false, pass:false, shoot:false, dash:false},
+    p2:{up:false,down:false,left:false,right:false, pass:false, shoot:false, dash:false},
+  };
+
+  const keymap = new Map([
+    ['KeyW',['p1','up']], ['KeyS',['p1','down']], ['KeyA',['p1','left']], ['KeyD',['p1','right']],
+    ['KeyJ',['p1','pass']], ['KeyK',['p1','shoot']], ['KeyL',['p1','dash']],
+    ['ArrowUp',['p2','up']], ['ArrowDown',['p2','down']], ['ArrowLeft',['p2','left']], ['ArrowRight',['p2','right']],
+    ['Comma',['p2','pass']], ['Period',['p2','shoot']], ['Slash',['p2','dash']],
+  ]);
+  addEventListener('keydown',e=>{ const m=keymap.get(e.code); if(m){ const [p,k]=m; Input[p][k]=true; }});
+  addEventListener('keyup',e=>{ const m=keymap.get(e.code); if(m){ const [p,k]=m; Input[p][k]=false; }});
+
+  function pickPassTarget(pl){
+    const mates = pl.team===0? teamA : teamB;
+    let best=null, bestScore=-1;
+    for(const m of mates){ if(m===pl) continue; const s = (pl.team===0? m.x : (W-m.x)) - Math.abs(m.y-pl.y)*0.3; if(s>bestScore){ best=m; bestScore=s; } }
+    return best;
+  }
+
+  function nearestToBall(players){
+    let best=null, d=1e9; for(const p of players){ const dd=len2(p.x-ball.x, p.y-ball.y); if(dd<d){d=dd; best=p;} } return best;
+  }
+
+  function aiMove(pl){
+    // very light FSM: if own ball -> go shoot line; else chase or mark
+    const team = pl.team===0? teamA : teamB; const foe = pl.team===0? teamB : teamA;
+    const dir = (pl.team===0? 1 : -1);
+    // if teammate has ball, support forward
+    const carrier = [...team].find(t=>t.hasBall);
+    if(carrier && carrier!==pl){ const tx = carrier.x + dir*40; const ty = carrier.y + (pl.id%2? -40:40); return steer(pl, tx, ty); }
+    // if self has ball: advance and occasionally shoot
+    if(pl.hasBall){ const gx = pl.team===0? PITCH.right-30 : PITCH.left+30; const gy = clamp(H/2 + (pl.id-1)*30, PITCH.top+30, PITCH.bottom-30); 
+      const toGoal = len2(gx-pl.x, gy-pl.y);
+      if(toGoal<140){ pl.tryPassOrShoot('shoot'); }
+      // dash sometimes
+      if(pl.coolDash<=0 && Math.random()<0.02) pl.tryDash();
+      return steer(pl, gx, gy); }
+    // else: contest ball
+    const owner = [...teamA, ...teamB].find(t=>t.hasBall);
+    if(owner){ // mark owner
+      return steer(pl, owner.x - dir*30, owner.y);
+    } else {
+      const target = {x:ball.x - dir*8, y:ball.y};
+      return steer(pl, target.x, target.y);
+    }
+  }
+
+  function steer(pl, tx,ty){ const dx=tx-pl.x, dy=ty-pl.y; const d=len2(dx,dy); if(d<5) return [0,0]; return norm(dx,dy); }
+
+  // =========================
+  // Init / Reset / Kickoff / Goal
+  // =========================
+  function createTeam(side, n, isAI){ const arr=[]; for(let i=0;i<n;i++){ const p=new Player(side,i); p.ai=isAI; arr.push(p);} return arr; }
+
+  function placeTeams(){
+    const n = GAME.teamSize;
+    teamA = createTeam(0,n, false);
+    const aiForB = (GAME.mode==='p1-vs-ai');
+    teamB = createTeam(1,n, !aiForB? false:true);
+
+    for(let i=0;i<n;i++){
+      const ay = H/2 + (i-(n-1)/2)*40; teamA[i].spawn(PITCH.left+120, ay);
+      const by = H/2 + (i-(n-1)/2)*40; teamB[i].spawn(PITCH.right-120, by);
+    }
+    ball.x=W/2; ball.y=H/2; ball.vx=ball.vy=ball.spin=0;
+    // give center to teamA
+    teamA[0].hasBall=true; ball.x=teamA[0].x+14; ball.y=teamA[0].y;
+  }
+
+  function reset(){ GAME.running=false; GAME.paused=false; GAME.timeLeft=90; GAME.scoreA=0; GAME.scoreB=0; UI.pauseBtn.textContent='일시정지'; placeTeams(); syncUI(); draw(0); }
+
+  function start(){ GAME.running=true; GAME.lastTick=now(); loop(); }
+
+  function goal(side){ // side=0 scored by A to B goal or reverse? We'll detect by ball crossing
+    if(side==='A'){ GAME.scoreA++; Audio.beep(880,0.12,'square',0.06); }
+    else { GAME.scoreB++; Audio.beep(440,0.12,'square',0.06); }
+    UI.scoreA.textContent=GAME.scoreA; UI.scoreB.textContent=GAME.scoreB;
+    // kickoff other team
+    const giveA = (side!=='A');
+    placeTeams();
+    if(giveA){ teamA[0].hasBall=true; } else { teamB[0].hasBall=true; }
+  }
+
+  function syncUI(){ UI.scoreA.textContent=GAME.scoreA; UI.scoreB.textContent=GAME.scoreB; UI.timer.textContent = Math.ceil(GAME.timeLeft)+'"'; }
+
+  // =========================
+  // Game Loop
+  // =========================
+  function loop(){
+    if(!GAME.running) return; requestAnimationFrame(loop);
+    const t=now(); const dt = Math.min(0.05,(t-GAME.lastTick)/1000); GAME.lastTick=t;
+    if(GAME.paused) { draw(dt); return; }
+
+    // update timer
+    GAME.timeLeft -= dt; if(GAME.timeLeft<=0){ GAME.timeLeft=0; GAME.running=false; UI.timer.textContent='종료'; return; }
+
+    // inputs to players
+    const leadA = teamA[0]; const leadB = teamB[0];
+    tickTeam(teamA, Input.p1, leadA);
+    if(GAME.mode==='p1-vs-p2'){ tickTeam(teamB, Input.p2, leadB); }
+    else { tickTeam(teamB, null, leadB); }
+
+    // ball update & collisions
+    if(!ownerOfBall()) ball.update(dt);
+    handleCollisions();
+
+    // goals
+    if(ball.x< PITCH.left-8 && Math.abs(ball.y-H/2)<GOAL.height/2){ goal('B'); }
+    if(ball.x> PITCH.right+8 && Math.abs(ball.y-H/2)<GOAL.height/2){ goal('A'); }
+
+    // UI cooldown bars
+    UI.cdDash1.style.width = (leadA.coolDash/3*100)+'%'; UI.cdCurve1.style.width = (leadA.coolCurve/4*100)+'%';
+    UI.cdDash2.style.width = (leadB.coolDash/3*100)+'%'; UI.cdCurve2.style.width = (leadB.coolCurve/4*100)+'%';
+
+    syncUI();
+    draw(dt);
+  }
+
+  function tickTeam(team, input, lead){
+    // control lead with input/AI; others AI if needed
+    for(const p of team){ const inp = (p===lead? input : null); p.update(1/60, inp); }
+
+    // actions
+    if(input){ if(input.dash) { lead.tryDash(); } if(input.pass){ lead.tryPassOrShoot('pass'); } if(input.shoot){ lead.tryPassOrShoot('shoot'); } }
+
+    // auto tackle/pickup if close
+    for(const p of team){
+      if(len2(p.x-ball.x, p.y-ball.y) < p.r+10){
+        // if ball slow enough, take possession
+        if(Math.hypot(ball.vx,ball.vy)<5){ takeBall(p); }
+        else { // bump
+          const [nx,ny]=norm(ball.x-p.x, ball.y-p.y); ball.vx += nx*0.8; ball.vy += ny*0.8;
+        }
+      }
+    }
+  }
+
+  function ownerOfBall(){ return [...teamA,...teamB].find(p=>p.hasBall); }
+  function takeBall(p){ [...teamA,...teamB].forEach(x=>x.hasBall=false); p.hasBall=true; Audio.beep(700,0.06,'square',0.05); }
+
+  function handleCollisions(){
+    const all=[...teamA,...teamB];
+    // player vs player separation
+    for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++){
+      const a=all[i], b=all[j]; const dx=b.x-a.x, dy=b.y-a.y; const d=len2(dx,dy); const min=a.r+b.r;
+      if(d<min){ const [nx,ny]=norm(dx||1,dy||0); const push=(min-d)/2; a.x-=nx*push; a.y-=ny*push; b.x+=nx*push; b.y+=ny*push; }
+    }
+  }
+
+  // =========================
+  // Rendering (neon style)
+  // =========================
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    drawPitch();
+    drawGoal('L'); drawGoal('R');
+    // ball trail
+    ctx.save();
+    ctx.shadowColor = '#22d3ee'; ctx.shadowBlur=15;
+    ctx.fillStyle = '#67e8f9';
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, 8, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // players
+    drawTeam(teamA, '#60a5fa','#0ea5e9');
+    drawTeam(teamB, '#f472b6','#e879f9');
+  }
+
+  function drawPitch(){
+    // base
+    ctx.fillStyle = '#0a1628'; ctx.fillRect(0,0,W,H);
+    // grass stripes
+    for(let i=0;i<10;i++){ ctx.fillStyle = `rgba(255,255,255,${i%2?0.02:0.04})`; const y=PITCH.top + i*((PITCH.bottom-PITCH.top)/10); ctx.fillRect(PITCH.left,y,PITCH.right-PITCH.left,(PITCH.bottom-PITCH.top)/10); }
+    // outline
+    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=2; ctx.strokeRect(PITCH.left,PITCH.top,PITCH.right-PITCH.left,PITCH.bottom-PITCH.top);
+    // mid
+    ctx.beginPath(); ctx.moveTo(W/2,PITCH.top); ctx.lineTo(W/2,PITCH.bottom); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W/2,H/2,60,0,Math.PI*2); ctx.stroke();
+  }
+  function drawGoal(side){
+    const x = side==='L'? PITCH.left-5 : PITCH.right+5; const y= H/2 - GOAL.height/2;
+    ctx.save(); ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x, y+GOAL.height); ctx.stroke(); ctx.restore();
+  }
+  function drawTeam(arr, c1,c2){
+    for(const p of arr){
+      // glow body
+      ctx.save(); ctx.shadowColor=c2; ctx.shadowBlur=12; ctx.fillStyle=c1; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      // ring
+      ctx.lineWidth=3; ctx.strokeStyle=c2; ctx.stroke();
+      // indicator if ball owner
+      if(p.hasBall){ ctx.fillStyle='#fff'; ctx.fillRect(p.x-6,p.y-p.r-14,12,6); }
+      ctx.restore();
+    }
+  }
+
+  // =========================
+  // Boot
+  // =========================
+  reset();
+})();
+</script>
+</body>
+</html>
