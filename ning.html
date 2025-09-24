@@ -162,8 +162,8 @@ var menu=get("menu"), mode1Btn=get("mode1"), mode2Btn=get("mode2"), startBtn=get
 var g1_pass=get("g1_pass"), g2_pass=get("g2_pass"), g1_shot=get("g1_shot"), g2_shot=get("g2_shot");
 var g1_pass_pct=get("g1_pass_pct"), g2_pass_pct=get("g2_pass_pct"), g1_shot_pct=get("g1_shot_pct"), g2_shot_pct=get("g2_shot_pct");
 // Roles
-var CDM_SPD=0.95, WING_SPD=CDM_SPD*1.30*1.20; // 🔧 윙 속도 +20%
-var RoleProfile={GK:{spd:0.81,shot:0.5,tackle:0.95},CB:{spd:1.10,shot:0.6,tackle:1.28},CDM:{spd:CDM_SPD,shot:1.05,tackle:1.22},LW:{spd:WING_SPD,shot:1.12,tackle:0.8},RW:{spd:WING_SPD,shot:1.12,tackle:0.8},ST:{spd:1.16,shot:1.18,tackle:0.75}};
+var CDM_SPD=0.95, WING_SPD=CDM_SPD*1.30*2.20; // 🔧 윙 속도 +20%
+var RoleProfile={GK:{spd:0.81,shot:0.5,tackle:0.95},CB:{spd:2.10,shot:0.6,tackle:1.28},CDM:{spd:CDM_SPD,shot:1.05,tackle:1.22},LW:{spd:WING_SPD,shot:1.12,tackle:0.8},RW:{spd:WING_SPD,shot:1.12,tackle:0.8},ST:{spd:2.16,shot:1.18,tackle:0.75}};
 // Rules
 var CM=10, HOLD_PUSH_CB=0.5*CM, HOLD_PUSH_OTH=0.8*CM, GK_SAFE_RADIUS=2*CM;
 var CROWD_RAD=26, CROWD_TIME=0.8, CROWD_PUSH=0.3*CM; // 🔧 군집 0.8초 후 0.3cm(=3px) 반발
