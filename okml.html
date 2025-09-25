@@ -1,448 +1,341 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Minimal Breaker — 오리지널 HTML5 게임</title>
-  <style>
-    /*
-      Minimal Breaker (c) 2025 Original work by ChatGPT for user "돌려"
-      - 순수 HTML/CSS/JS, 외부 라이브러리/에셋 0개
-      - GitHub Pages/Tistory iframe 호스팅 적합
-      - 기능: 모바일 최적화 토글, 맵 폭 축소(기본 9열/모바일 6열), 세로 비율 16:12, 모바일 1.6배(16:19.2)
-      - 안정화: 모바일 화면 들썩임 방지 CSS/로직, 벽돌 즉시 파괴
-      - 변경: 모바일에서 패들 폭 1/3, 모바일 기본 속도 0.8×, "스피드 x2" **독립 토글 버튼** 추가, "드래그 허용" 버튼으로 페이지 스크롤 가능 토글
-      - Tests: 런타임 자기진단에 스피드 토글/드래그 토글 검사 추가
-    */
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>오목 SAFE (강화 AI)</title>
+<style>
+body{margin:0;display:grid;place-items:center;min-height:100vh;background:#111;color:#e5e7eb;font-family:system-ui,Apple SD Gothic Neo,Segoe UI,Roboto,Arial}
+.wrap{padding:16px;background:#0f172a;border:1px solid #243042;border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.35)}
+h1{font-size:18px;margin:0 0 10px}
+.row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+button,select{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
+button.sec{background:#374151}
+.badge{padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #334155}
+canvas{
+  display:block;background:#f7efd9;border:1px solid #111827;border-radius:12px;
+  /* 작은 화면에서 자동 축소되도록 */
+  width:min(900px, 92vw); height:auto;
+  /* 모바일 탭/제스처 품질 개선: 300ms 지연/더블탭 확대 제거 */
+  touch-action: manipulation;
+}
+small{color:#93c5fd}
 
-    :root{ --bg:#0b0f17; --ink:#e6edf3; --muted:#9aa4b2; --primary:#2d7ff9; --accent:#23a559; --warn:#f5a524; --danger:#ef4444; --panel:#111827; }
+/* 모바일 최적화 켬일 때 살짝 더 큼직한 UI 느낌 */
+body.mobile .wrap{ padding:18px; }
+body.mobile h1{ font-size:20px; }
+body.mobile .badge{ font-weight:700; }
+</style>
 
-    /* 화면 흔들림 방지 */
-    html, body {
-      overscroll-behavior: none;      /* 상/하 바운스 방지 */
-      -webkit-overflow-scrolling: auto;
-      overflow: hidden;               /* 페이지 자체 스크롤 제거 */
-      -webkit-text-size-adjust: 100%; /* iOS 자동 글자 확대 방지 */
-      height:100%; margin:0; background:var(--bg); color:var(--ink);
-      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    }
-
-    .wrap{ display:flex; align-items:center; justify-content:center; min-height:100%; padding:16px; box-sizing:border-box; }
-
-    /* 맵 폭 축소 */
-    .game{ width:min(720px, 100%); margin:0 auto; }
-    body.mobile .game{ width:min(600px, 100%); }
-
-    .bar{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 10px 0; color:var(--muted); flex-wrap:wrap; }
-    .bar .left, .bar .right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .tag{ background:var(--panel); color:var(--ink); border-radius:10px; padding:6px 10px; }
-    .btn{ background:var(--panel); color:var(--ink); border:1px solid #202838; padding:6px 10px; border-radius:10px; cursor:pointer; }
-    .btn:hover{ border-color:#2a3650; }
-
-    /* 기본: 세로 16:12, 모바일: 1.6배 = 16:19.2 */
-    canvas{
-      width:100%; aspect-ratio: 16 / 12; display:block;
-      background:linear-gradient(180deg, #0c111a 0%, #0c111a 70%, #0a0f18 100%);
-      box-shadow:0 12px 40px rgba(0,0,0,.35); border-radius:14px;
-      /* 터치 제스처로 스크롤/줌 방지 + 합성가속 (드래그 허용 모드에서 덮어씀) */
-      touch-action: none; -webkit-user-select: none; user-select: none; transform: translateZ(0);
-    }
-    body.mobile canvas{ aspect-ratio: 16 / 19.2; }
-
-    /* 드래그 허용 모드: 페이지 스크롤 허용 */
-    body.drag-allow canvas{ touch-action: auto; }
-
-    body.mobile .bar{ font-size:16px; }
-
-    .help{ margin-top:10px; color:var(--muted); text-align:center; opacity:.9; }
-    .kbd{ padding:2px 6px; border:1px solid #344156; border-radius:6px; color:var(--ink); }
-
-    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111827; color:var(--ink); padding:8px 12px; border-radius:10px; border:1px solid #202838; opacity:0; pointer-events:none; transition:opacity .25s ease; }
-    .toast.show{ opacity:1; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="game">
-      <div class="bar">
-        <div class="left">
-          <span class="tag">Minimal Breaker</span>
-          <span>점수 <strong id="score">0</strong></span>
-          <span>스테이지 <strong id="stage">1</strong></span>
-          <span>라이프 <strong id="lives">3</strong></span>
-        </div>
-        <div class="right">
-          <button class="btn" id="btnMobile">모바일 최적화: 끔</button>
-          <button class="btn" id="btnSpeed">속도 x1</button>
-          <button class="btn" id="btnDrag">드래그: 차단</button>
-          <button class="btn" id="btnPause">일시정지</button>
-          <button class="btn" id="btnRestart">리셋</button>
-        </div>
-      </div>
-      <canvas id="cv" width="1280" height="960" aria-label="브레이크아웃 게임 캔버스" role="img"></canvas>
-      <div class="help">
-        <span class="kbd">←</span>/<span class="kbd">→</span> 또는 <span class="kbd">A</span>/<span class="kbd">D</span> 이동 · <span class="kbd">Space</span> 발사/일시정지 · 터치 드래그(게임) / 드래그 허용 버튼(페이지)
-      </div>
-    </div>
+<div class="wrap">
+  <h1>오목 SAFE</h1>
+  <div class="row">
+    <button id="new">새 게임</button>
+    <button id="undo" class="sec">되돌리기</button>
+    <select id="mode">
+      <option value="pvp">사람 vs 사람</option>
+      <option value="ai-ez">사람 vs AI(보통)</option>
+      <option value="ai-hard" selected>사람 vs AI(강함)</option>
+    </select>
+    <button id="mobile" class="sec">모바일 최적화: 끔</button>
+    <span class="badge" id="status">흑 선공</span>
   </div>
-  <div class="toast" id="toast"></div>
+  <canvas id="cv" width="900" height="900"></canvas>
+  <small>팁: “강함”은 2~3수 앞을 보고 ‘열린3/4’ 같은 패턴을 적극 노립니다.</small>
+</div>
 
-  <script>
-  (()=>{
-    const cv = document.getElementById('cv');
-    const ctx = cv.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    const stageEl = document.getElementById('stage');
-    const livesEl = document.getElementById('lives');
-    const btnPause = document.getElementById('btnPause');
-    const btnRestart = document.getElementById('btnRestart');
-    const btnMobile = document.getElementById('btnMobile');
-    const btnSpeed = document.getElementById('btnSpeed');
-    const btnDrag = document.getElementById('btnDrag');
-    const toast = document.getElementById('toast');
+<script>
+/* ===== 기본 상수/상태 ===== */
+const N=15, BLACK=1, WHITE=2;
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const statusEl=document.getElementById('status'), modeSel=document.getElementById('mode');
+const mobileBtn=document.getElementById('mobile');
 
-    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+/* 모바일 최적화 토글에 따라 바뀌는 파라미터들 */
+const mobileUI = {
+  on: false,
+  MARGIN: 40,               // 기본 여백
+  MARGIN_M: 48,             // 모바일 여백(조금 크게)
+  RATIO: 0.42,              // 돌 반지름 비율
+  RATIO_M: 0.50,            // 모바일에서 돌 크게
+  GRID_W: 2,                // 선 굵기
+  GRID_W_M: 3,              // 모바일 선 굵기
+  STAR_R: 4,                // 별점(홀이) 반지름
+  STAR_R_M: 6               // 모바일 별점 더 큼
+};
 
-    const state = {
-      w: 1280, h: 960, // 기본 16:12
-      paddle: { x: 640, y: 920, w: 150, h: 16, speed: 650, targetX: 640 },
-      balls: [], bricks: [], particles: [], powerups: [],
-      rows: 7, cols: 9, gutter: 8, brickH: 24,
-      score: 0, lives: 3, stage: 1,
-      launched: false, paused: false,
-      mobile: false,
-      speedMul: 1,        // 속도 x1 / x2 토글
-      dragAllow: false,   // 페이지 드래그 허용 여부
-      last: 0,
-    };
+function MARGIN(){ return mobileUI.on ? mobileUI.MARGIN_M : mobileUI.MARGIN; }
+function RATIO(){ return mobileUI.on ? mobileUI.RATIO_M  : mobileUI.RATIO; }
+function GRID_W(){ return mobileUI.on ? mobileUI.GRID_W_M: mobileUI.GRID_W; }
+function STAR_R(){ return mobileUI.on ? mobileUI.STAR_R_M: mobileUI.STAR_R; }
+const STAR=[3,7,11];
 
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-    const rand  = (a,b) => a + Math.random()*(b-a);
+let board, turn, over, moves, winLine=null;
 
-    function showToast(msg){
-      toast.textContent = msg; toast.classList.add('show');
-      clearTimeout(showToast.tid);
-      showToast.tid = setTimeout(()=> toast.classList.remove('show'), 1200);
+function clear(){ ctx.clearRect(0,0,cv.width,cv.height); }
+function cellSize(){ return (cv.width - MARGIN()*2)/(N-1); }
+function cellCenter(gx,gy){ const s=cellSize(); return {x:MARGIN()+gx*s, y:MARGIN()+gy*s, s}; }
+function pxToCell(px,py){ const s=cellSize(); const gx=Math.round((px-MARGIN())/s), gy=Math.round((py-MARGIN())/s); return {gx,gy}; }
+
+/* ===== 보드 그리기 ===== */
+function drawBoard(){
+  clear();
+  const g=ctx.createLinearGradient(0,0,cv.width,cv.height); g.addColorStop(0,'#f7efd9'); g.addColorStop(1,'#f0e2bf');
+  ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
+
+  ctx.strokeStyle='#111827'; ctx.lineWidth=GRID_W();
+  const s=cellSize();
+  for(let i=0;i<N;i++){
+    ctx.beginPath(); ctx.moveTo(MARGIN(), MARGIN()+i*s); ctx.lineTo(MARGIN()+(N-1)*s, MARGIN()+i*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(MARGIN()+i*s, MARGIN()); ctx.lineTo(MARGIN()+i*s, MARGIN()+(N-1)*s); ctx.stroke();
+  }
+  ctx.fillStyle='#0b1220';
+  STAR.forEach(ix=>STAR.forEach(iy=>{ const {x,y}=cellCenter(ix,iy); ctx.beginPath(); ctx.arc(x,y,STAR_R(),0,Math.PI*2); ctx.fill(); }));
+
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
+  if(winLine) drawWinLine(winLine);
+}
+function drawStone(gx,gy,col){
+  const {x,y,s}=cellCenter(gx,gy); const r=s*RATIO();
+  const gr=ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.2,x,y,r);
+  if(col===BLACK){ gr.addColorStop(0,'#6b7280'); gr.addColorStop(1,'#111827'); }
+  else{ gr.addColorStop(0,'#fff'); gr.addColorStop(1,'#d1d5db'); }
+  ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.lineWidth=1.6; ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
+}
+function drawWinLine(line){
+  ctx.save(); ctx.strokeStyle='#22c55e'; ctx.lineWidth=5; ctx.lineJoin='round'; ctx.lineCap='round';
+  for(let i=0;i<line.length-1;i++){ const a=cellCenter(line[i][0],line[i][1]), b=cellCenter(line[i+1][0],line[i+1][1]);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+  ctx.restore();
+}
+
+/* ===== 규칙/로직 ===== */
+function checkWin(gx,gy,c){
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const [dx,dy] of dirs){
+    let cnt=1, line=[[gx,gy]], x=gx+dx, y=gy+dy;
+    while(x>=0&&x<N&&y>=0&&y<N&&board[y][x]===c){ line.push([x,y]); cnt++; x+=dx; y+=dy; }
+    x=gx-dx; y=gy-dy;
+    while(x>=0&&x<N&&y>=0&&y<N&&board[y][x]===c){ line.unshift([x,y]); cnt++; x-=dx; y-=dy; }
+    if(cnt>=5) return line;
+  }
+  return null;
+}
+function reset(){ board=Array.from({length:N},()=>Array(N).fill(0)); turn=BLACK; over=false; moves=[]; winLine=null; statusEl.textContent='흑 선공'; drawBoard(); }
+function place(gx,gy,byAI=false){
+  if(over||gx<0||gx>=N||gy<0||gy>=N||board[gy][gx]) return;
+  board[gy][gx]=turn; moves.push([gx,gy,turn]); drawStone(gx,gy,turn);
+  const line=checkWin(gx,gy,turn);
+  if(line){ over=true; winLine=line; drawBoard(); statusEl.textContent=(turn===BLACK?'흑':'백')+' 승리!'; return; }
+  turn=(turn===BLACK?WHITE:BLACK);
+  statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : '');
+  if(isAIturn() && !byAI) setTimeout(aiMove, 60);
+}
+function undo(){
+  if(!moves.length || (over && winLine)){ winLine=null; over=false; }
+  if(!moves.length) return;
+  const last=moves.pop(); board[last[1]][last[0]]=0; turn=last[2]; drawBoard();
+  statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : '');
+}
+function isAIturn(){ return (modeSel.value==='ai-ez' || modeSel.value==='ai-hard') && turn===WHITE; }
+
+/* ===== 강화 AI(원본 그대로) ===== */
+const SCORE = {
+  FIVE: 1_000_000_000,
+  OPEN_FOUR: 8_000_000,
+  CLOSED_FOUR: 800_000,
+  OPEN_THREE: 80_000,
+  CLOSED_THREE: 8_000,
+  OPEN_TWO: 800,
+  CLOSED_TWO: 120
+};
+function lineScore(x,y,c){
+  let total=0;
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const [dx,dy] of dirs){
+    let count=1, openL=0, openR=0;
+    let nx=x+dx, ny=y+dy;
+    while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===c){count++; nx+=dx; ny+=dy;}
+    if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===0) openR=1;
+    nx=x-dx; ny=y-dy;
+    while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===c){count++; nx-=dx; ny-=dy;}
+    if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===0) openL=1;
+    const open = openL + openR;
+    if(count>=5) { total += SCORE.FIVE; continue; }
+    if(count===4){
+      if(open===2) total += SCORE.OPEN_FOUR;
+      else if(open===1) total += SCORE.CLOSED_FOUR;
+    } else if(count===3){
+      if(open===2) total += SCORE.OPEN_THREE;
+      else if(open===1) total += SCORE.CLOSED_THREE;
+    } else if(count===2){
+      if(open===2) total += SCORE.OPEN_TWO;
+      else if(open===1) total += SCORE.CLOSED_TWO;
     }
-
-    const container = document.querySelector('.game');
-    let lastWidth = 0;
-
-    function resize(){
-      const rect = container.getBoundingClientRect();
-      const width = Math.round(rect.width);
-      if (Math.abs(width - lastWidth) < 1) return; // 가로폭이 같으면 무시
-      lastWidth = width;
-
-      state.w = Math.round(width * DPR);
-      const ar = state.mobile ? (19.2/16) : (12/16); // 모바일 1.6배
-      state.h = Math.round(width * ar * DPR);
-
-      cv.width = state.w; cv.height = state.h;
-      state.paddle.y = state.h - 40 * DPR;
-      if(!state.launched){
-        const p = state.paddle; const b = state.balls[0];
-        if(b){ b.x = p.x; b.y = p.y - 20*DPR; }
+  }
+  return total;
+}
+function heuristic(x,y,me){
+  const opp = me===WHITE?BLACK:WHITE;
+  let s = 0;
+  s += lineScore(x,y,me);
+  s += Math.floor(lineScore(x,y,opp)*0.9);
+  const mid=7; s += (20 - (Math.abs(x-mid)+Math.abs(y-mid))) * 20;
+  let near=0;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const nx=x+dx, ny=y+dy; if(nx<0||ny<0||nx>=N||ny>=N) continue;
+    if(board[ny][nx]) near++;
+  }
+  s += near*50;
+  return s;
+}
+function genCandidates(){
+  const cand=[]; let any=false;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(board[y][x]) any=true;
+  if(!any) return [[7,7,99999999]];
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    let ok=false;
+    for(let dy=-2;dy<=2;dy++){ if(ok) break;
+      for(let dx=-2;dx<=2;dx++){
+        const nx=x+dx, ny=y+dy;
+        if(nx>=0&&nx<N&&ny>=0&&ny<N && board[ny][nx]){ ok=true; break; }
       }
-      layoutBricks();
     }
+    if(!ok) continue;
+    cand.push([x,y,0]);
+  }
+  return cand;
+}
+function bestOnePly(me){
+  const cand = genCandidates();
+  let best=null, bestScore=-1e100;
+  for(const c of cand){
+    const [x,y] = c;
+    c[2] = heuristic(x,y,me);
+    if(c[2] > bestScore){ best = c; bestScore = c[2]; }
+  }
+  return best;
+}
+function immediate(me){
+  const opp = me===WHITE?BLACK:WHITE;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    board[y][x]=me;
+    const win = !!checkWin(x,y,me);
+    board[y][x]=0;
+    if(win) return [x,y];
+  }
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    board[y][x]=opp;
+    const win = !!checkWin(x,y,opp);
+    board[y][x]=0;
+    if(win) return [x,y];
+  }
+  return null;
+}
+function alphaBeta(depth, me, alpha, beta){
+  const opp = me===WHITE?BLACK:WHITE;
+  let cand = genCandidates();
+  cand.forEach(c => c[2] = heuristic(c[0], c[1], me));
+  cand.sort((a,b)=>b[2]-a[2]);
+  const LIMIT = depth>=3 ? 6 : 10;
+  cand = cand.slice(0, LIMIT);
+  let bestScore = -1e100, bestMove = null;
+  for(const [x,y,] of cand){
+    board[y][x]=me;
+    if(checkWin(x,y,me)){ board[y][x]=0; return {score: SCORE.FIVE, move:[x,y]}; }
+    const sc = (depth<=1) ? evaluateStatic(me) : -alphaBeta(depth-1, opp, -beta, -alpha).score;
+    board[y][x]=0;
+    if(sc > bestScore){ bestScore=sc; bestMove=[x,y]; }
+    if(sc > alpha) alpha=sc;
+    if(alpha >= beta) break;
+  }
+  return {score: bestScore, move: bestMove};
+}
+function evaluateStatic(me){
+  const opp = me===WHITE?BLACK:WHITE;
+  let my=0, their=0;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    if(board[y][x]) continue;
+    my   += heuristic(x,y,me)*0.3;
+    their+= heuristic(x,y,opp)*0.3;
+  }
+  return my - their;
+}
+function aiMove(){
+  const me = WHITE;
+  const fast = immediate(me);
+  if(fast){ place(fast[0], fast[1], true); return; }
+  if(modeSel.value==='ai-ez'){
+    const best = bestOnePly(me) || [7,7];
+    place(best[0], best[1], true);
+  } else {
+    const depth = moves.length<10 || moves.length>60 ? 3 : 2;
+    const {move} = alphaBeta(depth, me, -1e100, 1e100);
+    const m = move || bestOnePly(me) || [7,7];
+    place(m[0], m[1], true);
+  }
+}
 
-    function layoutBricks(){
-      const { rows, cols, gutter, brickH } = state;
-      const marginX = 28 * DPR;
-      const marginY = 60 * DPR;
-      const areaW = state.w - marginX*2;
-      const bw = (areaW - (cols-1)*gutter) / cols;
-      const colors = ['#2d7ff9','#23a559','#f5a524','#ef4444','#8b5cf6'];
-      const bricks = [];
-      for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-          bricks.push({ // 즉시 파괴
-            x: Math.round(marginX + c*(bw+gutter)),
-            y: Math.round(marginY + r*(brickH+gutter)),
-            w: Math.round(bw), h: brickH,
-            color: colors[(r+c)%colors.length], alive:true,
-            score: 20
-          });
-        }
-      }
-      state.bricks = bricks;
-    }
+/* ===== 입력/이벤트 (모바일 터치 수정) ===== */
+// CSS 스케일 반영: 화면 좌표 -> 캔버스 내부 좌표
+function getCanvasXY(clientX, clientY){
+  const r = cv.getBoundingClientRect();
+  const scaleX = cv.width / r.width;
+  const scaleY = cv.height / r.height;
+  return { x: (clientX - r.left) * scaleX, y: (clientY - r.top) * scaleY };
+}
+let lastTouchAt = 0; // 고스트 클릭 방지
 
-    function currentBaseSpeed(){
-      // 모바일 여부 + 스피드 배수 반영
-      const base = state.mobile ? 420*0.8 : 420; // 모바일만 기본 속도 0.8배 (느리게)
-      return base * state.speedMul * DPR;
-    }
+cv.addEventListener('click', e=>{
+  // 터치 직후 발생하는 고스트 클릭 무시
+  if(performance.now() - lastTouchAt < 450) return;
+  const p = getCanvasXY(e.clientX, e.clientY);
+  const c = pxToCell(p.x, p.y);
+  place(c.gx, c.gy);
+});
 
-    function newBall(x, y, speedMul=1){
-      const speed = currentBaseSpeed() * speedMul;
-      const angle = - (Math.PI*0.25 + Math.random()*Math.PI*0.5);
-      state.balls.push({ x, y, r: (state.mobile? 10:8)*DPR, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed });
-    }
+cv.addEventListener('touchstart', e=>{
+  if(e.touches.length>1) return;        // 멀티터치 무시
+  lastTouchAt = performance.now();
+  e.preventDefault();                    // 더블탭 확대/스크롤 방지
+  const t=e.touches[0];
+  const p = getCanvasXY(t.clientX, t.clientY);
+  const c = pxToCell(p.x, p.y);
+  place(c.gx, c.gy);
+},{passive:false});
 
-    function resetLevel(next=false){
-      if(next){ state.stage++; stageEl.textContent = state.stage; state.rows = Math.min(11, state.rows+1); }
-      state.launched = false; state.balls.length = 0; state.powerups.length = 0;
-      const p = state.paddle;
-      // 모바일에서 패들 폭 1/3 적용
-      const baseDesktop = 150 * DPR;
-      const baseMobile  = (200 * (1/3)) * DPR; // 200 → 1/3
-      const minDesktop  = 90 * DPR;
-      const minMobile   = (140 * (1/3)) * DPR; // 140 → 1/3
-      const baseW = state.mobile ? baseMobile : baseDesktop;
-      const minW  = state.mobile ? minMobile  : minDesktop;
-      p.w = clamp(baseW - (state.stage-1)*5*DPR, minW, 260*DPR);
-      p.x = state.w/2; p.targetX = p.x;
-      layoutBricks();
-      newBall(p.x, state.paddle.y - 20*DPR);
-      scoreEl.textContent = state.score; livesEl.textContent = state.lives;
-    }
+document.getElementById('new').onclick=reset;
+document.getElementById('undo').onclick=undo;
+modeSel.onchange=()=>{ statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : ''); };
 
-    function spawnParticles(x,y,color){ for(let i=0;i<8;i++) state.particles.push({ x, y, vx: rand(-80,80)*DPR, vy: rand(-120,0)*DPR, life: 0.6, color }); }
+/* === 모바일 UI 토글 === */
+mobileBtn.onclick = ()=>{
+  mobileUI.on = !mobileUI.on;
+  document.body.classList.toggle('mobile', mobileUI.on);
+  mobileBtn.textContent = `모바일 최적화: ${mobileUI.on ? '켬' : '끔'}`;
+  drawBoard();
+  reportSizeSoon();
+};
 
-    function dropPowerup(x,y){
-      const roll = Math.random(); let type=null;
-      if(roll < 0.10) type='M'; else if(roll<0.22) type='W'; else if(roll<0.34) type='S';
-      if(!type) return; state.powerups.push({ x, y, vy: 140*DPR, type, w: 22*DPR, h: 14*DPR });
-    }
-
-    function applyPowerup(type){
-      const p = state.paddle;
-      if(type==='W'){ p.w = clamp(p.w * 1.25, 90*DPR, 300*DPR); showToast('Paddle ↑ 넓이 증가'); }
-      else if(type==='S'){ for(const b of state.balls){ b.vx*=0.8; b.vy*=0.8; } showToast('속도 ↓ 슬로우'); }
-      else if(type==='M'){ const old = state.balls.slice(); for(const b of old){ newBall(b.x, b.y, 1); } showToast('멀티볼!'); }
-    }
-
-    function updateButtons(){
-      btnMobile.textContent = `모바일 최적화: ${state.mobile ? '켬' : '끔'}`;
-      btnSpeed.textContent  = `속도 x${state.speedMul}`;
-      btnDrag.textContent   = `드래그: ${state.dragAllow ? '허용' : '차단'}`;
-    }
-
-    function setMobileMode(on){
-      state.mobile = !!on;
-      document.body.classList.toggle('mobile', state.mobile);
-      state.cols = state.mobile ? 6 : 9;
-      state.brickH = state.mobile ? 28 : 24;
-      state.gutter = state.mobile ? 10 : 8;
-      // 모바일/데스크톱 전환 시 패들 폭/볼 반지름 재설정 위해 리셋
-      resetLevel(false);
-      forceResize();
-      updateButtons();
-      showToast(state.mobile ? '모바일 UI 최적화 적용' : '모바일 최적화 해제');
-    }
-
-    function setSpeedMode(mult){
-      mult = Math.max(1, Math.min(3, mult|0 || mult));
-      if(mult === state.speedMul) return;
-      const ratio = mult / state.speedMul;
-      state.speedMul = mult;
-      // 현재 공 속도도 즉시 스케일링
-      for(const b of state.balls){ b.vx *= ratio; b.vy *= ratio; }
-      updateButtons();
-      showToast(`속도 x${state.speedMul}`);
-    }
-
-    function setDragAllow(on){
-      state.dragAllow = !!on;
-      document.body.classList.toggle('drag-allow', state.dragAllow);
-      updateButtons();
-      showToast(state.dragAllow ? '페이지 드래그 허용' : '페이지 드래그 차단');
-    }
-
-    const input = { left:false, right:false };
-    window.addEventListener('keydown', e=>{
-      if(e.code==='ArrowLeft' || e.code==='KeyA') input.left=true;
-      if(e.code==='ArrowRight' || e.code==='KeyD') input.right=true;
-      if(e.code==='Space') toggleLaunchOrPause();
-    });
-    window.addEventListener('keyup', e=>{
-      if(e.code==='ArrowLeft' || e.code==='KeyA') input.left=false;
-      if(e.code==='ArrowRight' || e.code==='KeyD') input.right=false;
-    });
-
-    // 터치 스크롤 조건부 차단 (dragAllow=false 일 때만 차단)
-    document.addEventListener('touchmove', (e)=> {
-      if(!state.dragAllow) e.preventDefault();
-    }, { passive:false });
-
-    let dragging=false;
-    cv.addEventListener('pointerdown', e=>{
-      if(state.dragAllow) return; // 페이지 드래그 허용 모드에선 게임 드래그 비활성화
-      dragging=true; cv.setPointerCapture(e.pointerId);
-      if(!state.launched && !state.paused) state.launched=true;
-    });
-    cv.addEventListener('pointerup',   ()=>{ dragging=false; });
-    cv.addEventListener('pointermove', e=>{
-      if(state.dragAllow || !dragging) return;
-      const rect = cv.getBoundingClientRect();
-      const x = (e.clientX - rect.left) * DPR;
-      state.paddle.targetX = x;
-    });
-
-    btnPause.addEventListener('click', ()=>{ state.paused = !state.paused; btnPause.textContent = state.paused? '계속' : '일시정지'; });
-    btnRestart.addEventListener('click', ()=>{ state.score=0; state.lives=3; state.stage=1; stageEl.textContent=1; resetLevel(false); });
-    btnMobile.addEventListener('click', ()=> setMobileMode(!state.mobile));
-    btnSpeed.addEventListener('click',  ()=> setSpeedMode(state.speedMul===1?2:1));
-    btnDrag.addEventListener('click',   ()=> setDragAllow(!state.dragAllow));
-
-    function toggleLaunchOrPause(){
-      if(!state.launched){ state.launched=true; }
-      else { state.paused = !state.paused; btnPause.textContent = state.paused? '계속' : '일시정지'; }
-    }
-
-    function rectCircleCollide(rx,ry,rw,rh, cx,cy,cr){
-      const nx = Math.max(rx, Math.min(cx, rx+rw));
-      const ny = Math.max(ry, Math.min(cy, ry+rh));
-      const dx = cx-nx, dy = cy-ny; return (dx*dx + dy*dy) <= cr*cr;
-    }
-
-    function step(dt){
-      const p = state.paddle;
-      const move = (input.right?1:0) - (input.left?1:0);
-      if(move !== 0){ p.targetX += move * p.speed * dt; }
-      p.x += (p.targetX - p.x) * Math.min(1, dt*12);
-      p.x = clamp(p.x, p.w/2 + 8*DPR, state.w - p.w/2 - 8*DPR);
-
-      for(let i=state.balls.length-1;i>=0;i--){
-        const b = state.balls[i];
-        if(!state.launched){ b.x = p.x; b.y = p.y - 20*DPR; continue; }
-        b.x += b.vx*dt; b.y += b.vy*dt;
-        if(b.x < b.r){ b.x=b.r; b.vx*=-1; }
-        if(b.x > state.w - b.r){ b.x=state.w - b.r; b.vx*=-1; }
-        if(b.y < b.r + 8*DPR){ b.y=b.r + 8*DPR; b.vy*=-1; }
-        if(b.y > state.h + 50*DPR){ state.balls.splice(i,1); }
-      }
-
-      if(state.launched && state.balls.length===0){
-        state.lives--; livesEl.textContent = state.lives;
-        if(state.lives<0){ state.lives=3; state.score=0; state.stage=1; stageEl.textContent=1; showToast('게임 오버'); }
-        resetLevel(false); return;
-      }
-
-      // Paddle collision
-      for(const b of state.balls){
-        if(rectCircleCollide(p.x-p.w/2, p.y-p.h/2, p.w, p.h, b.x,b.y,b.r)){
-          const rel = (b.x - p.x) / (p.w/2);
-          const speed = Math.hypot(b.vx,b.vy) * 1.01;
-          const ang = (-Math.PI*0.15) + (-Math.PI*0.7) * rel;
-          b.vx = Math.cos(ang)*speed; b.vy = -Math.abs(Math.sin(ang)*speed);
-          b.y = p.y - p.h/2 - b.r - 0.1;
-        }
-      }
-
-      // Brick collision & scoring — 즉시 파괴
-      let aliveCount = 0;
-      for(const br of state.bricks){
-        if(!br.alive) continue; aliveCount++;
-        for(const b of state.balls){
-          if(!rectCircleCollide(br.x, br.y, br.w, br.h, b.x,b.y,b.r)) continue;
-          const ox = (br.x + br.w/2) - b.x; const oy = (br.y + br.h/2) - b.y;
-          const ax = (br.w/2 + b.r) - Math.abs(ox); const ay = (br.h/2 + b.r) - Math.abs(oy);
-          if(ax < ay){ b.vx *= -1; b.x += (ox>0? -ax: ax); }
-          else { b.vy *= -1; b.y += (oy>0? -ay: ay); }
-          br.alive = false; state.score += br.score; scoreEl.textContent = state.score;
-          spawnParticles(b.x,b.y, br.color); dropPowerup(br.x+br.w/2, br.y+br.h/2);
-        }
-      }
-
-      // Powerups
-      for(let i=state.powerups.length-1;i>=0;i--){
-        const pu = state.powerups[i]; pu.y += pu.vy*dt;
-        if(rectCircleCollide(p.x-p.w/2, p.y-p.h/2, p.w, p.h, pu.x, pu.y, Math.max(pu.w,pu.h)/2)){
-          applyPowerup(pu.type); state.powerups.splice(i,1); continue;
-        }
-        if(pu.y > state.h + 40*DPR) state.powerups.splice(i,1);
-      }
-
-      // Particles
-      for(let i=state.particles.length-1;i>=0;i--){
-        const pa = state.particles[i]; pa.life -= dt; if(pa.life<=0){ state.particles.splice(i,1); continue; }
-        pa.x += pa.vx*dt; pa.y += pa.vy*dt; pa.vy += 480*DPR*dt;
-      }
-
-      if(aliveCount===0){ showToast(`스테이지 ${state.stage} 클리어`); resetLevel(true); }
-    }
-
-    function draw(){
-      const { w,h } = state; ctx.clearRect(0,0,w,h);
-      const grd = ctx.createLinearGradient(0,0,0,h); grd.addColorStop(0,'#0f172a'); grd.addColorStop(1,'#0b1220'); ctx.fillStyle=grd; ctx.fillRect(0,0,w,h);
-
-      for(const br of state.bricks){ if(!br.alive) continue; ctx.fillStyle=br.color; ctx.fillRect(br.x, br.y, br.w, br.h); ctx.fillStyle='rgba(0,0,0,.15)'; ctx.fillRect(br.x, br.y+br.h-4*DPR, br.w, 4*DPR); }
-
-      const p = state.paddle; ctx.fillStyle='#1f2a44'; ctx.fillRect(p.x-p.w/2, p.y-p.h/2, p.w, p.h); ctx.fillStyle='#2d7ff9'; ctx.fillRect(p.x-p.w/2, p.y-p.h/2, p.w, 4*DPR);
-
-      for(const b of state.balls){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fillStyle='#e6edf3'; ctx.fill(); ctx.closePath(); }
-
-      for(const pu of state.powerups){ ctx.fillStyle='#111827'; ctx.fillRect(pu.x-pu.w/2, pu.y-pu.h/2, pu.w, pu.h); ctx.strokeStyle='#2a3650'; ctx.strokeRect(pu.x-pu.w/2, pu.y-pu.h/2, pu.w, pu.h); ctx.fillStyle='#23a559'; ctx.font=`${12*DPR}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(pu.type, pu.x, pu.y+1*DPR); }
-
-      for(const pa of state.particles){ ctx.globalAlpha = Math.max(0, pa.life/0.6); ctx.fillStyle = pa.color; ctx.fillRect(pa.x,pa.y, 3*DPR,3*DPR); ctx.globalAlpha = 1; }
-
-      if(state.paused){ drawCenterText('일시정지 — Space', h*0.5); } else if(!state.launched){ drawCenterText('Space 또는 터치로 시작', h*0.5); }
-    }
-
-    function drawCenterText(t, y){
-      ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(0,y-40*DPR, state.w, 80*DPR);
-      ctx.fillStyle='#e6edf3'; ctx.font=`${24*DPR}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(t, state.w/2, y);
-    }
-
-    function loop(ts){ if(!state.last) state.last = ts; const dt = Math.min(0.033, (ts - state.last)/1000); state.last = ts; if(!state.paused) step(dt); draw(); requestAnimationFrame(loop); }
-
-    // --- Test helpers ---
-    function approx(a,b,eps=1e-3){ return Math.abs(a-b) <= eps; }
-    function assert(cond, msg){ if(!cond) throw new Error(msg); }
-    function forceResize(){ lastWidth = 0; resize(); }
-
-    function runTests(){
-      try{
-        // 1) 기본 속성
-        assert(typeof state.paddle.h === 'number', 'paddle.h should be a number');
-
-        // 2) 비율 테스트
-        const prevMobile = state.mobile; const prevSpeed = state.speedMul; const prevDrag = state.dragAllow;
-        state.mobile = false; forceResize();
-        assert(approx(state.h/state.w, 12/16, 0.02), 'desktop aspect ~12/16');
-        state.mobile = true; forceResize();
-        assert(approx(state.h/state.w, 19.2/16, 0.02), 'mobile aspect ~19.2/16');
-
-        // 3) 스피드 토글 테스트
-        const b0 = {vx:100, vy:0}; const old = Math.hypot(b0.vx,b0.vy);
-        state.balls.push(b0); setSpeedMode(2); // x2
-        const ratio = Math.hypot(b0.vx,b0.vy) / old; assert(approx(ratio,2,0.01),'speed toggle scales velocity x2');
-        state.balls.pop(); setSpeedMode(prevSpeed);
-
-        // 4) 드래그 토글 텍스트 반영
-        setDragAllow(true);  assert(btnDrag.textContent.includes('허용'),'drag button shows 허용');
-        setDragAllow(false); assert(btnDrag.textContent.includes('차단'),'drag button shows 차단');
-
-        // 5) draw/step smoke
-        step(0.016); draw();
-
-        // 복구
-        state.mobile = prevMobile; setDragAllow(prevDrag); forceResize();
-
-        console.log('[Minimal Breaker] Tests passed.');
-        showToast('Self-test: OK');
-      }catch(err){
-        console.error('[Minimal Breaker] Test failed:', err);
-        showToast('Self-test failed (F12 console)');
-      }
-      updateButtons();
-    }
-
-    function init(){
-      state.paddle.h = 16*DPR;
-      requestAnimationFrame(()=>{ const r = container.getBoundingClientRect(); lastWidth = Math.round(r.width); resize(); });
-      resetLevel(false);
-      window.addEventListener('resize', resize);
-      requestAnimationFrame(loop);
-      setTimeout(runTests, 60);
-      updateButtons();
-    }
-
-    init();
-  })();
-  </script>
-</body>
+reset();
+</script>
+<script>
+/* ===== 부모 창에 사이즈 보고(티스토리 iframe용) ===== */
+(function(){
+  function report(){
+    const h = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
+    window.parent?.postMessage({ type:'OMOK_SIZE', w:900, h }, '*');
+  }
+  function reportSizeSoon(){ setTimeout(report, 0); setTimeout(report, 120); }
+  window.addEventListener('load', report);
+  window.addEventListener('resize', reportSizeSoon);
+  setTimeout(report, 100);
+  // 전역에서 쓰기 위해 노출
+  window.reportSizeSoon = reportSizeSoon;
+})();
+</script>
 </html>
