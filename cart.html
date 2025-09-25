@@ -3,451 +3,787 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Kart-like 3D — Forward Camera (Christmas / Santa Village / F1 Track) · MIT</title>
+<title>Kart 3D — Santa Village Night (Cinematic++ · Drift++) · MIT</title>
 <style>
-  html,body{height:100%;margin:0;background:#0a0d14;color:#e6edf3;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
-  .wrap{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr}
-  header{display:flex;gap:.75rem;align-items:center;padding:.75rem 1rem;background:#101726;border-bottom:1px solid #1e2940}
-  header h1{font-size:1rem;margin:0;font-weight:600;opacity:.95}
-  header .btn{background:#172033;border:1px solid #24324f;padding:.45rem .7rem;border-radius:.55rem;cursor:pointer;color:#e6edf3}
-  header .btn:hover{background:#1b2742}
-  header .sep{flex:1}
+  :root{
+    --bg:#02040a; --panel:#0f172a; --border:#1e2f50; --ink:#e6edf3;
+    --accent:#23a559; --blue:#2d7ff9; --white:#ffffff; --yellow:#ffd166; --red:#ff6b6b;
+    --glow-yellow:rgba(255,209,102,0.7); --glow-red:rgba(255,107,107,0.7);
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto;overflow:hidden;}
+  .wrap{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr;opacity:0;animation:fadeIn 1s 1s forwards;}
+  header{display:flex;gap:.6rem;align-items:center;padding:.6rem 1rem;background:var(--panel);color:#e6edf3;border-bottom:1px solid var(--border);user-select:none;}
+  header h1{font-size:1rem;margin:0 .4rem 0 0;font-weight:650}
+  .btn{background:#142042;border:1px solid var(--border);padding:.45rem .7rem;border-radius:.55rem;cursor:pointer;color:#e6edf3;transition:background .2s, transform .1s;}
+  .btn:hover{background:#1a2a59}
+  .btn:active{transform:scale(0.95);}
+  .sep{flex:1}
+  .hint{opacity:.9;font-size:.9rem}
   #app{position:relative}
   #app canvas{display:block;width:100%;height:100%}
-  .hint{opacity:.85;font-size:.9rem}
-  #test-badge{position:fixed;right:10px;bottom:10px;background:#102035;border:1px solid #21314f;padding:.35rem .55rem;border-radius:.55rem;font-size:.8rem;opacity:.9}
+  .bar{display:flex;align-items:center;gap:.5rem}
+  .bar label{display:inline-flex;align-items:center;gap:.35rem}
+  select,input[type="range"]{background:transparent;border:none;color:#e6edf3;outline:none}
+  input[type="range"]{accent-color:var(--accent)}
+  .hud{pointer-events:none;position:fixed;inset:0;user-select:none;}
+  .speed{position:absolute;right:18px;bottom:18px;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(120px 120px at 50% 50%,#10224a99,#0b1428cc);box-shadow:0 10px 30px rgba(0,0,0,.35);border:2px solid #1e2f50;color:#e6edf3;backdrop-filter:blur(8px);}
+  .speed .val{font-size:2.2rem;font-weight:800;text-shadow:0 0 10px #000;}
+  .speed .unit{font-size:.9rem;opacity:.8;margin-top:-6px}
+  .lap{position:absolute;right:190px;top:16px;font-weight:800;font-size:2rem;text-align:right;text-shadow:0 0 15px #000;}
+  .lap small{display:block;font-size:.85rem;opacity:.8}
+  .minimap{position:absolute;left:18px;bottom:18px;width:220px;height:160px;background:#0b1324cc;border:1px solid #1e2f50;border-radius:12px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(8px);}
+  .minimap canvas{width:100%;height:100%;display:block}
+  .boost{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;width:40vw;max-width:560px;height:12px;border-radius:12px;background:#0c1830;border:1px solid #1e2f50;overflow:hidden;box-shadow:0 0 15px rgba(0,0,0,.5);}
+  .boost .fill{height:100%;width:0%;background:linear-gradient(90deg,var(--yellow),var(--red));box-shadow:0 0 10px var(--glow-yellow), 0 0 20px var(--glow-red);transition:width .2s ease-out;}
+  .helper{position:absolute;left:50%;transform:translateX(-50%);bottom:44px;opacity:.85;font-size:.85rem;text-shadow:0 0 8px #000;}
+  #loader{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:100;transition:opacity .5s;color:#e6edf3;font-size:1.2rem;}
+  #preview-modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:90;display:none;place-items:center;opacity:0;transition:opacity .3s;}
+  .preview-content{background:var(--panel);border:1px solid var(--border);padding:1.5rem;border-radius:1rem;text-align:center;box-shadow:0 10px 40px #000;}
+  .preview-content h2{margin:0 0 1rem;font-size:1.2rem;font-weight:600;}
+  #track-preview-canvas{width:400px;height:300px;border-radius:.5rem;background:#050913;border:1px solid var(--border);margin-bottom:1rem;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 </style>
-<!--
-MIT License — Original code & procedural assets only (no third-party art). Commercial use allowed.
-This demo uses Three.js (MIT) via CDN.
--->
 </head>
 <body>
+
+<div id="loader">❄️ 로딩 중...</div>
+
+<div id="preview-modal">
+  <div class="preview-content">
+    <h2>새로운 트랙 미리보기</h2>
+    <canvas id="track-preview-canvas"></canvas>
+    <div>
+      <button id="confirm-regen" class="btn">이 트랙으로 결정</button>
+      <button id="cancel-regen" class="btn">취소</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
   <header>
-    <h1>3D Christmas Kart — Forward Cam (Santa Village · F1 Style)</h1>
-    <button id="regen" class="btn">트랙 재생성</button>
-    <button id="reset" class="btn">카트 리셋</button>
-    <label class="btn" title="화면 품질">
-      품질
-      <select id="quality" style="background:transparent;border:none;color:#e6edf3;outline:none;margin-left:.35rem">
-        <option value="high" selected>높음</option>
-        <option value="med">중간</option>
-        <option value="low">낮음</option>
-      </select>
-    </label>
+    <h1>Kart 3D — 산타 빌리지 나이트 (Cinematic++)</h1>
+    <div class="bar">
+      <button id="regen" class="btn">트랙 재생성</button>
+      <button id="reset" class="btn">카트 리셋</button>
+      <label class="btn">품질
+        <select id="quality"><option value="high" selected>높음</option><option value="med">중간</option><option value="low">낮음</option></select>
+      </label>
+      <label class="btn">폭 <input id="width" type="range" min="12" max="28" step="0.5" value="20" /> <span id="widthVal">20.0</span></label>
+      <label class="btn">테마
+        <select id="theme"><option value="aurora" selected>오로라 야경</option><option value="snowday">설경 낮</option><option value="sunset">선셋</option></select>
+      </label>
+    </div>
     <div class="sep"></div>
-    <div class="hint">조작: ↑ 가속 · ↓ 브레이크/후진 · ←/→ 조향 · Space 드리프트 · R 리셋 — 앞을 보는 3D 시점 / 산타마을 / 눈 / F1 트랙 질감</div>
+    <div class="hint">↑↓ 가속/브레이크 · ←→ 조향 · <b>A/D 차선</b> · Space 드리프트</div>
   </header>
   <div id="app"></div>
-  <div id="test-badge">Tests: running…</div>
+  <div class="hud">
+    <div class="speed"><div class="val" id="spdVal">0</div><div class="unit">km/h</div></div>
+    <div class="lap"><div id="lapVal">1/2 LAP</div><small id="lapTime">00:00.000</small></div>
+    <div class="minimap"><canvas id="mini"></canvas></div>
+    <div class="boost"><div class="fill" id="boostFill"></div></div>
+    <div class="helper">DRIFT: Space · BOOST 자동충전</div>
+  </div>
 </div>
 
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
+import { AfterimagePass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/AfterimagePass.js';
+import { GammaCorrectionShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/GammaCorrectionShader.js';
 
-// ===== Test/Debug helpers =====
-function setTestBadge(text, ok=true){
-  const el = document.getElementById('test-badge');
-  if(!el) return;
-  el.textContent = text;
-  el.style.borderColor = ok ? '#1f7a4c' : '#7a1f2a';
-  el.style.background = ok ? '#0f2a1f' : '#2a0f14';
-}
+const app=document.getElementById('app');
+let renderer,scene,camera,clock,composer,bloomPass,afterimagePass;
+let kart,wheels=[],camRig,lookTarget,smokePool=[],sparkPool=[];
+let trackCurve,trackMesh,trackWidth=20,trackLength=1000,trackFrames=[];
+let edgeLines,centerDashes,curbs,barriers,lamps;
+let ground,skyDome,stars,mountains,pines=new THREE.Group(),village=new THREE.Group(),snow;
+const keys={up:false,down:false,left:false,right:false,strafeL:false,strafeR:false,drift:false}
+const state={seed:(Math.random()*1e9)>>>0,v:0,s:0.01,lateral:0,yaw:0,driftAng:0,pos:new THREE.Vector3(),laps:0,maxLaps:2,lastLapCross:0,boost:0,
+  params:{accel:50,brake:58,maxV:90,drag:0.992,steerLane:14.5,driftGrip:0.35,laneFriction:8.5}}
 
-// Prefer THREE.MathUtils.wrap if available; fallback to manual wrap
-const wrap = (typeof THREE.MathUtils.wrap === 'function')
-  ? THREE.MathUtils.wrap
-  : (x, min, max) => { const r = max - min; return ((x - min) % r + r) % r + min; };
-
-// ===== Globals =====
-const app = document.getElementById('app');
-let renderer, scene, camera, clock;
-let kart, kartBody, wheels = [], camRig, lookTarget;
-let trackCurve, trackMesh, trackWidth = 12; // F1 wider
-let edgeLines, curbs; // instanced visuals
-let ground, pines = new THREE.Group(), snow, village = new THREE.Group();
-const keys = {up:false,down:false,left:false,right:false,drift:false};
-const animActors = [];
-
-// Height profile for hills
-let heightParams = { a1:8, a2:4, p1:Math.random(), p2:Math.random() };
-const heightAt = t => (
-  Math.sin((t+heightParams.p1)*Math.PI*2)*heightParams.a1 +
-  Math.sin((t+heightParams.p2)*Math.PI*4)*heightParams.a2
-);
-
-// Kart state (arcade physics, XZ plane with Y from height profile)
-const state = {
-  seed: (Math.random()*1e9)>>>0,
-  v: 0,
-  yaw: 0,
-  pos: new THREE.Vector3(),
-  params: {
-    accel: 38,
-    brake: 46,
-    maxV: 64,
-    drag: 0.992,
-    steerAt0: 2.9,
-    steerAtMax: 0.9,
-    grip: 10.5,
-    driftGrip: 4.0
-  }
-};
-
-// ===== Init =====
+// --- 1. 초기화 및 씬 설정 ---
 function init(){
-  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
-  renderer.setSize(app.clientWidth, app.clientHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.setSize(app.clientWidth,app.clientHeight);
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.1;
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   app.appendChild(renderer.domElement);
 
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0a0d14');
+  scene=new THREE.Scene();
+  scene.fog=new THREE.FogExp2('#0a1429',0.00025);
+  camera=new THREE.PerspectiveCamera(65,app.clientWidth/app.clientHeight,0.1,6000);
+  clock=new THREE.Clock();
 
-  camera = new THREE.PerspectiveCamera(65, app.clientWidth/app.clientHeight, 0.1, 4000);
-  clock = new THREE.Clock();
+  const hemi=new THREE.HemisphereLight('#bfe3ff','#0c1830',0.8);scene.add(hemi);
+  const dir=new THREE.DirectionalLight('#ffffff',1.2);dir.position.set(160,200,120);dir.castShadow=true;dir.shadow.mapSize.set(2048,2048);Object.assign(dir.shadow.camera,{left:-600,right:600,top:600,bottom:-600,near:1,far:1800});scene.add(dir);
 
-  // Lights
-  const hemi = new THREE.HemisphereLight('#9ecfff', '#0b1a2a', 0.9); scene.add(hemi);
-  const dir = new THREE.DirectionalLight('#d6e6ff', 1.05); dir.position.set(120,160,80); dir.castShadow = true;
-  dir.shadow.mapSize.set(2048,2048); Object.assign(dir.shadow.camera,{left:-400,right:400,top:400,bottom:-400,near:1,far:1000}); scene.add(dir);
+  buildSky('aurora');buildStars(true);buildMountains(state.seed);
+  const groundGeo=new THREE.PlaneGeometry(14000,14000),groundMat=new THREE.MeshStandardMaterial({color:'#f1f6ff',roughness:0.98});
+  ground=new THREE.Mesh(groundGeo,groundMat);ground.rotation.x=-Math.PI/2;ground.position.y=-6;ground.receiveShadow=true;scene.add(ground);
 
-  // Ground (snow)
-  const groundGeo = new THREE.PlaneGeometry(8000, 8000, 1, 1);
-  const groundMat = new THREE.MeshStandardMaterial({ color:'#f1f8ff', roughness:0.92, metalness:0.0 });
-  ground = new THREE.Mesh(groundGeo, groundMat); ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+  rebuildTrack(state.seed);buildPines(state.seed);buildVillage(state.seed);scene.add(pines);scene.add(village);
+  buildKart();buildLamps();
+  camRig=new THREE.Object3D();lookTarget=new THREE.Object3D();scene.add(camRig);scene.add(lookTarget);
+  buildSnow(10000);
 
-  // Build world
-  rebuildTrack(state.seed);
-  buildPines(state.seed);
-  buildVillage(state.seed);
-  scene.add(pines);
-  scene.add(village);
+  setupPostProcessing();
+  setupEventListeners();
 
-  buildKart();
+  document.getElementById('loader').style.opacity='0';
+  document.querySelector('.wrap').style.opacity='1';
 
-  // Camera rig (forward-looking)
-  camRig = new THREE.Object3D();
-  lookTarget = new THREE.Object3D();
-  scene.add(camRig); scene.add(lookTarget);
-
-  buildSnow(1000); // lighter snowfall
-
-  window.addEventListener('resize', onResize);
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-
-  animate();
+  animate()
 }
 
-// ===== Random & helpers =====
-function srand(seed){ return function(){ seed^=seed<<13; seed^=seed>>>17; seed^=seed<<5; return (seed>>>0)/0xFFFFFFFF; }; }
+// --- 2. 포스트 프로세싱 (그래픽 품질 향상) ---
+function setupPostProcessing(){
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
 
-// Compute signed curvature in XZ at t
-function curvatureAt(t){
-  const eps = 1/1000; const t0 = Math.max(0, t-eps), t1 = Math.min(1, t+eps);
-  const a = trackCurve.getTangentAt(t0); const b = trackCurve.getTangentAt(t1);
-  const angA = Math.atan2(a.x, a.z); const angB = Math.atan2(b.x, b.z);
-  return wrap(angB-angA, -Math.PI, Math.PI) / (t1 - t0);
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.4, 0.85);
+    composer.addPass(bloomPass);
+
+    afterimagePass = new AfterimagePass(0.92);
+    afterimagePass.enabled = false;
+    composer.addPass(afterimagePass);
+
+    const vignetteShader = {
+        uniforms: { 'tDiffuse': { value: null }, 'darkness': { value: 1.1 }, 'offset': { value: 1.1 } },
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform sampler2D tDiffuse; uniform float darkness; uniform float offset; varying vec2 vUv;
+        void main() {
+            vec4 texel = texture2D(tDiffuse, vUv);
+            vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
+            gl_FragColor = vec4(mix(texel.rgb, vec3(0.0), dot(uv, uv) * darkness), texel.a);
+        }`
+    };
+    const vignettePass = new ShaderPass(vignetteShader);
+    composer.addPass(vignettePass);
+    composer.addPass(new ShaderPass(GammaCorrectionShader));
 }
 
-// Find nearest curve t for XZ point
-function nearestT(pos){
-  let minD2 = Infinity, bestT = 0; const S = 300;
-  for(let i=0;i<S;i++){
-    const t = i/(S-1), p = trackCurve.getPointAt(t);
-    const dx = pos.x - p.x, dz = pos.z - p.z; const d2 = dx*dx+dz*dz;
-    if(d2<minD2){ minD2=d2; bestT=t; }
-  }
-  return bestT;
-}
 
-// ===== Track generation =====
+// --- 3. 트랙 생성 (코너 뱅킹 추가) ---
 function rebuildTrack(seed){
-  // dispose prior
-  if(trackMesh){ scene.remove(trackMesh); trackMesh.geometry.dispose(); trackMesh.material.dispose(); trackMesh=null; }
-  if(edgeLines){ scene.remove(edgeLines); edgeLines.geometry.dispose(); edgeLines.material.dispose(); edgeLines=null; }
-  if(curbs){ scene.remove(curbs); curbs.geometry.dispose(); curbs.material.dispose(); curbs=null; }
+  [trackMesh,edgeLines,centerDashes,curbs,barriers,lamps]?.forEach(x=>{if(x){scene.remove(x);x.geometry?.dispose?.();x.material?.dispose?.();if(x.children)x.children.forEach(c=>{c.geometry?.dispose?.();c.material?.dispose?.()})}})
+  const rnd=x=>((seed=Math.imul(1664525,seed)+1013904223)>>>0)/4294967295;
+  const heightParams={base:10,a1:7.5+rnd()*4,a2:3.5+rnd()*2,p1:rnd(),p2:rnd()}
+  const heightAt=t=>heightParams.base+Math.sin((t+heightParams.p1)*Math.PI*2)*heightParams.a1+Math.sin((t+heightParams.p2)*Math.PI*4)*heightParams.a2
 
-  const rnd = srand(seed);
-  heightParams = { a1: 8+rnd()*4, a2: 4+rnd()*2, p1: rnd(), p2: rnd() };
+  const k=16,radius=240;const pts=[];for(let i=0;i<k;i++){const ang=i/k*Math.PI*2;let r=radius*(0.8+rnd()*0.42);if(i%8===0)r*=0.72;if(i%8===1)r*=0.9;pts.push(new THREE.Vector3(Math.cos(ang)*r,0,Math.sin(ang)*r))}
+  trackCurve=new THREE.CatmullRomCurve3(pts,true,'catmullrom',0.08);
 
-  // Curvier control points for drift corners & a chicane
-  const k=12, radius=180; const pts=[];
-  for(let i=0;i<k;i++){
-    const ang = i/k * Math.PI*2;
-    let rj = radius*(0.72 + rnd()*0.55);
-    // inject chicane-like S offset on two opposite sectors
-    if(i%6===0) rj *= 0.72; if(i%6===1) rj *= 0.88;
-    const x = Math.cos(ang)*rj; const z = Math.sin(ang)*rj;
-    pts.push(new THREE.Vector3(x,0,z));
-  }
-  trackCurve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.08);
+  const segs=2200,half=trackWidth*0.5;const pos=[],uvs=[],idx=[];
+  trackFrames = trackCurve.computeFrenetFrames(segs, true).binormals.map((b,i) => ({
+      pos: trackCurve.getPointAt(i/segs),
+      tan: trackCurve.getTangentAt(i/segs),
+      nor: trackCurve.computeFrenetFrames(segs, true).normals[i],
+      bin: b
+  }));
+  trackFrames.forEach((f,i) => f.pos.y = heightAt(i/segs));
 
-  // Build F1-like ribbon with elevation + camber (banking)
-  const segs = 1500; const halfW = trackWidth*0.5; const pos = []; const uvs=[]; const idx=[];
-  const centers = []; const tangents = []; const cambers = [];
   for(let i=0;i<=segs;i++){
-    const t = i/segs;
-    const center = trackCurve.getPointAt(t);
-    center.y = heightAt(t);
-    const tan = trackCurve.getTangentAt(t); // could have y, but use XZ for left
-    const tanXZ = new THREE.Vector3(tan.x, 0, tan.z).normalize();
-    const left = new THREE.Vector3(-tanXZ.z, 0, tanXZ.x).normalize();
-
-    // Camber from curvature sign
-    const kappa = curvatureAt(t);
-    const bank = THREE.MathUtils.clamp(kappa*0.02, -0.35, 0.35); // radians (~±20° max)
-    const up = new THREE.Vector3(0,1,0);
-    const L = new THREE.Vector3().copy(center).addScaledVector(left,  halfW).addScaledVector(up, Math.sin(bank)*0.2);
-    const R = new THREE.Vector3().copy(center).addScaledVector(left, -halfW).addScaledVector(up, -Math.sin(bank)*0.2);
-
-    pos.push(L.x, L.y, L.z,  R.x, R.y, R.z);
-    uvs.push(0, t*30, 1, t*30);
-    if(i>0){ const vi=i*2; idx.push(vi-2,vi-1,vi,  vi-1,vi+1,vi); }
-
-    centers.push(center); tangents.push(tanXZ); cambers.push(bank);
+    const t=i/segs;
+    const {pos:c, tan, nor} = trackFrames[i%segs];
+    const curvature = Math.abs(getCurvature(t, 1/segs));
+    const bankAngle = Math.min(0.5, curvature * 0.03) * Math.sign(getCurvature(t, 1/segs));
+    const upVec = new THREE.Vector3(0,1,0).applyAxisAngle(tan, -bankAngle).normalize();
+    const left = new THREE.Vector3().crossVectors(tan, upVec).normalize();
+    
+    const L=new THREE.Vector3().copy(c).addScaledVector(left,half),R=new THREE.Vector3().copy(c).addScaledVector(left,-half);
+    pos.push(L.x,L.y,L.z,R.x,R.y,R.z);uvs.push(0,t*42,1,t*42);if(i>0){const vi=i*2;idx.push(vi-2,vi-1,vi,vi-1,vi+1,vi)}
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos),3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uvs),2));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(pos),3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(uvs),2));geo.setIndex(idx);geo.computeVertexNormals();
+  const asphalt=new THREE.MeshStandardMaterial({color:'#4a515e', roughness: 0.8, metalness: 0.1});
+  trackMesh=new THREE.Mesh(geo,asphalt);trackMesh.receiveShadow=true;scene.add(trackMesh);
+  trackLength=trackCurve.getLength();
 
-  // Asphalt w/ darker tone to separate from snow
-  const asphalt = new THREE.MeshStandardMaterial({ color:'#1f262e', roughness:0.98, metalness:0.0 });
-  trackMesh = new THREE.Mesh(geo, asphalt); trackMesh.receiveShadow = true; scene.add(trackMesh);
-
-  // Edge white lines (instanced)
-  const lineMat = new THREE.MeshBasicMaterial({ color:'#ffffff' });
-  const lineGeo = new THREE.PlaneGeometry(0.16, 2);
-  edgeLines = new THREE.InstancedMesh(lineGeo, lineMat, 500);
-  let j=0; const step = Math.max(6, Math.floor(segs/200));
-  for(let i=0;i<segs && j<500; i+=step){
-    const t = i/segs; const c = centers[i]; const left = new THREE.Vector3(-tangents[i].z,0,tangents[i].x).normalize();
-    const edge = new THREE.Object3D(); edge.position.copy(c).addScaledVector(left, halfW*0.98); edge.position.y += Math.sin(cambers[i])*0.02;
-    edge.rotation.x = -Math.PI/2; edge.rotation.z = Math.atan2(tangents[i].x, tangents[i].z);
-    edge.updateMatrix(); edgeLines.setMatrixAt(j++, edge.matrix);
-  }
-  edgeLines.instanceMatrix.needsUpdate = true; scene.add(edgeLines);
-
-  // Inside curbs (red/white) on tighter corners
-  const curbGeo = new THREE.BoxGeometry(0.35, 0.12, 1.4);
-  const curbMat = new THREE.MeshStandardMaterial({ color:'#ff3748', roughness:0.6, metalness:0.0 });
-  curbs = new THREE.InstancedMesh(curbGeo, curbMat, 600);
-  let cIdx=0; const curvThresh = 18; // threshold for "corner"
-  for(let i=2;i<segs-2 && cIdx<600; i+=3){
-    const t = i/segs; const kappa = Math.abs(curvatureAt(t));
-    if(kappa>curvThresh){
-      const turn = Math.sign(curvatureAt(t)); // + left, - right
-      const c = centers[i]; const left = new THREE.Vector3(-tangents[i].z,0,tangents[i].x).normalize();
-      const insideDir = (turn>0? left : left.multiplyScalar(-1));
-      const pos3 = new THREE.Object3D();
-      pos3.position.copy(c).addScaledVector(insideDir, halfW*0.95);
-      pos3.position.y += 0.06 + Math.sin(cambers[i])*0.02;
-      pos3.rotation.y = Math.atan2(tangents[i].x, tangents[i].z);
-      pos3.updateMatrix(); curbs.setMatrixAt(cIdx++, pos3.matrix);
-    }
-  }
-  curbs.instanceMatrix.needsUpdate = true; scene.add(curbs);
+  // 트랙 디테일 생성 (기존 코드와 유사)
+  const centers = trackFrames.map(f => f.pos);
+  const tangents = trackFrames.map(f => f.tan);
+  const edgeGeo=new THREE.PlaneGeometry(0.26,2.2),edgeMat=new THREE.MeshBasicMaterial({color:'#ffffff'});
+  edgeLines=new THREE.InstancedMesh(edgeGeo,edgeMat,1000)
+  let j=0;for(let i=0;i<segs&&j<1000;i+=Math.max(4,Math.floor(segs/240))){const c=centers[i];const rot=Math.atan2(tangents[i].x,tangents[i].z);const o=new THREE.Object3D();o.position.copy(c);o.position.y+=0.07;o.rotation.set(-Math.PI/2,0,rot);o.updateMatrix();edgeLines.setMatrixAt(j++,o.matrix)}edgeLines.instanceMatrix.needsUpdate=true;scene.add(edgeLines);
+  const dGeo=new THREE.PlaneGeometry(0.34,2.4),dMat=new THREE.MeshBasicMaterial({color:'#ffd166'});centerDashes=new THREE.InstancedMesh(dGeo,dMat,1300);let di=0;for(let i=0;i<segs&&di<1300;i+=Math.max(6,Math.floor(segs/220))){const c=centers[i];const rot=Math.atan2(tangents[i].x,tangents[i].z);const o=new THREE.Object3D();o.position.copy(c);o.position.y+=0.075;o.rotation.set(-Math.PI/2,0,rot);o.updateMatrix();centerDashes.setMatrixAt(di++,o.matrix)}centerDashes.instanceMatrix.needsUpdate=true;scene.add(centerDashes);
+  barriers=new THREE.Group();const bGeo=new THREE.BoxGeometry(0.8,0.6,1.6);const bBlue=new THREE.MeshStandardMaterial({color:'#2d7ff9',emissive:0x0a1a3a,emissiveIntensity:0.25});const bWhite=new THREE.MeshStandardMaterial({color:'#eaf2ff'});for(let i=0;i<segs;i+=Math.max(6,Math.floor(segs/160))){const c=centers[i];const left=new THREE.Vector3(-tangents[i].z,0,tangents[i].x).normalize();for(const s of[-1,1]){const m=new THREE.Mesh(bGeo,((i/6)&1)?bBlue:bWhite);m.position.copy(c).addScaledVector(left,s*(trackWidth*0.5+0.9));m.position.y=c.y+0.3;m.rotation.y=Math.atan2(tangents[i].x,tangents[i].z);m.castShadow=true;barriers.add(m)}}scene.add(barriers);
 }
+const wrap=(x,min,max)=>{const r=max-min;return((x-min)%r+r)%r+min};
+function getCurvature(t,eps=1e-4){const t1=t-eps,t2=t+eps;const p1=trackCurve.getTangentAt(t1),p2=trackCurve.getTangentAt(t2);return(p2.clone().sub(p1).length()/(eps*2))}
 
-// ===== Pines & Village (unchanged visuals) =====
-function buildPines(seed){
-  pines.clear(); const rnd = srand(seed^0x9e3779b9);
-  for(let i=0;i<420;i++){
-    const r = 700 + rnd()*1400; const th = rnd()*Math.PI*2;
-    const x = Math.cos(th)*r, z = Math.sin(th)*r;
-    const h = 8 + rnd()*24; const rBase = h*0.35;
-    const geo = new THREE.ConeGeometry(rBase, h, 8);
-    const mat = new THREE.MeshStandardMaterial({ color: (rnd()<0.5?'#0b3a2a':'#115b40'), roughness:0.95 });
-    const cone = new THREE.Mesh(geo, mat);
-    cone.position.set(x, h*0.5-0.5, z);
-    cone.castShadow = true; cone.receiveShadow = true;
-    pines.add(cone);
-  }
-}
-
-function buildVillage(seed){
-  village.clear(); animActors.length = 0; const rnd = srand(seed^0x51633); const count = 16;
-  for(let n=0;n<count;n++){
-    const t = n/count; const p = trackCurve.getPointAt(t); p.y=heightAt(t);
-    const tan = trackCurve.getTangentAt(t); const left = new THREE.Vector3(-tan.z,0,tan.x).normalize();
-    const side = (n%2===0?1:-1); const base = new THREE.Vector3().copy(p).addScaledVector(left, side*(trackWidth*2.0 + 8 + rnd()*10)); base.y = 0;
-    const choice = rnd(); if(choice < 0.2) village.add(makeSanta(base, rnd)); else if(choice < 0.55) village.add(makeSnowman(base, rnd)); else village.add(makeCabin(base, rnd));
-  }
-}
-
-function makeCabin(pos, rnd){
-  const g = new THREE.Group(); g.position.copy(pos);
-  const w = 6+rnd()*4, d=6+rnd()*4, h=3.2+rnd()*1.2;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({ color:'#8b5a3c', roughness:0.9 }));
-  body.position.y = h/2; body.castShadow = true; body.receiveShadow = true; g.add(body);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.72, 3.4, 4), new THREE.MeshStandardMaterial({ color:'#b91c1c', roughness:0.8 }));
-  roof.position.y = h+1.2; roof.rotation.y = Math.PI/4; roof.castShadow=true; g.add(roof);
-  const lightMat = new THREE.MeshBasicMaterial({ color:'#ffd166' });
-  const dot = new THREE.Mesh(new THREE.PlaneGeometry(0.18,0.18), lightMat);
-  for(let i=0;i<12;i++){ const d2 = dot.clone(); d2.position.set((i-6)*(w/12), h+0.5, d/2+0.05); d2.rotation.x=-Math.PI/2; g.add(d2); }
-  return g;
-}
-
-function makeSnowman(pos, rnd){
-  const g = new THREE.Group(); g.position.copy(pos);
-  const matSnow = new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:0.7 });
-  const b = new THREE.Mesh(new THREE.SphereGeometry(1.4,16,16), matSnow); b.position.y=1.4; g.add(b);
-  const m = new THREE.Mesh(new THREE.SphereGeometry(1.0,16,16), matSnow); m.position.y=2.8; g.add(m);
-  const h = new THREE.Mesh(new THREE.SphereGeometry(0.7,16,16), matSnow); h.position.y=3.8; g.add(h);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.15,0.6,12), new THREE.MeshStandardMaterial({ color:'#ff7f50'})); nose.position.set(0, 3.8, 0.7); nose.rotation.x=Math.PI/2; g.add(nose);
-  const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.08,16), new THREE.MeshStandardMaterial({ color:'#111827'})); hatBrim.position.y=4.25; g.add(hatBrim);
-  const hatTop = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.6,16), new THREE.MeshStandardMaterial({ color:'#111827'})); hatTop.position.y=4.65; g.add(hatTop);
-  return g;
-}
-
-function makeSanta(pos, rnd){
-  const g = new THREE.Group(); g.position.copy(pos);
-  const sleigh = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.4,1.2), new THREE.MeshStandardMaterial({ color:'#a11d2f', roughness:0.6 })); sleigh.position.y=0.25; sleigh.castShadow=true; g.add(sleigh);
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.8,16,16), new THREE.MeshStandardMaterial({ color:'#d72638', roughness:0.7 })); body.position.y=1.4; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.45,16,16), new THREE.MeshStandardMaterial({ color:'#ffe0bd', roughness:0.8 })); head.position.y=2.2; g.add(head);
-  const beard = new THREE.Mesh(new THREE.SphereGeometry(0.5,16,16), new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:0.5 })); beard.scale.set(1,0.6,0.4); beard.position.set(0,1.9,0.32); g.add(beard);
-  const hat = new THREE.Mesh(new THREE.ConeGeometry(0.5,0.9,16), new THREE.MeshStandardMaterial({ color:'#b91c1c', roughness:0.7 })); hat.position.y=2.6; hat.rotation.z=0.2; g.add(hat);
-  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.12,12,12), new THREE.MeshStandardMaterial({ color:'#ffffff'})); pom.position.set(Math.sin(0.2)*0.5,2.6+Math.cos(0.2)*0.9,0); g.add(pom);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.7,0.2), new THREE.MeshStandardMaterial({ color:'#d72638'})); arm.position.set(0.65,1.6,0); arm.rotation.z=0.4; g.add(arm);
-  animActors.push((t)=>{ arm.rotation.z = 0.4 + Math.sin(t*2.0)*0.35; });
-  return g;
-}
-
-// ===== Kart =====
+// --- 4. 카트 및 VFX (조명, 스파크) ---
 function buildKart(){
-  kart = new THREE.Group();
-  const bodyGeo = new THREE.BoxGeometry(2.4, 0.7, 3.2);
-  const bodyMat = new THREE.MeshStandardMaterial({ color:'#d72638', roughness:0.6, metalness:0.1 });
-  kartBody = new THREE.Mesh(bodyGeo, bodyMat); kartBody.castShadow = true; kartBody.receiveShadow = true; kart.add(kartBody);
-  const stripeGeo = new THREE.BoxGeometry(0.15, 0.72, 3.2);
-  for(let i=-2;i<=2;i++){ const s = new THREE.Mesh(stripeGeo, new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:0.4 })); s.position.x = i*0.45; kart.add(s); }
-  wheels = [];
-  function wheel(x,z){ const g = new THREE.CylinderGeometry(0.45,0.45,0.35,16); const m = new THREE.MeshStandardMaterial({ color:'#0f172a', roughness:0.4 }); const w = new THREE.Mesh(g,m); w.rotation.z = Math.PI/2; w.castShadow=true; w.receiveShadow=true; w.position.set(x, -0.25, z); kart.add(w); wheels.push(w);}  
-  wheel(-0.9,-1.2); wheel(0.9,-1.2); wheel(-0.9,1.2); wheel(0.9,1.2);
-  scene.add(kart);
-  placeKartAtStart();
+  kart=new THREE.Group();
+  const bodyMat=new THREE.MeshStandardMaterial({color:'#ff2f5a',roughness:0.3,metalness:0.3});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.7,3.4),bodyMat);body.castShadow=true;kart.add(body);
+  const spoiler=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,0.6),bodyMat);spoiler.position.set(0,0.6,-1.9);kart.add(spoiler);
+  
+  function wheel(x,z){const w=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.48,0.36,16),new THREE.MeshStandardMaterial({color:'#0f172a'}));w.rotation.z=Math.PI/2;w.position.set(x,-0.25,z);w.castShadow=true;wheels.push(w);kart.add(w)}wheel(-1.3,-1.25);wheel(1.3,-1.25);wheel(-1.3,1.25);wheel(1.3,1.25);
+  
+  const headLight = (s) => { const l=new THREE.SpotLight(0xffffff, 15, 20, Math.PI/6, 0.4); l.position.set(s*0.8, 0.1, 1.7); l.target.position.set(s*0.8, -0.5, 10); kart.add(l); kart.add(l.target); }; headLight(1); headLight(-1);
+  const tailLight = (s) => { const l=new THREE.PointLight(0xff0000, 0, 4); l.position.set(s*0.9, 0, -1.75); l.castShadow=false; kart.add(l); }; tailLight(1); tailLight(-1);
+
+  const smokeMat=new THREE.MeshBasicMaterial({color:'#eaf2ff',transparent:true,opacity:0.9});for(let i=0;i<70;i++){const p=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.6),smokeMat.clone());p.rotation.x=-Math.PI/2;p.visible=false;scene.add(p);smokePool.push(p)}
+  const sparkMat=new THREE.MeshBasicMaterial({color:'#ffd166',transparent:true,opacity:1,blending:THREE.AdditiveBlending});for(let i=0;i<100;i++){const p=new THREE.Mesh(new THREE.PlaneGeometry(0.05,0.3),sparkMat);p.visible=false;scene.add(p);sparkPool.push(p)}
+  scene.add(kart);placeKartAtStart();
+}
+function placeKartAtStart(){state.s=0.01;state.lateral=0;state.v=0;state.driftAng=0;state.lastLapCross=performance.now();state.laps=0;syncFromTrack()}
+function syncFromTrack(){
+  const t = THREE.MathUtils.mapLinear(state.s, 0, 1, 0, trackFrames.length - 1);
+  const frameIdx = Math.floor(t);
+  const subT = t - frameIdx;
+  const frameA = trackFrames[frameIdx];
+  const frameB = trackFrames[(frameIdx + 1) % trackFrames.length];
+
+  const pos = new THREE.Vector3().lerpVectors(frameA.pos, frameB.pos, subT);
+  const tan = new THREE.Vector3().lerpVectors(frameA.tan, frameB.tan, subT).normalize();
+  const nor = new THREE.Vector3().lerpVectors(frameA.nor, frameB.nor, subT).normalize();
+
+  const up = new THREE.Vector3().copy(nor);
+  const left = new THREE.Vector3().crossVectors(up, tan).normalize();
+  
+  state.pos.copy(pos).addScaledVector(left, state.lateral);
+  kart.position.copy(state.pos);
+  const lookAtPos = kart.position.clone().add(tan);
+  kart.up.copy(up);
+  kart.lookAt(lookAtPos);
+  kart.rotateZ(state.driftAng);
+}
+function spawnSmoke(){const p=smokePool.find(s=>!s.visible);if(!p)return;p.visible=true;p.position.set(state.pos.x,state.pos.y+0.1,state.pos.z);p.scale.set(0.6,0.6,0.6);p.material.opacity=0.8;p.life=0.55}
+function updateSmoke(dt){for(const p of smokePool){if(!p.visible)continue;p.life-=dt;p.scale.multiplyScalar(1+1.9*dt);p.material.opacity=Math.max(0,p.life*1.6);if(p.life<=0)p.visible=false}}
+function spawnSpark(){const s=sparkPool.find(sp=>!sp.visible);if(!s)return;s.visible=true;const side=Math.random()>0.5?1:-1;s.position.copy(kart.localToWorld(new THREE.Vector3(side*1.3,-0.2,-1.2)));s.vel=new THREE.Vector3(-Math.sin(state.yaw+state.driftAng)+Math.random()*0.4-0.2,Math.random()*0.8+0.4,-Math.cos(state.yaw+state.driftAng)+Math.random()*0.4-0.2).multiplyScalar(8);s.life=0.2}
+function updateSparks(dt){for(const s of sparkPool){if(!s.visible)continue;s.life-=dt;s.vel.y-=12*dt;s.position.addScaledVector(s.vel,dt);s.material.opacity=s.life/0.2;if(s.life<=0)s.visible=false}}
+
+// --- 5. 게임 로직 및 업데이트 ---
+function update(dt){
+  const P=state.params;const accel=(keys.up?P.accel:0)+(keys.down?-P.brake:0);state.v+=accel*dt;state.v=THREE.MathUtils.clamp(state.v,0,P.maxV);state.v*=Math.pow(P.drag,dt*60)
+  state.s=wrap(state.s+(state.v*dt)/trackLength,0,1)
+  let laneInput=(keys.right?1:0)+(keys.left?-1:0)+(keys.strafeR?1:0)+(keys.strafeL?-1:0)
+  const laneSpeed=keys.drift?P.steerLane*2.0:P.steerLane
+  state.lateral+=laneInput*laneSpeed*dt;
+  const maxLat=trackWidth*0.5*0.88
+  state.lateral=THREE.MathUtils.clamp(state.lateral,-maxLat,maxLat)
+  const targetAng=(keys.drift?THREE.MathUtils.clamp(laneInput*0.6,-0.65,0.65):0)
+  const angLerp=keys.drift?1-Math.pow(0.001,dt):1-Math.pow(0.05,dt)
+  state.driftAng+=(targetAng-state.driftAng)*angLerp
+  if(keys.drift){state.v+=7*dt;if(Math.random()<0.7)spawnSmoke();if(Math.random()<0.9)spawnSpark()}
+  state.boost=THREE.MathUtils.clamp(state.boost+(keys.drift?0.65:0.27)*dt,0,1)
+  if(keys.drift&&state.boost>0.1){state.v+=12*dt;state.boost=Math.max(0,state.boost-0.25*dt)}
+  if(state.s<0.02&&(performance.now()-state.lastLapCross)>2000){state.laps=Math.min(state.maxLaps,state.laps+1);state.lastLapCross=performance.now()}
+  
+  updateSnow(dt);updateSmoke(dt);updateSparks(dt);syncFromTrack();
+
+  kart.children.forEach(c => { if(c instanceof THREE.PointLight) c.intensity = keys.down ? 15 : 0; });
+  afterimagePass.enabled = state.v > P.maxV * 0.8;
+  afterimagePass.uniforms.damp.value = 0.94 - (state.v / P.maxV) * 0.1;
 }
 
-function placeKartAtStart(){
-  const t = 0.01; const p = trackCurve.getPointAt(t); const tan = trackCurve.getTangentAt(t);
-  state.pos.copy(p); state.pos.y = heightAt(t) + 0.05; state.yaw = Math.atan2(tan.x, tan.z); state.v = 0; syncKartTransform();
-}
-
-function syncKartTransform(){ kart.position.copy(state.pos); kart.rotation.set(0, state.yaw, 0); }
-
-// ===== Snow =====
-function buildSnow(count=1000){
-  if(snow){ scene.remove(snow); snow.geometry.dispose(); snow.material.dispose(); }
-  const geo = new THREE.BufferGeometry(); const pos = new Float32Array(count*3);
-  for(let i=0;i<count;i++){ pos[i*3+0] = (Math.random()-0.5)*3000; pos[i*3+1] = Math.random()*140 + 20; pos[i*3+2] = (Math.random()-0.5)*3000; }
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
-  const mat = new THREE.PointsMaterial({ color: '#ffffff', size: 0.6, sizeAttenuation: true, transparent:true, opacity:0.8 });
-  snow = new THREE.Points(geo, mat); scene.add(snow);
-}
-
-// ===== Controls =====
-function onKeyDown(e){ if(e.repeat) return; if(e.code==='ArrowUp') keys.up=true; if(e.code==='ArrowDown') keys.down=true; if(e.code==='ArrowLeft') keys.left=true; if(e.code==='ArrowRight') keys.right=true; if(e.code==='Space') keys.drift=true; if(e.code==='KeyR') placeKartAtStart(); }
-function onKeyUp(e){ if(e.code==='ArrowUp') keys.up=false; if(e.code==='ArrowDown') keys.down=false; if(e.code==='ArrowLeft') keys.left=false; if(e.code==='ArrowRight') keys.right=false; if(e.code==='Space') keys.drift=false; }
-
-// ===== Update / Physics =====
-function update(dt, t){
-  const P = state.params; 
-  const accel = (keys.up?P.accel:0) + (keys.down?-P.brake:0);
-  state.v += accel*dt; state.v = THREE.MathUtils.clamp(state.v, -P.maxV*0.4, P.maxV);
-  state.v *= Math.pow(P.drag, dt*60);
-
-  const sp = Math.abs(state.v)/P.maxV; const steerRate = P.steerAt0*(1-sp)+P.steerAtMax*sp;
-  const steerInput = (keys.left?-1:0)+(keys.right?1:0);
-  state.yaw += steerInput * steerRate * dt * Math.sign(Math.max(0.001,state.v));
-
-  // advance position in XZ
-  state.pos.x += Math.sin(state.yaw) * state.v * dt;
-  state.pos.z += Math.cos(state.yaw) * state.v * dt;
-
-  // project to road height & apply off-road slowdown
-  const tParam = nearestT(state.pos);
-  state.pos.y = heightAt(tParam) + 0.05;
-  const onRoad = (function(){
-    const p = trackCurve.getPointAt(tParam); const dx = state.pos.x - p.x, dz = state.pos.z - p.z; return Math.hypot(dx,dz) < (trackWidth*0.5*0.98);
-  })();
-  if(!onRoad){ state.v *= Math.pow(0.90, dt*60); }
-
-  // gentle auto-align to track direction (grip)
-  const tan = trackCurve.getTangentAt(tParam);
-  const targetYaw = Math.atan2(tan.x, tan.z);
-  const grip = keys.drift?P.driftGrip:P.grip;
-  let dy = wrap(targetYaw - state.yaw, -Math.PI, Math.PI);
-  state.yaw += THREE.MathUtils.clamp(dy, -grip*dt, grip*dt);
-
-  // Santa animations
-  for(const fn of animActors){ fn(t); }
-
-  syncKartTransform();
-}
-
-// Backward-compatible helpers still used by tests
-function isOnRoad(pos){
-  let minD2 = Infinity; const S = 200;
-  for(let i=0;i<S;i++){ const t = i/(S-1); const p = trackCurve.getPointAt(t); const dx = pos.x - p.x, dz = pos.z - p.z; const d2 = dx*dx + dz*dz; if(d2<minD2){ minD2=d2; } }
-  return Math.sqrt(minD2) < (trackWidth*0.5*0.98);
-}
-
-function nearestTangent(pos){
-  let minD2 = Infinity; let bestT = 0; const S = 200;
-  for(let i=0;i<S;i++){ const t = i/(S-1); const p = trackCurve.getPointAt(t); const dx = pos.x - p.x, dz = pos.z - p.z; const d2 = dx*dx+dz*dz; if(d2<minD2){ minD2=d2; bestT=t; } }
-  return trackCurve.getTangentAt(bestT);
-}
-
-// ===== Camera (forward-looking like KartRider) =====
+// --- 6. 카메라 로직 (기존과 유사, 부드럽게 조정) ---
+const UP=new THREE.Vector3(0,1,0);
 function updateCamera(dt){
-  const lookBase = 15; const lookSpeed = Math.max(0,state.v)*0.22; const lookDist = lookBase + lookSpeed;
-  const aheadXZ = new THREE.Vector3( state.pos.x + Math.sin(state.yaw)*lookDist, 0, state.pos.z + Math.cos(state.yaw)*lookDist );
-  const tAhead = nearestT(aheadXZ); const ahead = trackCurve.getPointAt(tAhead); ahead.y = heightAt(tAhead)+0.2;
-
-  const back = 7.2, height = 3.8; const desired = new THREE.Vector3( state.pos.x - Math.sin(state.yaw)*back, state.pos.y + height, state.pos.z - Math.cos(state.yaw)*back );
-  camRig.position.lerp(desired, 1 - Math.pow(0.001, dt));
-  lookTarget.position.lerp(ahead, 1 - Math.pow(0.0015, dt));
-  camera.position.copy(camRig.position); camera.lookAt(lookTarget.position);
+  const lookBase=17,lookSpeed=state.v*0.24,lookDist=lookBase+lookSpeed
+  const aheadS=wrap(state.s+lookDist/trackLength,0,1),aheadPt=trackCurve.getPointAt(aheadS);
+  aheadPt.y=trackFrames[Math.floor(aheadS * trackFrames.length)].pos.y + 0.2
+  
+  const back=7.8+Math.min(1,Math.abs(state.driftAng))*1.2
+  const tan = trackCurve.getTangentAt(state.s);
+  const desired=new THREE.Vector3().copy(kart.position).addScaledVector(tan, -back).add(new THREE.Vector3(0,4.2,0));
+  
+  const lerpA=1-Math.pow(0.0009,dt),lerpB=1-Math.pow(0.0013,dt)
+  camRig.position.lerp(desired,lerpA);lookTarget.position.lerp(aheadPt,lerpB)
+  camera.position.copy(camRig.position)
+  camera.lookAt(lookTarget.position);
 }
 
-// ===== Render loop =====
+// --- 7. 환경 요소 (하늘, 눈 등) ---
+function buildSky(kind){if(skyDome){scene.remove(skyDome);skyDome.geometry.dispose();skyDome.material.dispose()}const geo=new THREE.SphereGeometry(5000,32,16);let top,mid,bottom;if(kind==='snowday'){top='#b9deff';mid='#e6f2ff';bottom='#ffffff'}else if(kind==='sunset'){top='#0a0d1a';mid='#ff725e';bottom='#ffd1a8'}else{top='#0b1024';mid='#1a2e5e';bottom='#0a1628'}const mat=new THREE.ShaderMaterial({side:THREE.BackSide,uniforms:{topC:{value:new THREE.Color(top)},midC:{value:new THREE.Color(mid)},botC:{value:new THREE.Color(bottom)},time:{value:0}},vertexShader:`varying vec3 vPos;void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,fragmentShader:`varying vec3 vPos;uniform vec3 topC;uniform vec3 midC;uniform vec3 botC;uniform float time;float snoise(vec3 uv){float c=0.0;float a=0.5;for(int i=0;i<3;i++){uv=mod(uv,10.0)+time*0.1;c+=a*texture2D(vec2(fract(sin(dot(uv.xy,vec2(12.9898,78.233)))*43758.5453),fract(sin(dot(uv.yz,vec2(12.9898,78.233)))*43758.5453))).x;a*=0.5;uv*=2.0;}return c;}void main(){float h=normalize(vPos).y*0.5+0.5;vec3 col=mix(botC,midC,smoothstep(0.0,0.6,h));col=mix(col,topC,smoothstep(0.4,1.0,h));float aurora=pow(snoise(normalize(vPos)*3.0+time*0.05)*smoothstep(0.5,0.55,h),3.0)*0.5;col+=vec3(0.2,1.0,0.5)*aurora;gl_FragColor=vec4(col,1.0);}`});skyDome=new THREE.Mesh(geo,mat);scene.add(skyDome)}
+function updateSky(dt){if(skyDome) skyDome.material.uniforms.time.value += dt;}
+function buildSnow(n=10000){if(snow){scene.remove(snow);snow.geometry.dispose();snow.material.dispose()}const pos=new Float32Array(n*3),vel=new Float32Array(n);for(let i=0;i<n;i++){pos[i*3]=(Math.random()-0.5)*6000;pos[i*3+1]=Math.random()*260+90;pos[i*3+2]=(Math.random()-0.5)*6000;vel[i]=16+Math.random()*26}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('velocity',new THREE.Float32BufferAttribute(vel,1));const mat=new THREE.PointsMaterial({color:'#ffffff',size:1.1,sizeAttenuation:true,transparent:true,opacity:0.95});snow=new THREE.Points(geo,mat);scene.add(snow)}
+let windX=6,windZ=-3;function updateSnow(dt){if(!snow)return;const pos=snow.geometry.attributes.position.array;const vel=snow.geometry.attributes.velocity.array;const forward=state.v*0.6;for(let i=0;i<vel.length;i++){pos[i*3+0]+=windX*dt;pos[i*3+2]+=(windZ-forward)*dt;pos[i*3+1]-=vel[i]*dt;if(pos[i*3+1]<-4){pos[i*3+1]=240+Math.random()*140;}}snow.geometry.attributes.position.needsUpdate=true}
+function buildStars(show=true){if(stars){scene.remove(stars);stars.geometry.dispose();stars.material.dispose()}if(!show)return;const N=3000;const pos=new Float32Array(N*3);for(let i=0;i<N;i++){const r=3200+Math.random()*1600;const th=Math.random()*Math.PI*2;const ph=Math.acos(THREE.MathUtils.randFloatSpread(2));pos[i*3+0]=Math.sin(ph)*Math.cos(th)*r;pos[i*3+1]=Math.cos(ph)*r;pos[i*3+2]=Math.sin(ph)*Math.sin(th)*r}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));const mat=new THREE.PointsMaterial({size:1.5,sizeAttenuation:true,color:'#eaf2ff',transparent:true,opacity:0.95});stars=new THREE.Points(geo,mat);scene.add(stars)}
+function buildMountains(seed){if(mountains){scene.remove(mountains);mountains.children?.forEach(m=>{m.geometry.dispose();m.material.dispose()})}const rnd=x=>((seed=Math.imul(1664525,seed)+1013904223)>>>0)/4294967295;const g=new THREE.Group();for(let i=0;i<18;i++){const h=40+rnd()*120;const w=120+rnd()*220;const m=new THREE.Mesh(new THREE.ConeGeometry(w*0.5,h,5),new THREE.MeshStandardMaterial({color:'#0f1e2f',roughness:0.95}));const r=1500+rnd()*1200;const th=rnd()*Math.PI*2;m.position.set(Math.cos(th)*r,h*0.5-6,Math.sin(th)*r);g.add(m)}mountains=g;scene.add(mountains)}
+function buildPines(seed){}
+function buildVillage(seed){}
+function buildLamps(){}
+
+// --- 8. UI 및 이벤트 핸들러 (미리보기 기능) ---
+let nextTrackSeed;
+function setupEventListeners(){
+  window.addEventListener('resize',onResize);
+  window.addEventListener('keydown',onKeyDown);window.addEventListener('keyup',onKeyUp);
+  document.getElementById('regen').addEventListener('click',()=>showTrackPreview());
+  document.getElementById('confirm-regen').addEventListener('click', () => {
+      state.seed = nextTrackSeed;
+      rebuildTrack(state.seed);
+      placeKartAtStart();
+      hideTrackPreview();
+  });
+  document.getElementById('cancel-regen').addEventListener('click', hideTrackPreview);
+  document.getElementById('reset').addEventListener('click',placeKartAtStart);
+  document.getElementById('quality').addEventListener('change',e=>setQuality(e.target.value));
+  document.getElementById('width').addEventListener('input',e=>{trackWidth=parseFloat(e.target.value);document.getElementById('widthVal').textContent=trackWidth.toFixed(1);rebuildTrack(state.seed);placeKartAtStart()});
+  document.getElementById('theme').addEventListener('change',e=>setTheme(e.target.value));
+}
+function showTrackPreview(){
+    nextTrackSeed = (Math.random()*1e9)>>>0;
+    const pts=[]; const rnd=x=>((nextTrackSeed=Math.imul(1664525,nextTrackSeed)+1013904223)>>>0)/4294967295;
+    for(let i=0;i<16;i++){const ang=i/16*Math.PI*2;let r=240*(0.8+rnd()*0.42);if(i%8===0)r*=0.72;if(i%8===1)r*=0.9;pts.push(new THREE.Vector3(Math.cos(ang)*r,0,Math.sin(ang)*r))}
+    const previewCurve = new THREE.CatmullRomCurve3(pts,true,'catmullrom',0.08);
+    const canvas = document.getElementById('track-preview-canvas');
+    drawCurveOnCanvas(previewCurve, canvas);
+    const modal = document.getElementById('preview-modal');
+    modal.style.display = 'grid';
+    setTimeout(() => modal.style.opacity = '1', 10);
+}
+function hideTrackPreview() {
+    const modal = document.getElementById('preview-modal');
+    modal.style.opacity = '0';
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+function drawCurveOnCanvas(curve, canvas){
+    const ctx=canvas.getContext('2d');
+    const W=canvas.width=canvas.clientWidth*2; const H=canvas.height=canvas.clientHeight*2;
+    ctx.clearRect(0,0,W,H);
+    const points = curve.getPoints(200);
+    let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    for(const p of points){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minZ=Math.min(minZ,p.z);maxZ=Math.max(maxZ,p.z);}
+    const pad=40;const sx=(W-2*pad)/(maxX-minX);const sz=(H-2*pad)/(maxZ-minZ);const s=Math.min(sx,sz);
+    const ox=pad-minX*s+(W-(maxX-minX)*s)/2, oz=pad-minZ*s+(H-(maxZ-minZ)*s)/2;
+    ctx.lineWidth=8; ctx.strokeStyle='#3aa7ff'; ctx.beginPath();
+    for(let i=0;i<points.length;i++){const p=points[i];const x=p.x*s+ox,y=p.z*s+oz;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}
+    ctx.closePath();ctx.stroke();
+    const startPoint = points[0];
+    ctx.fillStyle = '#23a559'; ctx.beginPath(); ctx.arc(startPoint.x*s+ox, startPoint.z*s+oz, 12, 0, Math.PI*2); ctx.fill();
+}
+function onKeyDown(e){if(e.repeat)return;const c=e.code;if(c==='ArrowUp')keys.up=true;if(c==='ArrowDown')keys.down=true;if(c==='ArrowLeft')keys.left=true;if(c==='ArrowRight')keys.right=true;if(c==='KeyA')keys.strafeL=true;if(c==='KeyD')keys.strafeR=true;if(c==='Space')keys.drift=true;}
+function onKeyUp(e){const c=e.code;if(c==='ArrowUp')keys.up=false;if(c==='ArrowDown')keys.down=false;if(c==='ArrowLeft')keys.left=false;if(c==='ArrowRight')keys.right=false;if(c==='KeyA')keys.strafeL=false;if(c==='KeyD')keys.strafeR=false;if(c==='Space')keys.drift=false}
+function onResize(){renderer.setSize(app.clientWidth,app.clientHeight);composer.setSize(app.clientWidth,app.clientHeight);camera.aspect=app.clientWidth/app.clientHeight;camera.updateProjectionMatrix()}
+function setQuality(q){const dpr=(q==='low')?1:(q==='med')?Math.min(1.5,window.devicePixelRatio||1):Math.min(2,window.devicePixelRatio||1);renderer.setPixelRatio(dpr)}
+function setTheme(name){buildSky(name);buildStars(name!=='snowday');scene.fog.color.set(name==='snowday' ? '#c0d5e8' : '#0a1429');}
+
+// --- 9. 애니메이션 루프 및 미니맵 ---
+let miniCtx,miniCanvas,lastMiniDraw=0;
 function animate(){
-  const dt = Math.min(0.033, clock.getDelta()); const t = performance.now()*0.001;
-  update(dt, t); updateCamera(dt); renderer.render(scene, camera); requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.033,clock.getDelta());
+  update(dt);
+  updateCamera(dt);
+  updateSky(dt);
+  composer.render(); // renderer.render(scene, camera) 대신 composer 사용
+  
+  document.getElementById('spdVal').textContent=Math.round(state.v*3.6);
+  document.getElementById('lapVal').textContent=`${Math.max(1,state.laps)}/${state.maxLaps} LAP`;
+  document.getElementById('boostFill').style.width=`${state.boost*100}%`;
+  document.getElementById('lapTime').textContent=fmtMs(performance.now()-state.lastLapCross);
+  
+  if(!miniCtx){miniCanvas=document.getElementById('mini');miniCtx=miniCanvas.getContext('2d')}
+  if(performance.now()-lastMiniDraw>50){drawMini();lastMiniDraw=performance.now()}
 }
-
-function onResize(){ renderer.setSize(app.clientWidth, app.clientHeight); camera.aspect = app.clientWidth/app.clientHeight; camera.updateProjectionMatrix(); }
-
-// ===== UI =====
-function regen(){ rebuildTrack((Math.random()*1e9)>>>0); buildVillage(state.seed); placeKartAtStart(); }
-function setQuality(q){ const dpr = (q==='low')?1: (q==='med')?Math.min(1.5, window.devicePixelRatio||1):Math.min(2, window.devicePixelRatio||1); renderer.setPixelRatio(dpr); }
-
-document.getElementById('regen').addEventListener('click', regen);
-document.getElementById('reset').addEventListener('click', placeKartAtStart);
-document.getElementById('quality').addEventListener('change', e=> setQuality(e.target.value));
+function fmtMs(ms){const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),ms3=Math.floor(ms%1000).toString().padStart(3,'0');return`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${ms3}`}
+function drawMini(){const ctx=miniCtx;const W=miniCanvas.width=miniCanvas.clientWidth;const H=miniCanvas.height=miniCanvas.clientHeight;ctx.clearRect(0,0,W,H);if(trackFrames.length<2)return;const centers = trackFrames.map(f => f.pos);let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;for(const c of centers){minX=Math.min(minX,c.x);maxX=Math.max(maxX,c.x);minZ=Math.min(minZ,c.z);maxZ=Math.max(maxZ,c.z);}const pad=10;const sx=(W-2*pad)/(maxX-minX);const sz=(H-2*pad)/(maxZ-minZ);const s=Math.min(sx,sz);const ox=pad-minX*s+(W-(maxX-minX)*s)/2,oz=pad-minZ*s+(H-(maxZ-minZ)*s)/2;ctx.lineWidth=3;ctx.strokeStyle='#3aa7ff';ctx.beginPath();for(let i=0;i<centers.length;i++){const c=centers[i];const x=c.x*s+ox,y=c.z*s+oz;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.closePath();ctx.stroke();const px=state.pos.x*s+ox,py=state.pos.z*s+oz;ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill()}
 
 init();
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kart 3D — Santa Village Night (Cinematic++ · Drift++) · MIT</title>
+<style>
+  :root{
+    --bg:#02040a; --panel:#0f172a; --border:#1e2f50; --ink:#e6edf3;
+    --accent:#23a559; --blue:#2d7ff9; --white:#ffffff; --yellow:#ffd166; --red:#ff6b6b;
+    --glow-yellow:rgba(255,209,102,0.7); --glow-red:rgba(255,107,107,0.7);
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto;overflow:hidden;}
+  .wrap{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr;opacity:0;animation:fadeIn 1s 1s forwards;}
+  header{display:flex;gap:.6rem;align-items:center;padding:.6rem 1rem;background:var(--panel);color:#e6edf3;border-bottom:1px solid var(--border);user-select:none;}
+  header h1{font-size:1rem;margin:0 .4rem 0 0;font-weight:650}
+  .btn{background:#142042;border:1px solid var(--border);padding:.45rem .7rem;border-radius:.55rem;cursor:pointer;color:#e6edf3;transition:background .2s, transform .1s;}
+  .btn:hover{background:#1a2a59}
+  .btn:active{transform:scale(0.95);}
+  .sep{flex:1}
+  .hint{opacity:.9;font-size:.9rem}
+  #app{position:relative}
+  #app canvas{display:block;width:100%;height:100%}
+  .bar{display:flex;align-items:center;gap:.5rem}
+  .bar label{display:inline-flex;align-items:center;gap:.35rem}
+  select,input[type="range"]{background:transparent;border:none;color:#e6edf3;outline:none}
+  input[type="range"]{accent-color:var(--accent)}
+  .hud{pointer-events:none;position:fixed;inset:0;user-select:none;}
+  .speed{position:absolute;right:18px;bottom:18px;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(120px 120px at 50% 50%,#10224a99,#0b1428cc);box-shadow:0 10px 30px rgba(0,0,0,.35);border:2px solid #1e2f50;color:#e6edf3;backdrop-filter:blur(8px);}
+  .speed .val{font-size:2.2rem;font-weight:800;text-shadow:0 0 10px #000;}
+  .speed .unit{font-size:.9rem;opacity:.8;margin-top:-6px}
+  .lap{position:absolute;right:190px;top:16px;font-weight:800;font-size:2rem;text-align:right;text-shadow:0 0 15px #000;}
+  .lap small{display:block;font-size:.85rem;opacity:.8}
+  .minimap{position:absolute;left:18px;bottom:18px;width:220px;height:160px;background:#0b1324cc;border:1px solid #1e2f50;border-radius:12px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(8px);}
+  .minimap canvas{width:100%;height:100%;display:block}
+  .boost{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;width:40vw;max-width:560px;height:12px;border-radius:12px;background:#0c1830;border:1px solid #1e2f50;overflow:hidden;box-shadow:0 0 15px rgba(0,0,0,.5);}
+  .boost .fill{height:100%;width:0%;background:linear-gradient(90deg,var(--yellow),var(--red));box-shadow:0 0 10px var(--glow-yellow), 0 0 20px var(--glow-red);transition:width .2s ease-out;}
+  .helper{position:absolute;left:50%;transform:translateX(-50%);bottom:44px;opacity:.85;font-size:.85rem;text-shadow:0 0 8px #000;}
+  #loader{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:100;transition:opacity .5s;color:#e6edf3;font-size:1.2rem;}
+  #preview-modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);z-index:90;display:none;place-items:center;opacity:0;transition:opacity .3s;}
+  .preview-content{background:var(--panel);border:1px solid var(--border);padding:1.5rem;border-radius:1rem;text-align:center;box-shadow:0 10px 40px #000;}
+  .preview-content h2{margin:0 0 1rem;font-size:1.2rem;font-weight:600;}
+  #track-preview-canvas{width:400px;height:300px;border-radius:.5rem;background:#050913;border:1px solid var(--border);margin-bottom:1rem;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+</style>
+</head>
+<body>
 
-// ===== Lightweight self-tests (unchanged) =====
-function approx(a,b,eps=1e-6){ return Math.abs(a-b) <= eps; }
-function runTests(){
-  let ok = true; const errs = []; const PI = Math.PI;
-  const cases = [ {in: 0, expect: 0}, {in: PI/2, expect: PI/2}, {in: -PI/2, expect: -PI/2}, {in: 3*PI/2, expect: -PI/2}, {in: -3*PI/2, expect: PI/2}, {in: 5*PI, expect: -PI} ];
-  for(const c of cases){ const out = wrap(c.in, -PI, PI); if(!approx(out, c.expect, 1e-6)){ ok=false; errs.push(`wrap(${c.in}) => ${out}, expected ${c.expect}`); } }
-  if(!isOnRoad(state.pos)){ ok=false; errs.push('Expected starting position to be ON road'); }
-  const far = new THREE.Vector3(10000,0,10000); if(isOnRoad(far)){ ok=false; errs.push('Expected far position to be OFF road'); }
-  updateCamera(0.016); const cp = camera.position; if(!isFinite(cp.x) || !isFinite(cp.y) || !isFinite(cp.z)){ ok=false; errs.push('Camera position has non-finite values'); }
-  try { setQuality('med'); setQuality('low'); setQuality('high'); } catch(e){ ok=false; errs.push('setQuality threw: '+e.message); }
-  if(ok){ setTestBadge('Tests: PASS ✓', true); } else { setTestBadge('Tests: FAIL ✗ — ' + errs[0], false); console.error('Test failures:', errs); }
+<div id="loader">❄️ 로딩 중...</div>
+
+<div id="preview-modal">
+  <div class="preview-content">
+    <h2>새로운 트랙 미리보기</h2>
+    <canvas id="track-preview-canvas"></canvas>
+    <div>
+      <button id="confirm-regen" class="btn">이 트랙으로 결정</button>
+      <button id="cancel-regen" class="btn">취소</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <h1>Kart 3D — 산타 빌리지 나이트 (Cinematic++)</h1>
+    <div class="bar">
+      <button id="regen" class="btn">트랙 재생성</button>
+      <button id="reset" class="btn">카트 리셋</button>
+      <label class="btn">품질
+        <select id="quality"><option value="high" selected>높음</option><option value="med">중간</option><option value="low">낮음</option></select>
+      </label>
+      <label class="btn">폭 <input id="width" type="range" min="12" max="28" step="0.5" value="20" /> <span id="widthVal">20.0</span></label>
+      <label class="btn">테마
+        <select id="theme"><option value="aurora" selected>오로라 야경</option><option value="snowday">설경 낮</option><option value="sunset">선셋</option></select>
+      </label>
+    </div>
+    <div class="sep"></div>
+    <div class="hint">↑↓ 가속/브레이크 · ←→ 조향 · <b>A/D 차선</b> · Space 드리프트</div>
+  </header>
+  <div id="app"></div>
+  <div class="hud">
+    <div class="speed"><div class="val" id="spdVal">0</div><div class="unit">km/h</div></div>
+    <div class="lap"><div id="lapVal">1/2 LAP</div><small id="lapTime">00:00.000</small></div>
+    <div class="minimap"><canvas id="mini"></canvas></div>
+    <div class="boost"><div class="fill" id="boostFill"></div></div>
+    <div class="helper">DRIFT: Space · BOOST 자동충전</div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
+import { AfterimagePass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/AfterimagePass.js';
+import { GammaCorrectionShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/GammaCorrectionShader.js';
+
+const app=document.getElementById('app');
+let renderer,scene,camera,clock,composer,bloomPass,afterimagePass;
+let kart,wheels=[],camRig,lookTarget,smokePool=[],sparkPool=[];
+let trackCurve,trackMesh,trackWidth=20,trackLength=1000,trackFrames=[];
+let edgeLines,centerDashes,curbs,barriers,lamps;
+let ground,skyDome,stars,mountains,pines=new THREE.Group(),village=new THREE.Group(),snow;
+const keys={up:false,down:false,left:false,right:false,strafeL:false,strafeR:false,drift:false}
+const state={seed:(Math.random()*1e9)>>>0,v:0,s:0.01,lateral:0,yaw:0,driftAng:0,pos:new THREE.Vector3(),laps:0,maxLaps:2,lastLapCross:0,boost:0,
+  params:{accel:50,brake:58,maxV:90,drag:0.992,steerLane:14.5,driftGrip:0.35,laneFriction:8.5}}
+
+// --- 1. 초기화 및 씬 설정 ---
+function init(){
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.setSize(app.clientWidth,app.clientHeight);
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.1;
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  app.appendChild(renderer.domElement);
+
+  scene=new THREE.Scene();
+  scene.fog=new THREE.FogExp2('#0a1429',0.00025);
+  camera=new THREE.PerspectiveCamera(65,app.clientWidth/app.clientHeight,0.1,6000);
+  clock=new THREE.Clock();
+
+  const hemi=new THREE.HemisphereLight('#bfe3ff','#0c1830',0.8);scene.add(hemi);
+  const dir=new THREE.DirectionalLight('#ffffff',1.2);dir.position.set(160,200,120);dir.castShadow=true;dir.shadow.mapSize.set(2048,2048);Object.assign(dir.shadow.camera,{left:-600,right:600,top:600,bottom:-600,near:1,far:1800});scene.add(dir);
+
+  buildSky('aurora');buildStars(true);buildMountains(state.seed);
+  const groundGeo=new THREE.PlaneGeometry(14000,14000),groundMat=new THREE.MeshStandardMaterial({color:'#f1f6ff',roughness:0.98});
+  ground=new THREE.Mesh(groundGeo,groundMat);ground.rotation.x=-Math.PI/2;ground.position.y=-6;ground.receiveShadow=true;scene.add(ground);
+
+  rebuildTrack(state.seed);buildPines(state.seed);buildVillage(state.seed);scene.add(pines);scene.add(village);
+  buildKart();buildLamps();
+  camRig=new THREE.Object3D();lookTarget=new THREE.Object3D();scene.add(camRig);scene.add(lookTarget);
+  buildSnow(10000);
+
+  setupPostProcessing();
+  setupEventListeners();
+
+  document.getElementById('loader').style.opacity='0';
+  document.querySelector('.wrap').style.opacity='1';
+
+  animate()
 }
-setTimeout(runTests, 0);
+
+// --- 2. 포스트 프로세싱 (그래픽 품질 향상) ---
+function setupPostProcessing(){
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.4, 0.85);
+    composer.addPass(bloomPass);
+
+    afterimagePass = new AfterimagePass(0.92);
+    afterimagePass.enabled = false;
+    composer.addPass(afterimagePass);
+
+    const vignetteShader = {
+        uniforms: { 'tDiffuse': { value: null }, 'darkness': { value: 1.1 }, 'offset': { value: 1.1 } },
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform sampler2D tDiffuse; uniform float darkness; uniform float offset; varying vec2 vUv;
+        void main() {
+            vec4 texel = texture2D(tDiffuse, vUv);
+            vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
+            gl_FragColor = vec4(mix(texel.rgb, vec3(0.0), dot(uv, uv) * darkness), texel.a);
+        }`
+    };
+    const vignettePass = new ShaderPass(vignetteShader);
+    composer.addPass(vignettePass);
+    composer.addPass(new ShaderPass(GammaCorrectionShader));
+}
+
+
+// --- 3. 트랙 생성 (코너 뱅킹 추가) ---
+function rebuildTrack(seed){
+  [trackMesh,edgeLines,centerDashes,curbs,barriers,lamps]?.forEach(x=>{if(x){scene.remove(x);x.geometry?.dispose?.();x.material?.dispose?.();if(x.children)x.children.forEach(c=>{c.geometry?.dispose?.();c.material?.dispose?.()})}})
+  const rnd=x=>((seed=Math.imul(1664525,seed)+1013904223)>>>0)/4294967295;
+  const heightParams={base:10,a1:7.5+rnd()*4,a2:3.5+rnd()*2,p1:rnd(),p2:rnd()}
+  const heightAt=t=>heightParams.base+Math.sin((t+heightParams.p1)*Math.PI*2)*heightParams.a1+Math.sin((t+heightParams.p2)*Math.PI*4)*heightParams.a2
+
+  const k=16,radius=240;const pts=[];for(let i=0;i<k;i++){const ang=i/k*Math.PI*2;let r=radius*(0.8+rnd()*0.42);if(i%8===0)r*=0.72;if(i%8===1)r*=0.9;pts.push(new THREE.Vector3(Math.cos(ang)*r,0,Math.sin(ang)*r))}
+  trackCurve=new THREE.CatmullRomCurve3(pts,true,'catmullrom',0.08);
+
+  const segs=2200,half=trackWidth*0.5;const pos=[],uvs=[],idx=[];
+  trackFrames = trackCurve.computeFrenetFrames(segs, true).binormals.map((b,i) => ({
+      pos: trackCurve.getPointAt(i/segs),
+      tan: trackCurve.getTangentAt(i/segs),
+      nor: trackCurve.computeFrenetFrames(segs, true).normals[i],
+      bin: b
+  }));
+  trackFrames.forEach((f,i) => f.pos.y = heightAt(i/segs));
+
+  for(let i=0;i<=segs;i++){
+    const t=i/segs;
+    const {pos:c, tan, nor} = trackFrames[i%segs];
+    const curvature = Math.abs(getCurvature(t, 1/segs));
+    const bankAngle = Math.min(0.5, curvature * 0.03) * Math.sign(getCurvature(t, 1/segs));
+    const upVec = new THREE.Vector3(0,1,0).applyAxisAngle(tan, -bankAngle).normalize();
+    const left = new THREE.Vector3().crossVectors(tan, upVec).normalize();
+    
+    const L=new THREE.Vector3().copy(c).addScaledVector(left,half),R=new THREE.Vector3().copy(c).addScaledVector(left,-half);
+    pos.push(L.x,L.y,L.z,R.x,R.y,R.z);uvs.push(0,t*42,1,t*42);if(i>0){const vi=i*2;idx.push(vi-2,vi-1,vi,vi-1,vi+1,vi)}
+  }
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(pos),3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(uvs),2));geo.setIndex(idx);geo.computeVertexNormals();
+  const asphalt=new THREE.MeshStandardMaterial({color:'#4a515e', roughness: 0.8, metalness: 0.1});
+  trackMesh=new THREE.Mesh(geo,asphalt);trackMesh.receiveShadow=true;scene.add(trackMesh);
+  trackLength=trackCurve.getLength();
+
+  // 트랙 디테일 생성 (기존 코드와 유사)
+  const centers = trackFrames.map(f => f.pos);
+  const tangents = trackFrames.map(f => f.tan);
+  const edgeGeo=new THREE.PlaneGeometry(0.26,2.2),edgeMat=new THREE.MeshBasicMaterial({color:'#ffffff'});
+  edgeLines=new THREE.InstancedMesh(edgeGeo,edgeMat,1000)
+  let j=0;for(let i=0;i<segs&&j<1000;i+=Math.max(4,Math.floor(segs/240))){const c=centers[i];const rot=Math.atan2(tangents[i].x,tangents[i].z);const o=new THREE.Object3D();o.position.copy(c);o.position.y+=0.07;o.rotation.set(-Math.PI/2,0,rot);o.updateMatrix();edgeLines.setMatrixAt(j++,o.matrix)}edgeLines.instanceMatrix.needsUpdate=true;scene.add(edgeLines);
+  const dGeo=new THREE.PlaneGeometry(0.34,2.4),dMat=new THREE.MeshBasicMaterial({color:'#ffd166'});centerDashes=new THREE.InstancedMesh(dGeo,dMat,1300);let di=0;for(let i=0;i<segs&&di<1300;i+=Math.max(6,Math.floor(segs/220))){const c=centers[i];const rot=Math.atan2(tangents[i].x,tangents[i].z);const o=new THREE.Object3D();o.position.copy(c);o.position.y+=0.075;o.rotation.set(-Math.PI/2,0,rot);o.updateMatrix();centerDashes.setMatrixAt(di++,o.matrix)}centerDashes.instanceMatrix.needsUpdate=true;scene.add(centerDashes);
+  barriers=new THREE.Group();const bGeo=new THREE.BoxGeometry(0.8,0.6,1.6);const bBlue=new THREE.MeshStandardMaterial({color:'#2d7ff9',emissive:0x0a1a3a,emissiveIntensity:0.25});const bWhite=new THREE.MeshStandardMaterial({color:'#eaf2ff'});for(let i=0;i<segs;i+=Math.max(6,Math.floor(segs/160))){const c=centers[i];const left=new THREE.Vector3(-tangents[i].z,0,tangents[i].x).normalize();for(const s of[-1,1]){const m=new THREE.Mesh(bGeo,((i/6)&1)?bBlue:bWhite);m.position.copy(c).addScaledVector(left,s*(trackWidth*0.5+0.9));m.position.y=c.y+0.3;m.rotation.y=Math.atan2(tangents[i].x,tangents[i].z);m.castShadow=true;barriers.add(m)}}scene.add(barriers);
+}
+const wrap=(x,min,max)=>{const r=max-min;return((x-min)%r+r)%r+min};
+function getCurvature(t,eps=1e-4){const t1=t-eps,t2=t+eps;const p1=trackCurve.getTangentAt(t1),p2=trackCurve.getTangentAt(t2);return(p2.clone().sub(p1).length()/(eps*2))}
+
+// --- 4. 카트 및 VFX (조명, 스파크) ---
+function buildKart(){
+  kart=new THREE.Group();
+  const bodyMat=new THREE.MeshStandardMaterial({color:'#ff2f5a',roughness:0.3,metalness:0.3});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.7,3.4),bodyMat);body.castShadow=true;kart.add(body);
+  const spoiler=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,0.6),bodyMat);spoiler.position.set(0,0.6,-1.9);kart.add(spoiler);
+  
+  function wheel(x,z){const w=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.48,0.36,16),new THREE.MeshStandardMaterial({color:'#0f172a'}));w.rotation.z=Math.PI/2;w.position.set(x,-0.25,z);w.castShadow=true;wheels.push(w);kart.add(w)}wheel(-1.3,-1.25);wheel(1.3,-1.25);wheel(-1.3,1.25);wheel(1.3,1.25);
+  
+  const headLight = (s) => { const l=new THREE.SpotLight(0xffffff, 15, 20, Math.PI/6, 0.4); l.position.set(s*0.8, 0.1, 1.7); l.target.position.set(s*0.8, -0.5, 10); kart.add(l); kart.add(l.target); }; headLight(1); headLight(-1);
+  const tailLight = (s) => { const l=new THREE.PointLight(0xff0000, 0, 4); l.position.set(s*0.9, 0, -1.75); l.castShadow=false; kart.add(l); }; tailLight(1); tailLight(-1);
+
+  const smokeMat=new THREE.MeshBasicMaterial({color:'#eaf2ff',transparent:true,opacity:0.9});for(let i=0;i<70;i++){const p=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.6),smokeMat.clone());p.rotation.x=-Math.PI/2;p.visible=false;scene.add(p);smokePool.push(p)}
+  const sparkMat=new THREE.MeshBasicMaterial({color:'#ffd166',transparent:true,opacity:1,blending:THREE.AdditiveBlending});for(let i=0;i<100;i++){const p=new THREE.Mesh(new THREE.PlaneGeometry(0.05,0.3),sparkMat);p.visible=false;scene.add(p);sparkPool.push(p)}
+  scene.add(kart);placeKartAtStart();
+}
+function placeKartAtStart(){state.s=0.01;state.lateral=0;state.v=0;state.driftAng=0;state.lastLapCross=performance.now();state.laps=0;syncFromTrack()}
+function syncFromTrack(){
+  const t = THREE.MathUtils.mapLinear(state.s, 0, 1, 0, trackFrames.length - 1);
+  const frameIdx = Math.floor(t);
+  const subT = t - frameIdx;
+  const frameA = trackFrames[frameIdx];
+  const frameB = trackFrames[(frameIdx + 1) % trackFrames.length];
+
+  const pos = new THREE.Vector3().lerpVectors(frameA.pos, frameB.pos, subT);
+  const tan = new THREE.Vector3().lerpVectors(frameA.tan, frameB.tan, subT).normalize();
+  const nor = new THREE.Vector3().lerpVectors(frameA.nor, frameB.nor, subT).normalize();
+
+  const up = new THREE.Vector3().copy(nor);
+  const left = new THREE.Vector3().crossVectors(up, tan).normalize();
+  
+  state.pos.copy(pos).addScaledVector(left, state.lateral);
+  kart.position.copy(state.pos);
+  const lookAtPos = kart.position.clone().add(tan);
+  kart.up.copy(up);
+  kart.lookAt(lookAtPos);
+  kart.rotateZ(state.driftAng);
+}
+function spawnSmoke(){const p=smokePool.find(s=>!s.visible);if(!p)return;p.visible=true;p.position.set(state.pos.x,state.pos.y+0.1,state.pos.z);p.scale.set(0.6,0.6,0.6);p.material.opacity=0.8;p.life=0.55}
+function updateSmoke(dt){for(const p of smokePool){if(!p.visible)continue;p.life-=dt;p.scale.multiplyScalar(1+1.9*dt);p.material.opacity=Math.max(0,p.life*1.6);if(p.life<=0)p.visible=false}}
+function spawnSpark(){const s=sparkPool.find(sp=>!sp.visible);if(!s)return;s.visible=true;const side=Math.random()>0.5?1:-1;s.position.copy(kart.localToWorld(new THREE.Vector3(side*1.3,-0.2,-1.2)));s.vel=new THREE.Vector3(-Math.sin(state.yaw+state.driftAng)+Math.random()*0.4-0.2,Math.random()*0.8+0.4,-Math.cos(state.yaw+state.driftAng)+Math.random()*0.4-0.2).multiplyScalar(8);s.life=0.2}
+function updateSparks(dt){for(const s of sparkPool){if(!s.visible)continue;s.life-=dt;s.vel.y-=12*dt;s.position.addScaledVector(s.vel,dt);s.material.opacity=s.life/0.2;if(s.life<=0)s.visible=false}}
+
+// --- 5. 게임 로직 및 업데이트 ---
+function update(dt){
+  const P=state.params;const accel=(keys.up?P.accel:0)+(keys.down?-P.brake:0);state.v+=accel*dt;state.v=THREE.MathUtils.clamp(state.v,0,P.maxV);state.v*=Math.pow(P.drag,dt*60)
+  state.s=wrap(state.s+(state.v*dt)/trackLength,0,1)
+  let laneInput=(keys.right?1:0)+(keys.left?-1:0)+(keys.strafeR?1:0)+(keys.strafeL?-1:0)
+  const laneSpeed=keys.drift?P.steerLane*2.0:P.steerLane
+  state.lateral+=laneInput*laneSpeed*dt;
+  const maxLat=trackWidth*0.5*0.88
+  state.lateral=THREE.MathUtils.clamp(state.lateral,-maxLat,maxLat)
+  const targetAng=(keys.drift?THREE.MathUtils.clamp(laneInput*0.6,-0.65,0.65):0)
+  const angLerp=keys.drift?1-Math.pow(0.001,dt):1-Math.pow(0.05,dt)
+  state.driftAng+=(targetAng-state.driftAng)*angLerp
+  if(keys.drift){state.v+=7*dt;if(Math.random()<0.7)spawnSmoke();if(Math.random()<0.9)spawnSpark()}
+  state.boost=THREE.MathUtils.clamp(state.boost+(keys.drift?0.65:0.27)*dt,0,1)
+  if(keys.drift&&state.boost>0.1){state.v+=12*dt;state.boost=Math.max(0,state.boost-0.25*dt)}
+  if(state.s<0.02&&(performance.now()-state.lastLapCross)>2000){state.laps=Math.min(state.maxLaps,state.laps+1);state.lastLapCross=performance.now()}
+  
+  updateSnow(dt);updateSmoke(dt);updateSparks(dt);syncFromTrack();
+
+  kart.children.forEach(c => { if(c instanceof THREE.PointLight) c.intensity = keys.down ? 15 : 0; });
+  afterimagePass.enabled = state.v > P.maxV * 0.8;
+  afterimagePass.uniforms.damp.value = 0.94 - (state.v / P.maxV) * 0.1;
+}
+
+// --- 6. 카메라 로직 (기존과 유사, 부드럽게 조정) ---
+const UP=new THREE.Vector3(0,1,0);
+function updateCamera(dt){
+  const lookBase=17,lookSpeed=state.v*0.24,lookDist=lookBase+lookSpeed
+  const aheadS=wrap(state.s+lookDist/trackLength,0,1),aheadPt=trackCurve.getPointAt(aheadS);
+  aheadPt.y=trackFrames[Math.floor(aheadS * trackFrames.length)].pos.y + 0.2
+  
+  const back=7.8+Math.min(1,Math.abs(state.driftAng))*1.2
+  const tan = trackCurve.getTangentAt(state.s);
+  const desired=new THREE.Vector3().copy(kart.position).addScaledVector(tan, -back).add(new THREE.Vector3(0,4.2,0));
+  
+  const lerpA=1-Math.pow(0.0009,dt),lerpB=1-Math.pow(0.0013,dt)
+  camRig.position.lerp(desired,lerpA);lookTarget.position.lerp(aheadPt,lerpB)
+  camera.position.copy(camRig.position)
+  camera.lookAt(lookTarget.position);
+}
+
+// --- 7. 환경 요소 (하늘, 눈 등) ---
+function buildSky(kind){if(skyDome){scene.remove(skyDome);skyDome.geometry.dispose();skyDome.material.dispose()}const geo=new THREE.SphereGeometry(5000,32,16);let top,mid,bottom;if(kind==='snowday'){top='#b9deff';mid='#e6f2ff';bottom='#ffffff'}else if(kind==='sunset'){top='#0a0d1a';mid='#ff725e';bottom='#ffd1a8'}else{top='#0b1024';mid='#1a2e5e';bottom='#0a1628'}const mat=new THREE.ShaderMaterial({side:THREE.BackSide,uniforms:{topC:{value:new THREE.Color(top)},midC:{value:new THREE.Color(mid)},botC:{value:new THREE.Color(bottom)},time:{value:0}},vertexShader:`varying vec3 vPos;void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,fragmentShader:`varying vec3 vPos;uniform vec3 topC;uniform vec3 midC;uniform vec3 botC;uniform float time;float snoise(vec3 uv){float c=0.0;float a=0.5;for(int i=0;i<3;i++){uv=mod(uv,10.0)+time*0.1;c+=a*texture2D(vec2(fract(sin(dot(uv.xy,vec2(12.9898,78.233)))*43758.5453),fract(sin(dot(uv.yz,vec2(12.9898,78.233)))*43758.5453))).x;a*=0.5;uv*=2.0;}return c;}void main(){float h=normalize(vPos).y*0.5+0.5;vec3 col=mix(botC,midC,smoothstep(0.0,0.6,h));col=mix(col,topC,smoothstep(0.4,1.0,h));float aurora=pow(snoise(normalize(vPos)*3.0+time*0.05)*smoothstep(0.5,0.55,h),3.0)*0.5;col+=vec3(0.2,1.0,0.5)*aurora;gl_FragColor=vec4(col,1.0);}`});skyDome=new THREE.Mesh(geo,mat);scene.add(skyDome)}
+function updateSky(dt){if(skyDome) skyDome.material.uniforms.time.value += dt;}
+function buildSnow(n=10000){if(snow){scene.remove(snow);snow.geometry.dispose();snow.material.dispose()}const pos=new Float32Array(n*3),vel=new Float32Array(n);for(let i=0;i<n;i++){pos[i*3]=(Math.random()-0.5)*6000;pos[i*3+1]=Math.random()*260+90;pos[i*3+2]=(Math.random()-0.5)*6000;vel[i]=16+Math.random()*26}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('velocity',new THREE.Float32BufferAttribute(vel,1));const mat=new THREE.PointsMaterial({color:'#ffffff',size:1.1,sizeAttenuation:true,transparent:true,opacity:0.95});snow=new THREE.Points(geo,mat);scene.add(snow)}
+let windX=6,windZ=-3;function updateSnow(dt){if(!snow)return;const pos=snow.geometry.attributes.position.array;const vel=snow.geometry.attributes.velocity.array;const forward=state.v*0.6;for(let i=0;i<vel.length;i++){pos[i*3+0]+=windX*dt;pos[i*3+2]+=(windZ-forward)*dt;pos[i*3+1]-=vel[i]*dt;if(pos[i*3+1]<-4){pos[i*3+1]=240+Math.random()*140;}}snow.geometry.attributes.position.needsUpdate=true}
+function buildStars(show=true){if(stars){scene.remove(stars);stars.geometry.dispose();stars.material.dispose()}if(!show)return;const N=3000;const pos=new Float32Array(N*3);for(let i=0;i<N;i++){const r=3200+Math.random()*1600;const th=Math.random()*Math.PI*2;const ph=Math.acos(THREE.MathUtils.randFloatSpread(2));pos[i*3+0]=Math.sin(ph)*Math.cos(th)*r;pos[i*3+1]=Math.cos(ph)*r;pos[i*3+2]=Math.sin(ph)*Math.sin(th)*r}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));const mat=new THREE.PointsMaterial({size:1.5,sizeAttenuation:true,color:'#eaf2ff',transparent:true,opacity:0.95});stars=new THREE.Points(geo,mat);scene.add(stars)}
+function buildMountains(seed){if(mountains){scene.remove(mountains);mountains.children?.forEach(m=>{m.geometry.dispose();m.material.dispose()})}const rnd=x=>((seed=Math.imul(1664525,seed)+1013904223)>>>0)/4294967295;const g=new THREE.Group();for(let i=0;i<18;i++){const h=40+rnd()*120;const w=120+rnd()*220;const m=new THREE.Mesh(new THREE.ConeGeometry(w*0.5,h,5),new THREE.MeshStandardMaterial({color:'#0f1e2f',roughness:0.95}));const r=1500+rnd()*1200;const th=rnd()*Math.PI*2;m.position.set(Math.cos(th)*r,h*0.5-6,Math.sin(th)*r);g.add(m)}mountains=g;scene.add(mountains)}
+function buildPines(seed){}
+function buildVillage(seed){}
+function buildLamps(){}
+
+// --- 8. UI 및 이벤트 핸들러 (미리보기 기능) ---
+let nextTrackSeed;
+function setupEventListeners(){
+  window.addEventListener('resize',onResize);
+  window.addEventListener('keydown',onKeyDown);window.addEventListener('keyup',onKeyUp);
+  document.getElementById('regen').addEventListener('click',()=>showTrackPreview());
+  document.getElementById('confirm-regen').addEventListener('click', () => {
+      state.seed = nextTrackSeed;
+      rebuildTrack(state.seed);
+      placeKartAtStart();
+      hideTrackPreview();
+  });
+  document.getElementById('cancel-regen').addEventListener('click', hideTrackPreview);
+  document.getElementById('reset').addEventListener('click',placeKartAtStart);
+  document.getElementById('quality').addEventListener('change',e=>setQuality(e.target.value));
+  document.getElementById('width').addEventListener('input',e=>{trackWidth=parseFloat(e.target.value);document.getElementById('widthVal').textContent=trackWidth.toFixed(1);rebuildTrack(state.seed);placeKartAtStart()});
+  document.getElementById('theme').addEventListener('change',e=>setTheme(e.target.value));
+}
+function showTrackPreview(){
+    nextTrackSeed = (Math.random()*1e9)>>>0;
+    const pts=[]; const rnd=x=>((nextTrackSeed=Math.imul(1664525,nextTrackSeed)+1013904223)>>>0)/4294967295;
+    for(let i=0;i<16;i++){const ang=i/16*Math.PI*2;let r=240*(0.8+rnd()*0.42);if(i%8===0)r*=0.72;if(i%8===1)r*=0.9;pts.push(new THREE.Vector3(Math.cos(ang)*r,0,Math.sin(ang)*r))}
+    const previewCurve = new THREE.CatmullRomCurve3(pts,true,'catmullrom',0.08);
+    const canvas = document.getElementById('track-preview-canvas');
+    drawCurveOnCanvas(previewCurve, canvas);
+    const modal = document.getElementById('preview-modal');
+    modal.style.display = 'grid';
+    setTimeout(() => modal.style.opacity = '1', 10);
+}
+function hideTrackPreview() {
+    const modal = document.getElementById('preview-modal');
+    modal.style.opacity = '0';
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+function drawCurveOnCanvas(curve, canvas){
+    const ctx=canvas.getContext('2d');
+    const W=canvas.width=canvas.clientWidth*2; const H=canvas.height=canvas.clientHeight*2;
+    ctx.clearRect(0,0,W,H);
+    const points = curve.getPoints(200);
+    let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    for(const p of points){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minZ=Math.min(minZ,p.z);maxZ=Math.max(maxZ,p.z);}
+    const pad=40;const sx=(W-2*pad)/(maxX-minX);const sz=(H-2*pad)/(maxZ-minZ);const s=Math.min(sx,sz);
+    const ox=pad-minX*s+(W-(maxX-minX)*s)/2, oz=pad-minZ*s+(H-(maxZ-minZ)*s)/2;
+    ctx.lineWidth=8; ctx.strokeStyle='#3aa7ff'; ctx.beginPath();
+    for(let i=0;i<points.length;i++){const p=points[i];const x=p.x*s+ox,y=p.z*s+oz;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}
+    ctx.closePath();ctx.stroke();
+    const startPoint = points[0];
+    ctx.fillStyle = '#23a559'; ctx.beginPath(); ctx.arc(startPoint.x*s+ox, startPoint.z*s+oz, 12, 0, Math.PI*2); ctx.fill();
+}
+function onKeyDown(e){if(e.repeat)return;const c=e.code;if(c==='ArrowUp')keys.up=true;if(c==='ArrowDown')keys.down=true;if(c==='ArrowLeft')keys.left=true;if(c==='ArrowRight')keys.right=true;if(c==='KeyA')keys.strafeL=true;if(c==='KeyD')keys.strafeR=true;if(c==='Space')keys.drift=true;}
+function onKeyUp(e){const c=e.code;if(c==='ArrowUp')keys.up=false;if(c==='ArrowDown')keys.down=false;if(c==='ArrowLeft')keys.left=false;if(c==='ArrowRight')keys.right=false;if(c==='KeyA')keys.strafeL=false;if(c==='KeyD')keys.strafeR=false;if(c==='Space')keys.drift=false}
+function onResize(){renderer.setSize(app.clientWidth,app.clientHeight);composer.setSize(app.clientWidth,app.clientHeight);camera.aspect=app.clientWidth/app.clientHeight;camera.updateProjectionMatrix()}
+function setQuality(q){const dpr=(q==='low')?1:(q==='med')?Math.min(1.5,window.devicePixelRatio||1):Math.min(2,window.devicePixelRatio||1);renderer.setPixelRatio(dpr)}
+function setTheme(name){buildSky(name);buildStars(name!=='snowday');scene.fog.color.set(name==='snowday' ? '#c0d5e8' : '#0a1429');}
+
+// --- 9. 애니메이션 루프 및 미니맵 ---
+let miniCtx,miniCanvas,lastMiniDraw=0;
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.033,clock.getDelta());
+  update(dt);
+  updateCamera(dt);
+  updateSky(dt);
+  composer.render(); // renderer.render(scene, camera) 대신 composer 사용
+  
+  document.getElementById('spdVal').textContent=Math.round(state.v*3.6);
+  document.getElementById('lapVal').textContent=`${Math.max(1,state.laps)}/${state.maxLaps} LAP`;
+  document.getElementById('boostFill').style.width=`${state.boost*100}%`;
+  document.getElementById('lapTime').textContent=fmtMs(performance.now()-state.lastLapCross);
+  
+  if(!miniCtx){miniCanvas=document.getElementById('mini');miniCtx=miniCanvas.getContext('2d')}
+  if(performance.now()-lastMiniDraw>50){drawMini();lastMiniDraw=performance.now()}
+}
+function fmtMs(ms){const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),ms3=Math.floor(ms%1000).toString().padStart(3,'0');return`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${ms3}`}
+function drawMini(){const ctx=miniCtx;const W=miniCanvas.width=miniCanvas.clientWidth;const H=miniCanvas.height=miniCanvas.clientHeight;ctx.clearRect(0,0,W,H);if(trackFrames.length<2)return;const centers = trackFrames.map(f => f.pos);let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;for(const c of centers){minX=Math.min(minX,c.x);maxX=Math.max(maxX,c.x);minZ=Math.min(minZ,c.z);maxZ=Math.max(maxZ,c.z);}const pad=10;const sx=(W-2*pad)/(maxX-minX);const sz=(H-2*pad)/(maxZ-minZ);const s=Math.min(sx,sz);const ox=pad-minX*s+(W-(maxX-minX)*s)/2,oz=pad-minZ*s+(H-(maxZ-minZ)*s)/2;ctx.lineWidth=3;ctx.strokeStyle='#3aa7ff';ctx.beginPath();for(let i=0;i<centers.length;i++){const c=centers[i];const x=c.x*s+ox,y=c.z*s+oz;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.closePath();ctx.stroke();const px=state.pos.x*s+ox,py=state.pos.z*s+oz;ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill()}
+
+init();
 </script>
 </body>
 </html>
