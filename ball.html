@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minimal Breaker — 오리지널 HTML5 게임</title>
+  <style>
+    /*
+      Minimal Breaker (c) 2025 Original work by 코덕"
+      - 순수 HTML/CSS/JS, 외부 라이브러리/에셋 0개
+      - GitHub Pages/Tistory iframe 호스팅 적합
+    */
+
+    :root{
+      --bg:#0b0f17; --ink:#e6edf3; --muted:#9aa4b2; --primary:#2d7ff9;
+      --accent:#23a559; --warn:#f5a524; --danger:#ef4444; --panel:#111827;
+    }
+
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink);
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+    .wrap{ display:flex; align-items:center; justify-content:center; min-height:100%; padding:16px; box-sizing:border-box; }
+
+    /* 맵 폭 축소 */
+    .game{ width:min(720px, 100%); }
+    body.mobile .game{ width:min(600px, 100%); }
+
+    .bar{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 10px 0; color:var(--muted); }
+    .bar .left, .bar .right{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .tag{ background:var(--panel); color:var(--ink); border-radius:10px; padding:6px 10px; }
+    .btn{ background:var(--panel); color:var(--ink); border:1px solid #202838; padding:6px 10px; border-radius:10px; cursor:pointer; }
+    .btn:hover{ border-color:#2a3650; }
+
+    /* 세로를 더 길게: 16:12 (4:3) */
+    canvas{ width:100%; aspect-ratio: 16 / 12; display:block; background:linear-gradient(180deg, #0c111a 0%, #0c111a 70%, #0a0f18 100%); box-shadow:0 12px 40px rgba(0,0,0,.35); border-radius:14px; }
+
+    /* 모바일 모드에서 UI 높이를 1.5배(세로 비율 16:12 → 16:18) */
+    body.mobile canvas{ aspect-ratio: 16 / 18; }
+
+    body.mobile .bar{ font-size:16px; }
+
+    .help{ margin-top:10px; color:var(--muted); text-align:center; opacity:.9; }
+    .kbd{ padding:2px 6px; border:1px solid #344156; border-radius:6px; color:var(--ink); }
+
+    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111827; color:var(--ink); padding:8px 12px; border-radius:10px; border:1px solid #202838; opacity:0; pointer-events:none; transition:opacity .25s ease; }
+    .toast.show{ opacity:1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="game">
+      <div class="bar">
+        <div class="left">
+          <span class="tag">Minimal Breaker</span>
+          <span>점수 <strong id="score">0</strong></span>
+          <span>스테이지 <strong id="stage">1</strong></span>
+          <span>라이프 <strong id="lives">3</strong></span>
+        </div>
+        <div class="right">
+          <button class="btn" id="btnMobile">모바일 최적화: 끔</button>
+          <button class="btn" id="btnPause">일시정지</button>
+          <button class="btn" id="btnRestart">리셋</button>
+        </div>
+      </div>
+      <canvas id="cv" width="1280" height="960" aria-label="브레이크아웃 게임 캔버스" role="img"></canvas>
+      <div class="help">
+        <span class="kbd">←</span>/<span class="kbd">→</span> 또는 <span class="kbd">A</span>/<span class="kbd">D</span> 이동 · <span class="kbd">Space</span> 발사/일시정지 · 터치 드래그 지원
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+  (()=>{
+    const cv = document.getElementById('cv');
+    const ctx = cv.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const stageEl = document.getElementById('stage');
+    const livesEl = document.getElementById('lives');
+    const btnPause = document.getElementById('btnPause');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnMobile = document.getElementById('btnMobile');
+    const toast = document.getElementById('toast');
+
+    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+    const state = {
+      w: 1280, h: 960, // 16:12
+      paddle: { x: 640, y: 920, w: 150, h: 16, speed: 650, targetX: 640 },
+      balls: [], bricks: [], particles: [], powerups: [],
+      rows: 7, // 세로 늘어난 만큼 기본 행 수 +1
+      cols: 9, // 좁은 폭
+      gutter: 8,
+      brickH: 24,
+      score: 0, lives: 3, stage: 1,
+      launched: false, paused: false,
+      mobile: false,
+      last: 0,
+    };
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const rand = (a,b) => a + Math.random()*(b-a);
+
+    function showToast(msg){
+      toast.textContent = msg; toast.classList.add('show');
+      clearTimeout(showToast.tid);
+      showToast.tid = setTimeout(()=> toast.classList.remove('show'), 1200);
+    }
+
+    function resize(){
+      // 16:12 내부 비율 유지
+      const rect = cv.getBoundingClientRect();
+      state.w = Math.round(rect.width * DPR);
+      const ar = state.mobile ? (18/16) : (12/16);
+      state.h = Math.round(rect.width * ar * DPR); // 높이 증가
+      cv.width = state.w; cv.height = state.h;
+      state.paddle.y = state.h - 40 * DPR;
+      if(!state.launched){
+        const p = state.paddle; const b = state.balls[0];
+        if(b){ b.x = p.x; b.y = p.y - 20*DPR; }
+      }
+      layoutBricks();
+    }
+
+    function layoutBricks(){
+      const { rows, cols, gutter, brickH } = state;
+      const marginX = 28 * DPR;
+      const marginY = 60 * DPR;
+      const areaW = state.w - marginX*2;
+      const bw = (areaW - (cols-1)*gutter) / cols;
+      const colors = ['#2d7ff9','#23a559','#f5a524','#ef4444','#8b5cf6'];
+      const bricks = [];
+      for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+          // HP 제거: 언제나 1회 충돌로 파괴
+          bricks.push({
+            x: Math.round(marginX + c*(bw+gutter)),
+            y: Math.round(marginY + r*(brickH+gutter)),
+            w: Math.round(bw), h: brickH,
+            color: colors[(r+c)%colors.length], alive:true,
+            score: 20 // 즉시 파괴이므로 점수 소폭 상향
+          });
+        }
+      }
+      state.bricks = bricks;
+    }
+
+    function newBall(x, y, speedMul=1){
+      const base = state.mobile ? 360 : 420;
+      const speed = base * DPR * speedMul;
+      const angle = - (Math.PI*0.25 + Math.random()*Math.PI*0.5);
+      state.balls.push({ x, y, r: (state.mobile? 10:8)*DPR, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed });
+    }
+
+    function resetLevel(next=false){
+      if(next){ state.stage++; stageEl.textContent = state.stage; state.rows = Math.min(11, state.rows+1); }
+      state.launched = false; state.balls.length = 0; state.powerups.length = 0;
+      const p = state.paddle;
+      const baseW = (state.mobile? 200: 150) * DPR;
+      p.w = clamp(baseW - (state.stage-1)*5*DPR, state.mobile? 140*DPR : 90*DPR, 260*DPR);
+      p.x = state.w/2; p.targetX = p.x;
+      layoutBricks();
+      newBall(p.x, state.paddle.y - 20*DPR);
+      scoreEl.textContent = state.score; livesEl.textContent = state.lives;
+    }
+
+    function spawnParticles(x,y,color){
+      for(let i=0;i<8;i++) state.particles.push({ x, y, vx: rand(-80,80)*DPR, vy: rand(-120,0)*DPR, life: 0.6, color });
+    }
+
+    function dropPowerup(x,y){
+      const roll = Math.random(); let type=null;
+      if(roll < 0.10) type='M'; else if(roll<0.22) type='W'; else if(roll<0.34) type='S';
+      if(!type) return; state.powerups.push({ x, y, vy: 140*DPR, type, w: 22*DPR, h: 14*DPR });
+    }
+
+    function applyPowerup(type){
+      const p = state.paddle;
+      if(type==='W'){ p.w = clamp(p.w * 1.25, 90*DPR, 300*DPR); showToast('Paddle ↑ 넓이 증가'); }
+      else if(type==='S'){ for(const b of state.balls){ b.vx*=0.8; b.vy*=0.8; } showToast('속도 ↓ 슬로우'); }
+      else if(type==='M'){ const old = state.balls.slice(); for(const b of old){ newBall(b.x, b.y, 1); } showToast('멀티볼!'); }
+    }
+
+    function setMobileMode(on){
+      state.mobile = !!on;
+      document.body.classList.toggle('mobile', state.mobile);
+      state.cols = state.mobile ? 6 : 9;
+      state.brickH = state.mobile ? 28 : 24;
+      state.gutter = state.mobile ? 10 : 8;
+      resetLevel(false);
+      resize();
+      btnMobile.textContent = `모바일 최적화: ${state.mobile ? '켬' : '끔'}`;
+      showToast(state.mobile ? '모바일 UI 최적화 적용' : '모바일 최적화 해제');
+    }
+
+    const input = { left:false, right:false };
+    window.addEventListener('keydown', e=>{
+      if(e.code==='ArrowLeft' || e.code==='KeyA') input.left=true;
+      if(e.code==='ArrowRight' || e.code==='KeyD') input.right=true;
+      if(e.code==='Space') toggleLaunchOrPause();
+    });
+    window.addEventListener('keyup', e=>{
+      if(e.code==='ArrowLeft' || e.code==='KeyA') input.left=false;
+      if(e.code==='ArrowRight' || e.code==='KeyD') input.right=false;
+    });
+
+    let dragging=false;
+    cv.addEventListener('pointerdown', e=>{ dragging=true; cv.setPointerCapture(e.pointerId); if(!state.launched && !state.paused) state.launched=true; });
+    cv.addEventListener('pointerup',   ()=>{ dragging=false; });
+    cv.addEventListener('pointermove', e=>{
+      if(!dragging) return;
+      const rect = cv.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * DPR;
+      state.paddle.targetX = x;
+    });
+
+    btnPause.addEventListener('click', ()=>{ state.paused = !state.paused; btnPause.textContent = state.paused? '계속' : '일시정지'; });
+    btnRestart.addEventListener('click', ()=>{ state.score=0; state.lives=3; state.stage=1; stageEl.textContent=1; resetLevel(false); });
+    btnMobile.addEventListener('click', ()=> setMobileMode(!state.mobile));
+
+    function toggleLaunchOrPause(){
+      if(!state.launched){ state.launched=true; }
+      else { state.paused = !state.paused; btnPause.textContent = state.paused? '계속' : '일시정지'; }
+    }
+
+    function rectCircleCollide(rx,ry,rw,rh, cx,cy,cr){
+      const nx = Math.max(rx, Math.min(cx, rx+rw));
+      const ny = Math.max(ry, Math.min(cy, ry+rh));
+      const dx = cx-nx, dy = cy-ny; return (dx*dx + dy*dy) <= cr*cr;
+    }
+
+    function step(dt){
+      const p = state.paddle;
+      const move = (input.right?1:0) - (input.left?1:0);
+      if(move !== 0){ p.targetX += move * p.speed * dt; }
+      p.x += (p.targetX - p.x) * Math.min(1, dt*12);
+      p.x = clamp(p.x, p.w/2 + 8*DPR, state.w - p.w/2 - 8*DPR);
+
+      for(let i=state.balls.length-1;i>=0;i--){
+        const b = state.balls[i];
+        if(!state.launched){ b.x = p.x; b.y = p.y - 20*DPR; continue; }
+        b.x += b.vx*dt; b.y += b.vy*dt;
+        if(b.x < b.r){ b.x=b.r; b.vx*=-1; }
+        if(b.x > state.w - b.r){ b.x=state.w - b.r; b.vx*=-1; }
+        if(b.y < b.r + 8*DPR){ b.y=b.r + 8*DPR; b.vy*=-1; }
+        if(b.y > state.h + 50*DPR){ state.balls.splice(i,1); }
+      }
+
+      if(state.launched && state.balls.length===0){
+        state.lives--; livesEl.textContent = state.lives;
+        if(state.lives<0){ state.lives=3; state.score=0; state.stage=1; stageEl.textContent=1; showToast('게임 오버'); }
+        resetLevel(false); return;
+      }
+
+      // Paddle collision
+      for(const b of state.balls){
+        if(rectCircleCollide(p.x-p.w/2, p.y-p.h/2, p.w, p.h, b.x,b.y,b.r)){
+          const rel = (b.x - p.x) / (p.w/2);
+          const speed = Math.hypot(b.vx,b.vy) * 1.01;
+          const ang = (-Math.PI*0.15) + (-Math.PI*0.7) * rel;
+          b.vx = Math.cos(ang)*speed; b.vy = -Math.abs(Math.sin(ang)*speed);
+          b.y = p.y - p.h/2 - b.r - 0.1;
+        }
+      }
+
+      // Brick collision & scoring — 어느 방향에서 맞아도 즉시 파괴
+      let aliveCount = 0;
+      for(const br of state.bricks){
+        if(!br.alive) continue; aliveCount++;
+        for(const b of state.balls){
+          if(!rectCircleCollide(br.x, br.y, br.w, br.h, b.x,b.y,b.r)) continue;
+          // 반사 (축 겹침 기준) — 하지만 파괴는 무조건
+          const ox = (br.x + br.w/2) - b.x; const oy = (br.y + br.h/2) - b.y;
+          const ax = (br.w/2 + b.r) - Math.abs(ox); const ay = (br.h/2 + b.r) - Math.abs(oy);
+          if(ax < ay){ b.vx *= -1; b.x += (ox>0? -ax: ax); }
+          else { b.vy *= -1; b.y += (oy>0? -ay: ay); }
+
+          br.alive = false; // 즉시 파괴
+          state.score += br.score; scoreEl.textContent = state.score;
+          spawnParticles(b.x,b.y, br.color);
+          dropPowerup(br.x+br.w/2, br.y+br.h/2);
+        }
+      }
+
+      // Powerups
+      for(let i=state.powerups.length-1;i>=0;i--){
+        const pu = state.powerups[i]; pu.y += pu.vy*dt;
+        if(rectCircleCollide(p.x-p.w/2, p.y-p.h/2, p.w, p.h, pu.x, pu.y, Math.max(pu.w,pu.h)/2)){
+          applyPowerup(pu.type); state.powerups.splice(i,1); continue;
+        }
+        if(pu.y > state.h + 40*DPR) state.powerups.splice(i,1);
+      }
+
+      // Particles
+      for(let i=state.particles.length-1;i>=0;i--){
+        const pa = state.particles[i]; pa.life -= dt; if(pa.life<=0){ state.particles.splice(i,1); continue; }
+        pa.x += pa.vx*dt; pa.y += pa.vy*dt; pa.vy += 480*DPR*dt;
+      }
+
+      if(aliveCount===0){ showToast(`스테이지 ${state.stage} 클리어`); resetLevel(true); }
+    }
+
+    function draw(){
+      const { w,h } = state; ctx.clearRect(0,0,w,h);
+      const grd = ctx.createLinearGradient(0,0,0,h); grd.addColorStop(0,'#0f172a'); grd.addColorStop(1,'#0b1220'); ctx.fillStyle=grd; ctx.fillRect(0,0,w,h);
+
+      for(const br of state.bricks){ if(!br.alive) continue; ctx.fillStyle=br.color; ctx.fillRect(br.x, br.y, br.w, br.h); ctx.fillStyle='rgba(0,0,0,.15)'; ctx.fillRect(br.x, br.y+br.h-4*DPR, br.w, 4*DPR); }
+
+      const p = state.paddle; ctx.fillStyle='#1f2a44'; ctx.fillRect(p.x-p.w/2, p.y-p.h/2, p.w, p.h); ctx.fillStyle='#2d7ff9'; ctx.fillRect(p.x-p.w/2, p.y-p.h/2, p.w, 4*DPR);
+
+      for(const b of state.balls){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fillStyle='#e6edf3'; ctx.fill(); ctx.closePath(); }
+
+      for(const pu of state.powerups){ ctx.fillStyle='#111827'; ctx.fillRect(pu.x-pu.w/2, pu.y-pu.h/2, pu.w, pu.h); ctx.strokeStyle='#2a3650'; ctx.strokeRect(pu.x-pu.w/2, pu.y-pu.h/2, pu.w, pu.h); ctx.fillStyle='#23a559'; ctx.font=`${12*DPR}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(pu.type, pu.x, pu.y+1*DPR); }
+
+      for(const pa of state.particles){ ctx.globalAlpha = Math.max(0, pa.life/0.6); ctx.fillStyle = pa.color; ctx.fillRect(pa.x,pa.y, 3*DPR,3*DPR); ctx.globalAlpha = 1; }
+
+      if(state.paused){ drawCenterText('일시정지 — Space', h*0.5); } else if(!state.launched){ drawCenterText('Space 또는 터치로 시작', h*0.5); }
+    }
+
+    function drawCenterText(t, y){
+      ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(0,y-40*DPR, state.w, 80*DPR);
+      ctx.fillStyle='#e6edf3'; ctx.font=`${24*DPR}px ui-sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(t, state.w/2, y);
+    }
+
+    function loop(ts){ if(!state.last) state.last = ts; const dt = Math.min(0.033, (ts - state.last)/1000); state.last = ts; if(!state.paused) step(dt); draw(); requestAnimationFrame(loop); }
+
+    function init(){ state.paddle.h = 16*DPR; resetLevel(false); resize(); window.addEventListener('resize', resize); requestAnimationFrame(loop); }
+
+    init();
+  })();
+  </script>
+</body>
+</html>
