@@ -2,13 +2,17 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>Minimal Breaker — 오리지널 HTML5 게임</title>
   <style>
     /*
-      Minimal Breaker (c) 2025 Original work by 코덕"
+      Minimal Breaker (c) 2025 Original work by ChatGPT for user "돌려"
       - 순수 HTML/CSS/JS, 외부 라이브러리/에셋 0개
       - GitHub Pages/Tistory iframe 호스팅 적합
+      - 기능: 모바일 최적화 토글, 맵 폭 축소(기본 9열/모바일 6열), 세로 비율 16:12, 모바일 1.2배(16:14.4)
+      - 변경: 모바일 화면 들썩임 방지 CSS/로직 적용, 벽돌 즉시 파괴, 모바일에서 패들(판) 폭 15% 축소
+      - Fix: draw() 내 오타 p_h → p.h 수정
+      - Tests: 간단 런타임 자기진단(비율/그리기/속성) 추가
     */
 
     :root{
@@ -16,13 +20,20 @@
       --accent:#23a559; --warn:#f5a524; --danger:#ef4444; --panel:#111827;
     }
 
-    html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink);
-      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    /* 화면 흔들림 방지 */
+    html, body {
+      overscroll-behavior: none;      /* 상/하 바운스 방지 */
+      -webkit-overflow-scrolling: auto;
+      overflow: hidden;               /* 페이지 자체 스크롤 제거 */
+      -webkit-text-size-adjust: 100%; /* iOS 자동 글자 확대 방지 */
+      height:100%; margin:0; background:var(--bg); color:var(--ink);
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
 
     .wrap{ display:flex; align-items:center; justify-content:center; min-height:100%; padding:16px; box-sizing:border-box; }
 
     /* 맵 폭 축소 */
-    .game{ width:min(720px, 100%); }
+    .game{ width:min(720px, 100%); margin:0 auto; }
     body.mobile .game{ width:min(600px, 100%); }
 
     .bar{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 10px 0; color:var(--muted); }
@@ -31,11 +42,15 @@
     .btn{ background:var(--panel); color:var(--ink); border:1px solid #202838; padding:6px 10px; border-radius:10px; cursor:pointer; }
     .btn:hover{ border-color:#2a3650; }
 
-    /* 세로를 더 길게: 16:12 (4:3) */
-    canvas{ width:100%; aspect-ratio: 16 / 12; display:block; background:linear-gradient(180deg, #0c111a 0%, #0c111a 70%, #0a0f18 100%); box-shadow:0 12px 40px rgba(0,0,0,.35); border-radius:14px; }
-
-    /* 모바일 모드에서 UI 높이를 1.5배(세로 비율 16:12 → 16:18) */
-    body.mobile canvas{ aspect-ratio: 16 / 18; }
+    /* 기본: 세로 더 길게 16:12, 모바일: 1.2배 = 16:14.4 */
+    canvas{
+      width:100%; aspect-ratio: 16 / 12; display:block;
+      background:linear-gradient(180deg, #0c111a 0%, #0c111a 70%, #0a0f18 100%);
+      box-shadow:0 12px 40px rgba(0,0,0,.35); border-radius:14px;
+      /* 터치 제스처로 스크롤/줌 방지 + 합성가속 */
+      touch-action: none; -webkit-user-select: none; user-select: none; transform: translateZ(0);
+    }
+    body.mobile canvas{ aspect-ratio: 16 / 14.4; }
 
     body.mobile .bar{ font-size:16px; }
 
@@ -85,10 +100,11 @@
     const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 
     const state = {
-      w: 1280, h: 960, // 16:12
+      w: 1280, h: 960, // 기본 16:12
+      // 패들: 모바일에서 폭 15% 축소 적용 예정
       paddle: { x: 640, y: 920, w: 150, h: 16, speed: 650, targetX: 640 },
       balls: [], bricks: [], particles: [], powerups: [],
-      rows: 7, // 세로 늘어난 만큼 기본 행 수 +1
+      rows: 7, // 세로 늘어난 만큼 기본 행 +1
       cols: 9, // 좁은 폭
       gutter: 8,
       brickH: 24,
@@ -107,12 +123,20 @@
       showToast.tid = setTimeout(()=> toast.classList.remove('show'), 1200);
     }
 
+    // 가로폭 변화에만 반응하는 리사이즈 (주소창 높이 변화 무시)
+    const container = document.querySelector('.game');
+    let lastWidth = 0;
+
     function resize(){
-      // 16:12 내부 비율 유지
-      const rect = cv.getBoundingClientRect();
-      state.w = Math.round(rect.width * DPR);
-      const ar = state.mobile ? (18/16) : (12/16);
-      state.h = Math.round(rect.width * ar * DPR); // 높이 증가
+      const rect = container.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      if (Math.abs(width - lastWidth) < 1) return; // 가로폭이 같으면 무시
+      lastWidth = width;
+
+      state.w = Math.round(width * DPR);
+      const ar = state.mobile ? (14.4/16) : (12/16); // 모바일 1.2배
+      state.h = Math.round(width * ar * DPR);
+
       cv.width = state.w; cv.height = state.h;
       state.paddle.y = state.h - 40 * DPR;
       if(!state.launched){
@@ -132,13 +156,12 @@
       const bricks = [];
       for(let r=0;r<rows;r++){
         for(let c=0;c<cols;c++){
-          // HP 제거: 언제나 1회 충돌로 파괴
-          bricks.push({
+          bricks.push({ // 즉시 파괴
             x: Math.round(marginX + c*(bw+gutter)),
             y: Math.round(marginY + r*(brickH+gutter)),
             w: Math.round(bw), h: brickH,
             color: colors[(r+c)%colors.length], alive:true,
-            score: 20 // 즉시 파괴이므로 점수 소폭 상향
+            score: 20
           });
         }
       }
@@ -156,8 +179,14 @@
       if(next){ state.stage++; stageEl.textContent = state.stage; state.rows = Math.min(11, state.rows+1); }
       state.launched = false; state.balls.length = 0; state.powerups.length = 0;
       const p = state.paddle;
-      const baseW = (state.mobile? 200: 150) * DPR;
-      p.w = clamp(baseW - (state.stage-1)*5*DPR, state.mobile? 140*DPR : 90*DPR, 260*DPR);
+      // 모바일에서 패들 폭 15% 축소 적용
+      const baseDesktop = 150 * DPR;
+      const baseMobile = (200 * 0.85) * DPR; // 기존 200에서 15% 축소 → 170
+      const minDesktop = 90 * DPR;
+      const minMobile = (140 * 0.85) * DPR;   // 119로 축소
+      const baseW = state.mobile ? baseMobile : baseDesktop;
+      const minW  = state.mobile ? minMobile  : minDesktop;
+      p.w = clamp(baseW - (state.stage-1)*5*DPR, minW, 260*DPR);
       p.x = state.w/2; p.targetX = p.x;
       layoutBricks();
       newBall(p.x, state.paddle.y - 20*DPR);
@@ -181,6 +210,8 @@
       else if(type==='M'){ const old = state.balls.slice(); for(const b of old){ newBall(b.x, b.y, 1); } showToast('멀티볼!'); }
     }
 
+    function updateMobileButton(){ btnMobile.textContent = `모바일 최적화: ${state.mobile ? '켬' : '끔'}`; }
+
     function setMobileMode(on){
       state.mobile = !!on;
       document.body.classList.toggle('mobile', state.mobile);
@@ -188,8 +219,9 @@
       state.brickH = state.mobile ? 28 : 24;
       state.gutter = state.mobile ? 10 : 8;
       resetLevel(false);
-      resize();
-      btnMobile.textContent = `모바일 최적화: ${state.mobile ? '켬' : '끔'}`;
+      // 강제 리사이즈(같은 폭이어도 높이 재계산)
+      forceResize();
+      updateMobileButton();
       showToast(state.mobile ? '모바일 UI 최적화 적용' : '모바일 최적화 해제');
     }
 
@@ -203,6 +235,9 @@
       if(e.code==='ArrowLeft' || e.code==='KeyA') input.left=false;
       if(e.code==='ArrowRight' || e.code==='KeyD') input.right=false;
     });
+
+    // 터치 스크롤 완전 차단 (iframe 내부 페이지라 OK)
+    document.addEventListener('touchmove', (e)=> { e.preventDefault(); }, { passive:false });
 
     let dragging=false;
     cv.addEventListener('pointerdown', e=>{ dragging=true; cv.setPointerCapture(e.pointerId); if(!state.launched && !state.paused) state.launched=true; });
@@ -263,22 +298,18 @@
         }
       }
 
-      // Brick collision & scoring — 어느 방향에서 맞아도 즉시 파괴
+      // Brick collision & scoring — 즉시 파괴
       let aliveCount = 0;
       for(const br of state.bricks){
         if(!br.alive) continue; aliveCount++;
         for(const b of state.balls){
           if(!rectCircleCollide(br.x, br.y, br.w, br.h, b.x,b.y,b.r)) continue;
-          // 반사 (축 겹침 기준) — 하지만 파괴는 무조건
           const ox = (br.x + br.w/2) - b.x; const oy = (br.y + br.h/2) - b.y;
           const ax = (br.w/2 + b.r) - Math.abs(ox); const ay = (br.h/2 + b.r) - Math.abs(oy);
           if(ax < ay){ b.vx *= -1; b.x += (ox>0? -ax: ax); }
           else { b.vy *= -1; b.y += (oy>0? -ay: ay); }
-
-          br.alive = false; // 즉시 파괴
-          state.score += br.score; scoreEl.textContent = state.score;
-          spawnParticles(b.x,b.y, br.color);
-          dropPowerup(br.x+br.w/2, br.y+br.h/2);
+          br.alive = false; state.score += br.score; scoreEl.textContent = state.score;
+          spawnParticles(b.x,b.y, br.color); dropPowerup(br.x+br.w/2, br.y+br.h/2);
         }
       }
 
@@ -324,7 +355,46 @@
 
     function loop(ts){ if(!state.last) state.last = ts; const dt = Math.min(0.033, (ts - state.last)/1000); state.last = ts; if(!state.paused) step(dt); draw(); requestAnimationFrame(loop); }
 
-    function init(){ state.paddle.h = 16*DPR; resetLevel(false); resize(); window.addEventListener('resize', resize); requestAnimationFrame(loop); }
+    // --- Test helpers ---
+    function approx(a,b,eps=1e-3){ return Math.abs(a-b) <= eps; }
+    function assert(cond, msg){ if(!cond) throw new Error(msg); }
+    function forceResize(){ lastWidth = 0; resize(); }
+
+    function runTests(){
+      try{
+        // 1) 기본 속성 테스트
+        assert(typeof state.paddle.h === 'number', 'paddle.h should be a number');
+
+        // 2) 비율 테스트 (데스크톱/모바일)
+        const prevMobile = state.mobile;
+        state.mobile = false; forceResize();
+        assert(approx(state.h/state.w, 12/16, 0.01), 'desktop aspect should be ~12/16');
+        state.mobile = true; forceResize();
+        assert(approx(state.h/state.w, 14.4/16, 0.01), 'mobile aspect should be ~14.4/16');
+        state.mobile = prevMobile; forceResize();
+
+        // 3) draw/step 호출시 예외 없음
+        step(0.016); draw();
+
+        console.log('[Minimal Breaker] Tests passed.');
+        showToast('Self-test: OK');
+      }catch(err){
+        console.error('[Minimal Breaker] Test failed:', err);
+        showToast('Self-test failed (F12 console)');
+      }
+      updateMobileButton();
+    }
+
+    function init(){
+      state.paddle.h = 16*DPR;
+      // 최초 lastWidth 설정 후 시작
+      requestAnimationFrame(()=>{ const r = container.getBoundingClientRect(); lastWidth = Math.round(r.width); resize(); });
+      resetLevel(false);
+      window.addEventListener('resize', resize);
+      requestAnimationFrame(loop);
+      // Run tests a tiny bit later to ensure first layout
+      setTimeout(runTests, 60);
+    }
 
     init();
   })();
