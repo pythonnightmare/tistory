@@ -9,8 +9,17 @@ h1{font-size:18px;margin:0 0 10px}
 button,select{border:0;border-radius:10px;background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
 button.sec{background:#374151}
 .badge{padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #334155}
-canvas{display:block;background:#f7efd9;border:1px solid #111827;border-radius:12px}
+canvas{
+  display:block;background:#f7efd9;border:1px solid #111827;border-radius:12px;
+  /* 작은 화면에서 자동 축소되도록 */
+  width:min(900px, 92vw); height:auto;
+}
 small{color:#93c5fd}
+
+/* 모바일 최적화 켬일 때 살짝 더 큼직한 UI 느낌 */
+body.mobile .wrap{ padding:18px; }
+body.mobile h1{ font-size:20px; }
+body.mobile .badge{ font-weight:700; }
 </style>
 
 <div class="wrap">
@@ -23,6 +32,7 @@ small{color:#93c5fd}
       <option value="ai-ez">사람 vs AI(보통)</option>
       <option value="ai-hard" selected>사람 vs AI(강함)</option>
     </select>
+    <button id="mobile" class="sec">모바일 최적화: 끔</button>
     <span class="badge" id="status">흑 선공</span>
   </div>
   <canvas id="cv" width="900" height="900"></canvas>
@@ -31,15 +41,36 @@ small{color:#93c5fd}
 
 <script>
 /* ===== 기본 상수/상태 ===== */
-const N=15, MARGIN=40, STAR=[3,7,11], BLACK=1, WHITE=2, RATIO=0.42;
+const N=15, BLACK=1, WHITE=2;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const statusEl=document.getElementById('status'), modeSel=document.getElementById('mode');
+const mobileBtn=document.getElementById('mobile');
+
+/* 모바일 최적화 토글에 따라 바뀌는 파라미터들 */
+const mobileUI = {
+  on: false,
+  MARGIN: 40,               // 기본 여백
+  MARGIN_M: 48,             // 모바일 여백(조금 크게)
+  RATIO: 0.42,              // 돌 반지름 비율
+  RATIO_M: 0.50,            // 모바일에서 돌 크게
+  GRID_W: 2,                // 선 굵기
+  GRID_W_M: 3,              // 모바일 선 굵기
+  STAR_R: 4,                // 별점(홀이) 반지름
+  STAR_R_M: 6               // 모바일 별점 더 큼
+};
+
+function MARGIN(){ return mobileUI.on ? mobileUI.MARGIN_M : mobileUI.MARGIN; }
+function RATIO(){ return mobileUI.on ? mobileUI.RATIO_M  : mobileUI.RATIO; }
+function GRID_W(){ return mobileUI.on ? mobileUI.GRID_W_M: mobileUI.GRID_W; }
+function STAR_R(){ return mobileUI.on ? mobileUI.STAR_R_M: mobileUI.STAR_R; }
+const STAR=[3,7,11];
+
 let board, turn, over, moves, winLine=null;
 
 function clear(){ ctx.clearRect(0,0,cv.width,cv.height); }
-function cellSize(){ return (cv.width - MARGIN*2)/(N-1); }
-function cellCenter(gx,gy){ const s=cellSize(); return {x:MARGIN+gx*s, y:MARGIN+gy*s, s}; }
-function pxToCell(px,py){ const s=cellSize(); const gx=Math.round((px-MARGIN)/s), gy=Math.round((py-MARGIN)/s); return {gx,gy}; }
+function cellSize(){ return (cv.width - MARGIN()*2)/(N-1); }
+function cellCenter(gx,gy){ const s=cellSize(); return {x:MARGIN()+gx*s, y:MARGIN()+gy*s, s}; }
+function pxToCell(px,py){ const s=cellSize(); const gx=Math.round((px-MARGIN())/s), gy=Math.round((py-MARGIN())/s); return {gx,gy}; }
 
 /* ===== 보드 그리기 ===== */
 function drawBoard(){
@@ -47,20 +78,20 @@ function drawBoard(){
   const g=ctx.createLinearGradient(0,0,cv.width,cv.height); g.addColorStop(0,'#f7efd9'); g.addColorStop(1,'#f0e2bf');
   ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
 
-  ctx.strokeStyle='#111827'; ctx.lineWidth=2;
+  ctx.strokeStyle='#111827'; ctx.lineWidth=GRID_W();
   const s=cellSize();
   for(let i=0;i<N;i++){
-    ctx.beginPath(); ctx.moveTo(MARGIN, MARGIN+i*s); ctx.lineTo(MARGIN+(N-1)*s, MARGIN+i*s); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(MARGIN+i*s, MARGIN); ctx.lineTo(MARGIN+i*s, MARGIN+(N-1)*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(MARGIN(), MARGIN()+i*s); ctx.lineTo(MARGIN()+(N-1)*s, MARGIN()+i*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(MARGIN()+i*s, MARGIN()); ctx.lineTo(MARGIN()+i*s, MARGIN()+(N-1)*s); ctx.stroke();
   }
   ctx.fillStyle='#0b1220';
-  STAR.forEach(ix=>STAR.forEach(iy=>{ const {x,y}=cellCenter(ix,iy); ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill(); }));
+  STAR.forEach(ix=>STAR.forEach(iy=>{ const {x,y}=cellCenter(ix,iy); ctx.beginPath(); ctx.arc(x,y,STAR_R(),0,Math.PI*2); ctx.fill(); }));
 
   for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
   if(winLine) drawWinLine(winLine);
 }
 function drawStone(gx,gy,col){
-  const {x,y,s}=cellCenter(gx,gy); const r=s*RATIO;
+  const {x,y,s}=cellCenter(gx,gy); const r=s*RATIO();
   const gr=ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.2,x,y,r);
   if(col===BLACK){ gr.addColorStop(0,'#6b7280'); gr.addColorStop(1,'#111827'); }
   else{ gr.addColorStop(0,'#fff'); gr.addColorStop(1,'#d1d5db'); }
@@ -104,12 +135,7 @@ function undo(){
 }
 function isAIturn(){ return (modeSel.value==='ai-ez' || modeSel.value==='ai-hard') && turn===WHITE; }
 
-/* ===== 강화 AI =====
- * - 후보 생성: 돌에서 맨해튼 거리 ≤ 2 칸만 (비었을 땐 중앙)
- * - 평가: 열린4/닫힌4/열린3/닫힌3/열린2 가중치 + 중심/근접 보너스
- * - 보통: 1-플라이(내 최선 한 수) + 즉시수 (승/수비)
- * - 강함: 알파베타(depth=2~3, 후보 상위 K만 탐색)
- */
+/* ===== 강화 AI(원본 그대로) ===== */
 const SCORE = {
   FIVE: 1_000_000_000,
   OPEN_FOUR: 8_000_000,
@@ -120,22 +146,16 @@ const SCORE = {
   CLOSED_TWO: 120
 };
 function lineScore(x,y,c){
-  // (x,y)에 c를 뒀다고 가정하고 4방향 패턴 평가
   let total=0;
   const dirs=[[1,0],[0,1],[1,1],[1,-1]];
   for(const [dx,dy] of dirs){
     let count=1, openL=0, openR=0;
-
-    // 한쪽
     let nx=x+dx, ny=y+dy;
     while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===c){count++; nx+=dx; ny+=dy;}
     if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===0) openR=1;
-
-    // 반대쪽
     nx=x-dx; ny=y-dy;
     while(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===c){count++; nx-=dx; ny-=dy;}
     if(nx>=0&&nx<N&&ny>=0&&ny<N&&board[ny][nx]===0) openL=1;
-
     const open = openL + openR;
     if(count>=5) { total += SCORE.FIVE; continue; }
     if(count===4){
@@ -152,14 +172,11 @@ function lineScore(x,y,c){
   return total;
 }
 function heuristic(x,y,me){
-  // 내 패턴 점수 - 상대 패턴 점수 + 중앙/근접 보너스
   const opp = me===WHITE?BLACK:WHITE;
   let s = 0;
   s += lineScore(x,y,me);
-  s += Math.floor(lineScore(x,y,opp)*0.9); // 수비 가중 (상대 위협도 반영)
-  // 중앙 보너스
+  s += Math.floor(lineScore(x,y,opp)*0.9);
   const mid=7; s += (20 - (Math.abs(x-mid)+Math.abs(y-mid))) * 20;
-  // 이웃 보너스
   let near=0;
   for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
     const nx=x+dx, ny=y+dy; if(nx<0||ny<0||nx>=N||ny>=N) continue;
@@ -169,14 +186,11 @@ function heuristic(x,y,me){
   return s;
 }
 function genCandidates(){
-  const cand=[];
-  let any=false;
+  const cand=[]; let any=false;
   for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(board[y][x]) any=true;
-  if(!any) return [[7,7,99999999]]; // 첫 수 중앙
-
+  if(!any) return [[7,7,99999999]];
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){
     if(board[y][x]) continue;
-    // 거리2 이내에 돌 없으면 스킵
     let ok=false;
     for(let dy=-2;dy<=2;dy++){ if(ok) break;
       for(let dx=-2;dx<=2;dx++){
@@ -199,11 +213,8 @@ function bestOnePly(me){
   }
   return best;
 }
-// 즉시승/수비 체크
 function immediate(me){
-  // 이 수 두면 이김 / 상대가 다음에 이길 수 있으면 막기
   const opp = me===WHITE?BLACK:WHITE;
-  // 이김
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){
     if(board[y][x]) continue;
     board[y][x]=me;
@@ -211,7 +222,6 @@ function immediate(me){
     board[y][x]=0;
     if(win) return [x,y];
   }
-  // 막기
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){
     if(board[y][x]) continue;
     board[y][x]=opp;
@@ -221,35 +231,26 @@ function immediate(me){
   }
   return null;
 }
-
-/* === 알파베타(강함) === */
 function alphaBeta(depth, me, alpha, beta){
   const opp = me===WHITE?BLACK:WHITE;
-  // 후보 뽑고 정렬(탐색 줄이기)
   let cand = genCandidates();
   cand.forEach(c => c[2] = heuristic(c[0], c[1], me));
   cand.sort((a,b)=>b[2]-a[2]);
-  const LIMIT = depth>=3 ? 6 : 10; // 노드 폭 제한
+  const LIMIT = depth>=3 ? 6 : 10;
   cand = cand.slice(0, LIMIT);
-
   let bestScore = -1e100, bestMove = null;
   for(const [x,y,] of cand){
     board[y][x]=me;
-    // 빠른 승리 프루닝
     if(checkWin(x,y,me)){ board[y][x]=0; return {score: SCORE.FIVE, move:[x,y]}; }
-    const sc = (depth<=1)
-      ? evaluateStatic(me)  // 정적 평가
-      : -alphaBeta(depth-1, opp, -beta, -alpha).score;
+    const sc = (depth<=1) ? evaluateStatic(me) : -alphaBeta(depth-1, opp, -beta, -alpha).score;
     board[y][x]=0;
-
     if(sc > bestScore){ bestScore=sc; bestMove=[x,y]; }
     if(sc > alpha) alpha=sc;
-    if(alpha >= beta) break; // 컷
+    if(alpha >= beta) break;
   }
   return {score: bestScore, move: bestMove};
 }
 function evaluateStatic(me){
-  // 보드 전체 간단 평가(내 위협 - 상대 위협)
   const opp = me===WHITE?BLACK:WHITE;
   let my=0, their=0;
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){
@@ -259,21 +260,14 @@ function evaluateStatic(me){
   }
   return my - their;
 }
-
-/* === 모드별 AI === */
 function aiMove(){
   const me = WHITE;
-  // 1) 즉시 수(승/수비)
   const fast = immediate(me);
   if(fast){ place(fast[0], fast[1], true); return; }
-
   if(modeSel.value==='ai-ez'){
-    // 보통: 1-플라이 최적
     const best = bestOnePly(me) || [7,7];
     place(best[0], best[1], true);
   } else {
-    // 강함: 알파베타 (깊이 2~3)
-    // 중반 이후 돌이 많아지면 2, 초반/후반은 3까지
     const depth = moves.length<10 || moves.length>60 ? 3 : 2;
     const {move} = alphaBeta(depth, me, -1e100, 1e100);
     const m = move || bestOnePly(me) || [7,7];
@@ -288,23 +282,29 @@ document.getElementById('new').onclick=reset;
 document.getElementById('undo').onclick=undo;
 modeSel.onchange=()=>{ statusEl.textContent=(turn===BLACK?'흑 차례':'백 차례') + (isAIturn() ? ' (AI)' : ''); };
 
-reset();
-</script>
-  <script>
-(function(){
-  function report(){
-    const h = Math.max(
-      document.body.scrollHeight,
-      document.documentElement.scrollHeight
-    );
-    // 내부 기준 가로 900을 함께 보냄
-    window.parent?.postMessage({ type:'OMOK_SIZE', w:900, h }, '*');
-  }
-  window.addEventListener('load', report);
-  window.addEventListener('resize', () => setTimeout(report, 0));
-  // 글꼴/이미지 로딩 지연 대비
-  setTimeout(report, 100);
-})();
-</script>
+/* === 모바일 UI 토글 === */
+mobileBtn.onclick = ()=>{
+  mobileUI.on = !mobileUI.on;
+  document.body.classList.toggle('mobile', mobileUI.on);
+  mobileBtn.textContent = `모바일 최적화: ${mobileUI.on ? '켬' : '끔'}`;
+  drawBoard();
+  // 부모(티스토리)에게 새 높이 알려주기
+  reportSizeSoon();
+};
 
+reset();
+
+/* ===== 부모 창에 사이즈 보고(티스토리 iframe용) ===== */
+function report(){
+  const h = Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight
+  );
+  window.parent?.postMessage({ type:'OMOK_SIZE', w:900, h }, '*');
+}
+function reportSizeSoon(){ setTimeout(report, 0); setTimeout(report, 120); }
+window.addEventListener('load', report);
+window.addEventListener('resize', reportSizeSoon);
+setTimeout(report, 100);
+</script>
 </html>
