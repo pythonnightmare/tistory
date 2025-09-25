@@ -12,13 +12,13 @@ button.sec{background:#374151}
 canvas{
   display:block;background:#f7efd9;border:1px solid #111827;border-radius:12px;
   /* 작은 화면에서 자동 축소되도록 */
-  width:min(900px, 92vw); height:auto;
+  width:min(900px,92vw); height:auto;
   /* 모바일 탭/제스처 품질 개선: 300ms 지연/더블탭 확대 제거 */
   touch-action: manipulation;
 }
 small{color:#93c5fd}
 
-/* 모바일 최적화 켬일 때 살짝 더 큼직한 UI 느낌 */
+/* 모바일 UI 토글 켬일 때 살짝 더 큼직한 UI */
 body.mobile .wrap{ padding:18px; }
 body.mobile h1{ font-size:20px; }
 body.mobile .badge{ font-weight:700; }
@@ -48,23 +48,18 @@ const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const statusEl=document.getElementById('status'), modeSel=document.getElementById('mode');
 const mobileBtn=document.getElementById('mobile');
 
-/* 모바일 최적화 토글에 따라 바뀌는 파라미터들 */
+/* 모바일 UI 토글 파라미터 */
 const mobileUI = {
-  on: false,
-  MARGIN: 40,               // 기본 여백
-  MARGIN_M: 48,             // 모바일 여백(조금 크게)
-  RATIO: 0.42,              // 돌 반지름 비율
-  RATIO_M: 0.50,            // 모바일에서 돌 크게
-  GRID_W: 2,                // 선 굵기
-  GRID_W_M: 3,              // 모바일 선 굵기
-  STAR_R: 4,                // 별점(홀이) 반지름
-  STAR_R_M: 6               // 모바일 별점 더 큼
+  on:false,
+  MARGIN:40, MARGIN_M:48,
+  RATIO:0.42, RATIO_M:0.50,     // 돌 크기
+  GRID_W:2,  GRID_W_M:3,        // 선 굵기
+  STAR_R:4,  STAR_R_M:6         // 별점 크기
 };
-
-function MARGIN(){ return mobileUI.on ? mobileUI.MARGIN_M : mobileUI.MARGIN; }
-function RATIO(){ return mobileUI.on ? mobileUI.RATIO_M  : mobileUI.RATIO; }
-function GRID_W(){ return mobileUI.on ? mobileUI.GRID_W_M: mobileUI.GRID_W; }
-function STAR_R(){ return mobileUI.on ? mobileUI.STAR_R_M: mobileUI.STAR_R; }
+function MARGIN(){ return mobileUI.on?mobileUI.MARGIN_M:mobileUI.MARGIN; }
+function RATIO(){  return mobileUI.on?mobileUI.RATIO_M :mobileUI.RATIO;  }
+function GRID_W(){ return mobileUI.on?mobileUI.GRID_W_M:mobileUI.GRID_W; }
+function STAR_R(){ return mobileUI.on?mobileUI.STAR_R_M:mobileUI.STAR_R; }
 const STAR=[3,7,11];
 
 let board, turn, over, moves, winLine=null;
@@ -137,7 +132,7 @@ function undo(){
 }
 function isAIturn(){ return (modeSel.value==='ai-ez' || modeSel.value==='ai-hard') && turn===WHITE; }
 
-/* ===== 강화 AI(원본 그대로) ===== */
+/* ===== 강화 AI ===== */
 const SCORE = {
   FIVE: 1_000_000_000,
   OPEN_FOUR: 8_000_000,
@@ -277,28 +272,27 @@ function aiMove(){
   }
 }
 
-/* ===== 입력/이벤트 (모바일 터치 수정) ===== */
-// CSS 스케일 반영: 화면 좌표 -> 캔버스 내부 좌표
+/* ===== 입력/이벤트 — 모바일 터치 보정 ===== */
+// 화면 좌표 → 캔버스 내부 좌표(반응형 스케일 보정)
 function getCanvasXY(clientX, clientY){
   const r = cv.getBoundingClientRect();
   const scaleX = cv.width / r.width;
   const scaleY = cv.height / r.height;
   return { x: (clientX - r.left) * scaleX, y: (clientY - r.top) * scaleY };
 }
-let lastTouchAt = 0; // 고스트 클릭 방지
+let lastTouchAt = 0; // 고스트 클릭 무시용 타임스탬프
 
 cv.addEventListener('click', e=>{
-  // 터치 직후 발생하는 고스트 클릭 무시
-  if(performance.now() - lastTouchAt < 450) return;
+  if(performance.now() - lastTouchAt < 450) return; // 터치 직후 click 무시
   const p = getCanvasXY(e.clientX, e.clientY);
   const c = pxToCell(p.x, p.y);
   place(c.gx, c.gy);
 });
 
 cv.addEventListener('touchstart', e=>{
-  if(e.touches.length>1) return;        // 멀티터치 무시
+  if(e.touches.length>1) return; // 멀티터치 무시
   lastTouchAt = performance.now();
-  e.preventDefault();                    // 더블탭 확대/스크롤 방지
+  e.preventDefault(); // 더블탭 확대/스크롤 방지
   const t=e.touches[0];
   const p = getCanvasXY(t.clientX, t.clientY);
   const c = pxToCell(p.x, p.y);
@@ -334,7 +328,6 @@ reset();
   window.addEventListener('load', report);
   window.addEventListener('resize', reportSizeSoon);
   setTimeout(report, 100);
-  // 전역에서 쓰기 위해 노출
   window.reportSizeSoon = reportSizeSoon;
 })();
 </script>
