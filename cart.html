@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kart-like 3D — Forward Camera (Christmas / Santa Village / F1 Track) · MIT</title>
+<style>
+  html,body{height:100%;margin:0;background:#0a0d14;color:#e6edf3;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto}
+  .wrap{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr}
+  header{display:flex;gap:.75rem;align-items:center;padding:.75rem 1rem;background:#101726;border-bottom:1px solid #1e2940}
+  header h1{font-size:1rem;margin:0;font-weight:600;opacity:.95}
+  header .btn{background:#172033;border:1px solid #24324f;padding:.45rem .7rem;border-radius:.55rem;cursor:pointer;color:#e6edf3}
+  header .btn:hover{background:#1b2742}
+  header .sep{flex:1}
+  #app{position:relative}
+  #app canvas{display:block;width:100%;height:100%}
+  .hint{opacity:.85;font-size:.9rem}
+  #test-badge{position:fixed;right:10px;bottom:10px;background:#102035;border:1px solid #21314f;padding:.35rem .55rem;border-radius:.55rem;font-size:.8rem;opacity:.9}
+</style>
+<!--
+MIT License — Original code & procedural assets only (no third-party art). Commercial use allowed.
+This demo uses Three.js (MIT) via CDN.
+-->
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>3D Christmas Kart — Forward Cam (Santa Village · F1 Style)</h1>
+    <button id="regen" class="btn">트랙 재생성</button>
+    <button id="reset" class="btn">카트 리셋</button>
+    <label class="btn" title="화면 품질">
+      품질
+      <select id="quality" style="background:transparent;border:none;color:#e6edf3;outline:none;margin-left:.35rem">
+        <option value="high" selected>높음</option>
+        <option value="med">중간</option>
+        <option value="low">낮음</option>
+      </select>
+    </label>
+    <div class="sep"></div>
+    <div class="hint">조작: ↑ 가속 · ↓ 브레이크/후진 · ←/→ 조향 · Space 드리프트 · R 리셋 — 앞을 보는 3D 시점 / 산타마을 / 눈 / F1 트랙 질감</div>
+  </header>
+  <div id="app"></div>
+  <div id="test-badge">Tests: running…</div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+// ===== Test/Debug helpers =====
+function setTestBadge(text, ok=true){
+  const el = document.getElementById('test-badge');
+  if(!el) return;
+  el.textContent = text;
+  el.style.borderColor = ok ? '#1f7a4c' : '#7a1f2a';
+  el.style.background = ok ? '#0f2a1f' : '#2a0f14';
+}
+
+// Prefer THREE.MathUtils.wrap if available; fallback to manual wrap
+const wrap = (typeof THREE.MathUtils.wrap === 'function')
+  ? THREE.MathUtils.wrap
+  : (x, min, max) => { const r = max - min; return ((x - min) % r + r) % r + min; };
+
+// ===== Globals =====
+const app = document.getElementById('app');
+let renderer, scene, camera, clock;
+let kart, kartBody, wheels = [], camRig, lookTarget;
+let trackCurve, trackMesh, trackWidth = 12; // F1 wider
+let edgeLines, curbs; // instanced visuals
+let ground, pines = new THREE.Group(), snow, village = new THREE.Group();
+const keys = {up:false,down:false,left:false,right:false,drift:false};
+const animActors = [];
+
+// Height profile for hills
+let heightParams = { a1:8, a2:4, p1:Math.random(), p2:Math.random() };
+const heightAt = t => (
+  Math.sin((t+heightParams.p1)*Math.PI*2)*heightParams.a1 +
+  Math.sin((t+heightParams.p2)*Math.PI*4)*heightParams.a2
+);
+
+// Kart state (arcade physics, XZ plane with Y from height profile)
+const state = {
+  seed: (Math.random()*1e9)>>>0,
+  v: 0,
+  yaw: 0,
+  pos: new THREE.Vector3(),
+  params: {
+    accel: 38,
+    brake: 46,
+    maxV: 64,
+    drag: 0.992,
+    steerAt0: 2.9,
+    steerAtMax: 0.9,
+    grip: 10.5,
+    driftGrip: 4.0
+  }
+};
+
+// ===== Init =====
+function init(){
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+  renderer.setSize(app.clientWidth, app.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  app.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color('#0a0d14');
+
+  camera = new THREE.PerspectiveCamera(65, app.clientWidth/app.clientHeight, 0.1, 4000);
+  clock = new THREE.Clock();
+
+  // Lights
+  const hemi = new THREE.HemisphereLight('#9ecfff', '#0b1a2a', 0.9); scene.add(hemi);
+  const dir = new THREE.DirectionalLight('#d6e6ff', 1.05); dir.position.set(120,160,80); dir.castShadow = true;
+  dir.shadow.mapSize.set(2048,2048); Object.assign(dir.shadow.camera,{left:-400,right:400,top:400,bottom:-400,near:1,far:1000}); scene.add(dir);
+
+  // Ground (snow)
+  const groundGeo = new THREE.PlaneGeometry(8000, 8000, 1, 1);
+  const groundMat = new THREE.MeshStandardMaterial({ color:'#f1f8ff', roughness:0.92, metalness:0.0 });
+  ground = new THREE.Mesh(groundGeo, groundMat); ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+  // Build world
+  rebuildTrack(state.seed);
+  buildPines(state.seed);
+  buildVillage(state.seed);
+  scene.add(pines);
+  scene.add(village);
+
+  buildKart();
+
+  // Camera rig (forward-looking)
+  camRig = new THREE.Object3D();
+  lookTarget = new THREE.Object3D();
+  scene.add(camRig); scene.add(lookTarget);
+
+  buildSnow(1000); // lighter snowfall
+
+  window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+
+  animate();
+}
+
+// ===== Random & helpers =====
+function srand(seed){ return function(){ seed^=seed<<13; seed^=seed>>>17; seed^=seed<<5; return (seed>>>0)/0xFFFFFFFF; }; }
+
+// Compute signed curvature in XZ at t
+function curvatureAt(t){
+  const eps = 1/1000; const t0 = Math.max(0, t-eps), t1 = Math.min(1, t+eps);
+  const a = trackCurve.getTangentAt(t0); const b = trackCurve.getTangentAt(t1);
+  const angA = Math.atan2(a.x, a.z); const angB = Math.atan2(b.x, b.z);
+  return wrap(angB-angA, -Math.PI, Math.PI) / (t1 - t0);
+}
+
+// Find nearest curve t for XZ point
+function nearestT(pos){
+  let minD2 = Infinity, bestT = 0; const S = 300;
+  for(let i=0;i<S;i++){
+    const t = i/(S-1), p = trackCurve.getPointAt(t);
+    const dx = pos.x - p.x, dz = pos.z - p.z; const d2 = dx*dx+dz*dz;
+    if(d2<minD2){ minD2=d2; bestT=t; }
+  }
+  return bestT;
+}
+
+// ===== Track generation =====
+function rebuildTrack(seed){
+  // dispose prior
+  if(trackMesh){ scene.remove(trackMesh); trackMesh.geometry.dispose(); trackMesh.material.dispose(); trackMesh=null; }
+  if(edgeLines){ scene.remove(edgeLines); edgeLines.geometry.dispose(); edgeLines.material.dispose(); edgeLines=null; }
+  if(curbs){ scene.remove(curbs); curbs.geometry.dispose(); curbs.material.dispose(); curbs=null; }
+
+  const rnd = srand(seed);
+  heightParams = { a1: 8+rnd()*4, a2: 4+rnd()*2, p1: rnd(), p2: rnd() };
+
+  // Curvier control points for drift corners & a chicane
+  const k=12, radius=180; const pts=[];
+  for(let i=0;i<k;i++){
+    const ang = i/k * Math.PI*2;
+    let rj = radius*(0.72 + rnd()*0.55);
+    // inject chicane-like S offset on two opposite sectors
+    if(i%6===0) rj *= 0.72; if(i%6===1) rj *= 0.88;
+    const x = Math.cos(ang)*rj; const z = Math.sin(ang)*rj;
+    pts.push(new THREE.Vector3(x,0,z));
+  }
+  trackCurve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.08);
+
+  // Build F1-like ribbon with elevation + camber (banking)
+  const segs = 1500; const halfW = trackWidth*0.5; const pos = []; const uvs=[]; const idx=[];
+  const centers = []; const tangents = []; const cambers = [];
+  for(let i=0;i<=segs;i++){
+    const t = i/segs;
+    const center = trackCurve.getPointAt(t);
+    center.y = heightAt(t);
+    const tan = trackCurve.getTangentAt(t); // could have y, but use XZ for left
+    const tanXZ = new THREE.Vector3(tan.x, 0, tan.z).normalize();
+    const left = new THREE.Vector3(-tanXZ.z, 0, tanXZ.x).normalize();
+
+    // Camber from curvature sign
+    const kappa = curvatureAt(t);
+    const bank = THREE.MathUtils.clamp(kappa*0.02, -0.35, 0.35); // radians (~±20° max)
+    const up = new THREE.Vector3(0,1,0);
+    const L = new THREE.Vector3().copy(center).addScaledVector(left,  halfW).addScaledVector(up, Math.sin(bank)*0.2);
+    const R = new THREE.Vector3().copy(center).addScaledVector(left, -halfW).addScaledVector(up, -Math.sin(bank)*0.2);
+
+    pos.push(L.x, L.y, L.z,  R.x, R.y, R.z);
+    uvs.push(0, t*30, 1, t*30);
+    if(i>0){ const vi=i*2; idx.push(vi-2,vi-1,vi,  vi-1,vi+1,vi); }
+
+    centers.push(center); tangents.push(tanXZ); cambers.push(bank);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pos),3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(uvs),2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+
+  // Asphalt w/ darker tone to separate from snow
+  const asphalt = new THREE.MeshStandardMaterial({ color:'#1f262e', roughness:0.98, metalness:0.0 });
+  trackMesh = new THREE.Mesh(geo, asphalt); trackMesh.receiveShadow = true; scene.add(trackMesh);
+
+  // Edge white lines (instanced)
+  const lineMat = new THREE.MeshBasicMaterial({ color:'#ffffff' });
+  const lineGeo = new THREE.PlaneGeometry(0.16, 2);
+  edgeLines = new THREE.InstancedMesh(lineGeo, lineMat, 500);
+  let j=0; const step = Math.max(6, Math.floor(segs/200));
+  for(let i=0;i<segs && j<500; i+=step){
+    const t = i/segs; const c = centers[i]; const left = new THREE.Vector3(-tangents[i].z,0,tangents[i].x).normalize();
+    const edge = new THREE.Object3D(); edge.position.copy(c).addScaledVector(left, halfW*0.98); edge.position.y += Math.sin(cambers[i])*0.02;
+    edge.rotation.x = -Math.PI/2; edge.rotation.z = Math.atan2(tangents[i].x, tangents[i].z);
+    edge.updateMatrix(); edgeLines.setMatrixAt(j++, edge.matrix);
+  }
+  edgeLines.instanceMatrix.needsUpdate = true; scene.add(edgeLines);
+
+  // Inside curbs (red/white) on tighter corners
+  const curbGeo = new THREE.BoxGeometry(0.35, 0.12, 1.4);
+  const curbMat = new THREE.MeshStandardMaterial({ color:'#ff3748', roughness:0.6, metalness:0.0 });
+  curbs = new THREE.InstancedMesh(curbGeo, curbMat, 600);
+  let cIdx=0; const curvThresh = 18; // threshold for "corner"
+  for(let i=2;i<segs-2 && cIdx<600; i+=3){
+    const t = i/segs; const kappa = Math.abs(curvatureAt(t));
+    if(kappa>curvThresh){
+      const turn = Math.sign(curvatureAt(t)); // + left, - right
+      const c = centers[i]; const left = new THREE.Vector3(-tangents[i].z,0,tangents[i].x).normalize();
+      const insideDir = (turn>0? left : left.multiplyScalar(-1));
+      const pos3 = new THREE.Object3D();
+      pos3.position.copy(c).addScaledVector(insideDir, halfW*0.95);
+      pos3.position.y += 0.06 + Math.sin(cambers[i])*0.02;
+      pos3.rotation.y = Math.atan2(tangents[i].x, tangents[i].z);
+      pos3.updateMatrix(); curbs.setMatrixAt(cIdx++, pos3.matrix);
+    }
+  }
+  curbs.instanceMatrix.needsUpdate = true; scene.add(curbs);
+}
+
+// ===== Pines & Village (unchanged visuals) =====
+function buildPines(seed){
+  pines.clear(); const rnd = srand(seed^0x9e3779b9);
+  for(let i=0;i<420;i++){
+    const r = 700 + rnd()*1400; const th = rnd()*Math.PI*2;
+    const x = Math.cos(th)*r, z = Math.sin(th)*r;
+    const h = 8 + rnd()*24; const rBase = h*0.35;
+    const geo = new THREE.ConeGeometry(rBase, h, 8);
+    const mat = new THREE.MeshStandardMaterial({ color: (rnd()<0.5?'#0b3a2a':'#115b40'), roughness:0.95 });
+    const cone = new THREE.Mesh(geo, mat);
+    cone.position.set(x, h*0.5-0.5, z);
+    cone.castShadow = true; cone.receiveShadow = true;
+    pines.add(cone);
+  }
+}
+
+function buildVillage(seed){
+  village.clear(); animActors.length = 0; const rnd = srand(seed^0x51633); const count = 16;
+  for(let n=0;n<count;n++){
+    const t = n/count; const p = trackCurve.getPointAt(t); p.y=heightAt(t);
+    const tan = trackCurve.getTangentAt(t); const left = new THREE.Vector3(-tan.z,0,tan.x).normalize();
+    const side = (n%2===0?1:-1); const base = new THREE.Vector3().copy(p).addScaledVector(left, side*(trackWidth*2.0 + 8 + rnd()*10)); base.y = 0;
+    const choice = rnd(); if(choice < 0.2) village.add(makeSanta(base, rnd)); else if(choice < 0.55) village.add(makeSnowman(base, rnd)); else village.add(makeCabin(base, rnd));
+  }
+}
+
+function makeCabin(pos, rnd){
+  const g = new THREE.Group(); g.position.copy(pos);
+  const w = 6+rnd()*4, d=6+rnd()*4, h=3.2+rnd()*1.2;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({ color:'#8b5a3c', roughness:0.9 }));
+  body.position.y = h/2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.72, 3.4, 4), new THREE.MeshStandardMaterial({ color:'#b91c1c', roughness:0.8 }));
+  roof.position.y = h+1.2; roof.rotation.y = Math.PI/4; roof.castShadow=true; g.add(roof);
+  const lightMat = new THREE.MeshBasicMaterial({ color:'#ffd166' });
+  const dot = new THREE.Mesh(new THREE.PlaneGeometry(0.18,0.18), lightMat);
+  for(let i=0;i<12;i++){ const d2 = dot.clone(); d2.position.set((i-6)*(w/12), h+0.5, d/2+0.05); d2.rotation.x=-Math.PI/2; g.add(d2); }
+  return g;
+}
+
+function makeSnowman(pos, rnd){
+  const g = new THREE.Group(); g.position.copy(pos);
+  const matSnow = new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:0.7 });
+  const b = new THREE.Mesh(new THREE.SphereGeometry(1.4,16,16), matSnow); b.position.y=1.4; g.add(b);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1.0,16,16), matSnow); m.position.y=2.8; g.add(m);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.7,16,16), matSnow); h.position.y=3.8; g.add(h);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.15,0.6,12), new THREE.MeshStandardMaterial({ color:'#ff7f50'})); nose.position.set(0, 3.8, 0.7); nose.rotation.x=Math.PI/2; g.add(nose);
+  const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.08,16), new THREE.MeshStandardMaterial({ color:'#111827'})); hatBrim.position.y=4.25; g.add(hatBrim);
+  const hatTop = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.6,16), new THREE.MeshStandardMaterial({ color:'#111827'})); hatTop.position.y=4.65; g.add(hatTop);
+  return g;
+}
+
+function makeSanta(pos, rnd){
+  const g = new THREE.Group(); g.position.copy(pos);
+  const sleigh = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.4,1.2), new THREE.MeshStandardMaterial({ color:'#a11d2f', roughness:0.6 })); sleigh.position.y=0.25; sleigh.castShadow=true; g.add(sleigh);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.8,16,16), new THREE.MeshStandardMaterial({ color:'#d72638', roughness:0.7 })); body.position.y=1.4; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.45,16,16), new THREE.MeshStandardMaterial({ color:'#ffe0bd', roughness:0.8 })); head.position.y=2.2; g.add(head);
+  const beard = new THREE.Mesh(new THREE.SphereGeometry(0.5,16,16), new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:0.5 })); beard.scale.set(1,0.6,0.4); beard.position.set(0,1.9,0.32); g.add(beard);
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(0.5,0.9,16), new THREE.MeshStandardMaterial({ color:'#b91c1c', roughness:0.7 })); hat.position.y=2.6; hat.rotation.z=0.2; g.add(hat);
+  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.12,12,12), new THREE.MeshStandardMaterial({ color:'#ffffff'})); pom.position.set(Math.sin(0.2)*0.5,2.6+Math.cos(0.2)*0.9,0); g.add(pom);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.7,0.2), new THREE.MeshStandardMaterial({ color:'#d72638'})); arm.position.set(0.65,1.6,0); arm.rotation.z=0.4; g.add(arm);
+  animActors.push((t)=>{ arm.rotation.z = 0.4 + Math.sin(t*2.0)*0.35; });
+  return g;
+}
+
+// ===== Kart =====
+function buildKart(){
+  kart = new THREE.Group();
+  const bodyGeo = new THREE.BoxGeometry(2.4, 0.7, 3.2);
+  const bodyMat = new THREE.MeshStandardMaterial({ color:'#d72638', roughness:0.6, metalness:0.1 });
+  kartBody = new THREE.Mesh(bodyGeo, bodyMat); kartBody.castShadow = true; kartBody.receiveShadow = true; kart.add(kartBody);
+  const stripeGeo = new THREE.BoxGeometry(0.15, 0.72, 3.2);
+  for(let i=-2;i<=2;i++){ const s = new THREE.Mesh(stripeGeo, new THREE.MeshStandardMaterial({ color:'#ffffff', roughness:0.4 })); s.position.x = i*0.45; kart.add(s); }
+  wheels = [];
+  function wheel(x,z){ const g = new THREE.CylinderGeometry(0.45,0.45,0.35,16); const m = new THREE.MeshStandardMaterial({ color:'#0f172a', roughness:0.4 }); const w = new THREE.Mesh(g,m); w.rotation.z = Math.PI/2; w.castShadow=true; w.receiveShadow=true; w.position.set(x, -0.25, z); kart.add(w); wheels.push(w);}  
+  wheel(-0.9,-1.2); wheel(0.9,-1.2); wheel(-0.9,1.2); wheel(0.9,1.2);
+  scene.add(kart);
+  placeKartAtStart();
+}
+
+function placeKartAtStart(){
+  const t = 0.01; const p = trackCurve.getPointAt(t); const tan = trackCurve.getTangentAt(t);
+  state.pos.copy(p); state.pos.y = heightAt(t) + 0.05; state.yaw = Math.atan2(tan.x, tan.z); state.v = 0; syncKartTransform();
+}
+
+function syncKartTransform(){ kart.position.copy(state.pos); kart.rotation.set(0, state.yaw, 0); }
+
+// ===== Snow =====
+function buildSnow(count=1000){
+  if(snow){ scene.remove(snow); snow.geometry.dispose(); snow.material.dispose(); }
+  const geo = new THREE.BufferGeometry(); const pos = new Float32Array(count*3);
+  for(let i=0;i<count;i++){ pos[i*3+0] = (Math.random()-0.5)*3000; pos[i*3+1] = Math.random()*140 + 20; pos[i*3+2] = (Math.random()-0.5)*3000; }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({ color: '#ffffff', size: 0.6, sizeAttenuation: true, transparent:true, opacity:0.8 });
+  snow = new THREE.Points(geo, mat); scene.add(snow);
+}
+
+// ===== Controls =====
+function onKeyDown(e){ if(e.repeat) return; if(e.code==='ArrowUp') keys.up=true; if(e.code==='ArrowDown') keys.down=true; if(e.code==='ArrowLeft') keys.left=true; if(e.code==='ArrowRight') keys.right=true; if(e.code==='Space') keys.drift=true; if(e.code==='KeyR') placeKartAtStart(); }
+function onKeyUp(e){ if(e.code==='ArrowUp') keys.up=false; if(e.code==='ArrowDown') keys.down=false; if(e.code==='ArrowLeft') keys.left=false; if(e.code==='ArrowRight') keys.right=false; if(e.code==='Space') keys.drift=false; }
+
+// ===== Update / Physics =====
+function update(dt, t){
+  const P = state.params; 
+  const accel = (keys.up?P.accel:0) + (keys.down?-P.brake:0);
+  state.v += accel*dt; state.v = THREE.MathUtils.clamp(state.v, -P.maxV*0.4, P.maxV);
+  state.v *= Math.pow(P.drag, dt*60);
+
+  const sp = Math.abs(state.v)/P.maxV; const steerRate = P.steerAt0*(1-sp)+P.steerAtMax*sp;
+  const steerInput = (keys.left?-1:0)+(keys.right?1:0);
+  state.yaw += steerInput * steerRate * dt * Math.sign(Math.max(0.001,state.v));
+
+  // advance position in XZ
+  state.pos.x += Math.sin(state.yaw) * state.v * dt;
+  state.pos.z += Math.cos(state.yaw) * state.v * dt;
+
+  // project to road height & apply off-road slowdown
+  const tParam = nearestT(state.pos);
+  state.pos.y = heightAt(tParam) + 0.05;
+  const onRoad = (function(){
+    const p = trackCurve.getPointAt(tParam); const dx = state.pos.x - p.x, dz = state.pos.z - p.z; return Math.hypot(dx,dz) < (trackWidth*0.5*0.98);
+  })();
+  if(!onRoad){ state.v *= Math.pow(0.90, dt*60); }
+
+  // gentle auto-align to track direction (grip)
+  const tan = trackCurve.getTangentAt(tParam);
+  const targetYaw = Math.atan2(tan.x, tan.z);
+  const grip = keys.drift?P.driftGrip:P.grip;
+  let dy = wrap(targetYaw - state.yaw, -Math.PI, Math.PI);
+  state.yaw += THREE.MathUtils.clamp(dy, -grip*dt, grip*dt);
+
+  // Santa animations
+  for(const fn of animActors){ fn(t); }
+
+  syncKartTransform();
+}
+
+// Backward-compatible helpers still used by tests
+function isOnRoad(pos){
+  let minD2 = Infinity; const S = 200;
+  for(let i=0;i<S;i++){ const t = i/(S-1); const p = trackCurve.getPointAt(t); const dx = pos.x - p.x, dz = pos.z - p.z; const d2 = dx*dx + dz*dz; if(d2<minD2){ minD2=d2; } }
+  return Math.sqrt(minD2) < (trackWidth*0.5*0.98);
+}
+
+function nearestTangent(pos){
+  let minD2 = Infinity; let bestT = 0; const S = 200;
+  for(let i=0;i<S;i++){ const t = i/(S-1); const p = trackCurve.getPointAt(t); const dx = pos.x - p.x, dz = pos.z - p.z; const d2 = dx*dx+dz*dz; if(d2<minD2){ minD2=d2; bestT=t; } }
+  return trackCurve.getTangentAt(bestT);
+}
+
+// ===== Camera (forward-looking like KartRider) =====
+function updateCamera(dt){
+  const lookBase = 15; const lookSpeed = Math.max(0,state.v)*0.22; const lookDist = lookBase + lookSpeed;
+  const aheadXZ = new THREE.Vector3( state.pos.x + Math.sin(state.yaw)*lookDist, 0, state.pos.z + Math.cos(state.yaw)*lookDist );
+  const tAhead = nearestT(aheadXZ); const ahead = trackCurve.getPointAt(tAhead); ahead.y = heightAt(tAhead)+0.2;
+
+  const back = 7.2, height = 3.8; const desired = new THREE.Vector3( state.pos.x - Math.sin(state.yaw)*back, state.pos.y + height, state.pos.z - Math.cos(state.yaw)*back );
+  camRig.position.lerp(desired, 1 - Math.pow(0.001, dt));
+  lookTarget.position.lerp(ahead, 1 - Math.pow(0.0015, dt));
+  camera.position.copy(camRig.position); camera.lookAt(lookTarget.position);
+}
+
+// ===== Render loop =====
+function animate(){
+  const dt = Math.min(0.033, clock.getDelta()); const t = performance.now()*0.001;
+  update(dt, t); updateCamera(dt); renderer.render(scene, camera); requestAnimationFrame(animate);
+}
+
+function onResize(){ renderer.setSize(app.clientWidth, app.clientHeight); camera.aspect = app.clientWidth/app.clientHeight; camera.updateProjectionMatrix(); }
+
+// ===== UI =====
+function regen(){ rebuildTrack((Math.random()*1e9)>>>0); buildVillage(state.seed); placeKartAtStart(); }
+function setQuality(q){ const dpr = (q==='low')?1: (q==='med')?Math.min(1.5, window.devicePixelRatio||1):Math.min(2, window.devicePixelRatio||1); renderer.setPixelRatio(dpr); }
+
+document.getElementById('regen').addEventListener('click', regen);
+document.getElementById('reset').addEventListener('click', placeKartAtStart);
+document.getElementById('quality').addEventListener('change', e=> setQuality(e.target.value));
+
+init();
+
+// ===== Lightweight self-tests (unchanged) =====
+function approx(a,b,eps=1e-6){ return Math.abs(a-b) <= eps; }
+function runTests(){
+  let ok = true; const errs = []; const PI = Math.PI;
+  const cases = [ {in: 0, expect: 0}, {in: PI/2, expect: PI/2}, {in: -PI/2, expect: -PI/2}, {in: 3*PI/2, expect: -PI/2}, {in: -3*PI/2, expect: PI/2}, {in: 5*PI, expect: -PI} ];
+  for(const c of cases){ const out = wrap(c.in, -PI, PI); if(!approx(out, c.expect, 1e-6)){ ok=false; errs.push(`wrap(${c.in}) => ${out}, expected ${c.expect}`); } }
+  if(!isOnRoad(state.pos)){ ok=false; errs.push('Expected starting position to be ON road'); }
+  const far = new THREE.Vector3(10000,0,10000); if(isOnRoad(far)){ ok=false; errs.push('Expected far position to be OFF road'); }
+  updateCamera(0.016); const cp = camera.position; if(!isFinite(cp.x) || !isFinite(cp.y) || !isFinite(cp.z)){ ok=false; errs.push('Camera position has non-finite values'); }
+  try { setQuality('med'); setQuality('low'); setQuality('high'); } catch(e){ ok=false; errs.push('setQuality threw: '+e.message); }
+  if(ok){ setTestBadge('Tests: PASS ✓', true); } else { setTestBadge('Tests: FAIL ✗ — ' + errs[0], false); console.error('Test failures:', errs); }
+}
+setTimeout(runTests, 0);
+</script>
+</body>
+</html>
