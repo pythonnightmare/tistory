@@ -544,26 +544,65 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라: 진행 방향(T) 기반, 고정 뒤따라가기 ---------- */
 function chaseVP(car, aspect, dt){
-  const i=Math.floor(car.s)|0;
-  const w=car.world();
-  const T=basisAt(i).T;
-  const backBase=22.0, upBase=6.2;
-  const extra = car.v*0.12;
-  const targetEye = [ w.pos[0] - T[0]*(backBase+extra), w.pos[1] + (upBase+extra*0.15), w.pos[2] - T[2]*(backBase+extra) ];
-  const targetAt  = [ w.pos[0] + T[0]*7.0, w.pos[1] + 0.9, w.pos[2] + T[2]*7.0 ];
-  const kEye = 1 - Math.exp(-dt*6.0);
-  const kAt  = 1 - Math.exp(-dt*9.0);
-  car.camEye = car.camEye ? mixV(car.camEye, targetEye, kEye) : targetEye;
-  car.camAt  = car.camAt  ? mixV(car.camAt,  targetAt,  kAt)  : targetAt;
+  const i = Math.floor(car.s)|0;
+  const w = car.world();
+  const T = basisAt(i).T;
 
-  const V=M.look(car.camEye, car.camAt, [0,1,0]);
+  // ▶ 목표 Yaw: 수평면에서만 전방을 본다 (Y 성분은 무시)
+  let targetYaw = Math.atan2(T[2], T[0]);
+  if (!isFinite(targetYaw)) targetYaw = car.camYaw || 0;
+  if (car.camYaw == null) car.camYaw = targetYaw;
+
+  // ▶ 가장 짧은 각도로 보정
+  let dYaw = ((targetYaw - car.camYaw + Math.PI) % (2*Math.PI)); 
+  if (dYaw < 0) dYaw += 2*Math.PI;
+  dYaw -= Math.PI;
+
+  // ▶ Yaw 변화율 제한(초당 6rad 정도): 급커브에서도 ‘빙글’ 금지
+  const yawRate = 6.0;               // rad/sec
+  const maxStep = yawRate * dt;      // 이번 프레임 최대 회전
+  if (dYaw >  maxStep) dYaw =  maxStep;
+  if (dYaw < -maxStep) dYaw = -maxStep;
+  car.camYaw += dYaw;
+
+  const cosY = Math.cos(car.camYaw), sinY = Math.sin(car.camYaw);
+
+  // ▶ 시야 거리/높이 (멀리서 보기 + 속도 따라 살짝 줌아웃)
+  const backBase=24.0, upBase=6.6;
+  const extra = car.v * 0.12;
+
+  const eye = [
+    w.pos[0] - cosY*(backBase+extra),
+    w.pos[1] + (upBase + extra*0.15),
+    w.pos[2] - sinY*(backBase+extra)
+  ];
+  const at = [
+    w.pos[0] + cosY*7.0,
+    w.pos[1] + 0.9,
+    w.pos[2] + sinY*7.0
+  ];
+
+  // ▶ 지수 보간(매끄럽게 따라오되 과보정 없음)
+  const kEye = 1 - Math.exp(-dt*8.0);
+  const kAt  = 1 - Math.exp(-dt*10.0);
+  car.camEye = car.camEye ? [car.camEye[0]+(eye[0]-car.camEye[0])*kEye,
+                             car.camEye[1]+(eye[1]-car.camEye[1])*kEye,
+                             car.camEye[2]+(eye[2]-car.camEye[2])*kEye] : eye;
+  car.camAt  = car.camAt  ? [car.camAt[0]+(at[0]-car.camAt[0])*kAt,
+                             car.camAt[1]+(at[1]-car.camAt[1])*kAt,
+                             car.camAt[2]+(at[2]-car.camAt[2])*kAt] : at;
+
+  // ▶ 업벡터 고정: 롤/피치로 인한 뒤집힘 원천 차단
+  const V = M.look(car.camEye, car.camAt, [0,1,0]);
+
+  // 투영
   const P=[1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1];
   const fov=58*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=2200, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
   return M.mul(P,V);
 }
+
 
 /* ---------- 드로우 ---------- */
 function drawCar(VP,car){
@@ -609,10 +648,21 @@ const START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-  const i=Math.floor(c.s)|0; const w=c.world(); const T=basisAt(i).T;
-  c.camEye=[ w.pos[0]-T[0]*22, w.pos[1]+6.2, w.pos[2]-T[2]*22 ];
-  c.camAt =[ w.pos[0]+T[0]*7,  w.pos[1]+0.9, w.pos[2]+T[2]*7 ];
+
+  const i=Math.floor(c.s)|0;
+  const w=c.world();
+  const T=basisAt(i).T;
+
+  // ▶ 초기 yaw(수평 전방) 세팅
+  const yaw = Math.atan2(T[2], T[0]);
+  c.camYaw = yaw;
+
+  // ▶ 수평 yaw 기반으로 Eye/At 배치 (수평 뒤/앞 고정)
+  const back=24.0, up=6.6;
+  c.camEye=[ w.pos[0]-Math.cos(yaw)*back, w.pos[1]+up, w.pos[2]-Math.sin(yaw)*back ];
+  c.camAt =[ w.pos[0]+Math.cos(yaw)*7.0,  w.pos[1]+0.9, w.pos[2]+Math.sin(yaw)*7.0 ];
 }
+
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
   car2=makeCar(input2); car2.name='P2'; if(cfg.twoP) placeAtStart(car2, trackW*0.15);
