@@ -23,7 +23,6 @@
   .panel{pointer-events:auto;background:var(--glass);border:1px solid rgba(255,255,255,.16);border-radius:18px;padding:18px;max-width:760px;width:min(92%,760px);text-align:center;box-shadow:0 16px 70px rgba(0,0,0,.55)}
   .panel h1{margin:0 0 10px}
   .keys{margin-top:8px;font-size:12px;color:var(--muted)}
-  /* 모바일 패드 */
   .padL,.padR{position:absolute;bottom:12px;gap:12px;pointer-events:auto;display:none}
   .padL{left:12px}
   .padR{right:12px;flex-direction:column;align-items:flex-end}
@@ -65,12 +64,10 @@
     <div class="view" id="view">
       <canvas id="gl"></canvas>
       <div class="overlay" id="overlay"></div>
-      <!-- 모바일: 좌측 방향키 -->
       <div class="padL" id="padL">
         <button class="pbtn" data-act="L">◀</button>
         <button class="pbtn" data-act="R">▶</button>
       </div>
-      <!-- 모바일: 우측 (DRIFT 크게, 아래 가속/브레이크) -->
       <div class="padR" id="padR">
         <button class="pbtn" data-act="DR">DRIFT</button>
         <div class="row">
@@ -84,27 +81,28 @@
 
 <script>
 (()=>{'use strict';
-/* ---------- 안전: 에러 화면 ---------- */
+/* ---------- 안전 ---------- */
 const overlay=document.getElementById('overlay');
 const panel=(html)=>overlay.innerHTML=`<div class="panel">${html}</div>`;
 const clearPanel=()=>overlay.innerHTML='';
-window.addEventListener('error',e=>panel(`<h1>⚠ 오류</h1><pre style="text-align:left;white-space:pre-wrap">${e.message||e}</pre>`));
-window.addEventListener('unhandledrejection',e=>panel(`<h1>⚠ 오류</h1><pre style="text-align:left;white-space:pre-wrap">${(e.reason&&e.reason.message)||e.reason||e}</pre>`));
+addEventListener('error',e=>panel(`<h1>⚠ 오류</h1><pre style="text-align:left;white-space:pre-wrap">${e.message||e}</pre>`));
+addEventListener('unhandledrejection',e=>panel(`<h1>⚠ 오류</h1><pre style="text-align:left;white-space:pre-wrap">${(e.reason&&e.reason.message)||e.reason||e}</pre>`));
 
 /* ---------- 유틸 ---------- */
 const DPR=Math.max(1,Math.min(2,devicePixelRatio||1));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
-const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];          // ★ 추가
-const safeNorm=v=>{const l=Math.hypot(v[0],v[1],v[2]); return l>1e-6?[v[0]/l,v[1]/l,v[2]/l]:[0,0,1];}; // ★ 추가
+const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
+const safeNorm=v=>{const l=Math.hypot(v[0],v[1],v[2]); return l>1e-8?[v[0]/l,v[1]/l,v[2]/l]:[0,0,1];};
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v14';
+const saveKey='vector_racing_v15';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 
 /* ---------- 상태 ---------- */
-const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; // 중복 선언 없이 여기만
-const cfg=Object.assign({seed:(Math.random()*1e9)|0,theme:'SPACE',shape:'RANDOM',aiCount:0,twoP:false,mobile:false,best:null}, store.get());
+const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY'];
+const cfg=Object.assign({seed:(Math.random()*1e9)|0,theme:'SPACE',shape:'RANDOM',aiCount:1,twoP:false,mobile:false,best:null}, store.get());
+const SPEED_SCALE=1.2; // ★ 20% 상향
 const setHUD=(id,val)=>{const el=document.querySelector('#'+id+' .val'); if(el) el.textContent=val};
 const view=document.getElementById('view'), canvas=document.getElementById('gl');
 
@@ -113,25 +111,19 @@ const gl=canvas.getContext('webgl',{antialias:false,preserveDrawingBuffer:false}
 if(!gl){ panel('<h1>⚠ WebGL 미지원</h1>'); return; }
 let CW=2,CH=2; function applyViewport(){const r=view.getBoundingClientRect(); CW=(r.width*DPR)|0; CH=(r.height*DPR)|0; canvas.width=CW; canvas.height=CH; gl.viewport(0,0,CW,CH);}
 applyViewport(); new ResizeObserver(applyViewport).observe(view);
-gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
-function compile(type,src){const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)||'shader'); return s;}
-function prog(vs,fs){const p=gl.createProgram(); gl.attachShader(p,compile(gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)||'link'); return p;}
-function makeBuffer(data,item=3,type=gl.FLOAT){const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW); return {b,item,type};}
-function bind(buf,loc){gl.bindBuffer(gl.ARRAY_BUFFER,buf.b); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,buf.item,buf.type,false,0,0);}
-const M={mul:(a,b)=>{const o=new Array(16); for(let r=0;r<4;r++) for(let c=0;c<4;c++){o[c*4+r]=a[r]*b[c*4]+a[r+4]*b[c*4+1]+a[r+8]*b[c*4+2]+a[r+12]*b[c*4+3];} return o;}, T:(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1], R:(x,y,z)=>[x[0],x[1],x[2],0,y[0],y[1],y[2],0,z[0],z[1],z[2],0,0,0,0,1], look:(eye,at,up)=>{const zx=eye[0]-at[0],zy=eye[1]-at[1],zz=eye[2]-at[2]; const zL=Math.hypot(zx,zy,zz)||1; const z=[zx/zL,zy/zL,zz/zz?zz/zL:0]; let x=[up[1]*z[2]-up[2]*z[1], up[2]*z[0]-up[0]*z[2], up[0]*z[1]-up[1]*z[0]]; const xL=Math.hypot(x[0],x[1],x[2])||1; x=[x[0]/xL,x[1]/xL,x[2]/xL]; const y=[z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]]; const RT=[x[0],x[1],x[2],0, y[0],y[1],y[2],0, z[0],z[1],z[2],0, 0,0,0,1]; return M.mul(RT,M.T(-eye[0],-eye[1],-eye[2]));}}; // look
-
-const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
-const scale=(v,s)=>[v[0]*s,v[1]*s,v[2]*s], cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l];};
+gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
 
 /* ---------- 셰이더 ---------- */
+function compile(type,src){const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)||'shader'); return s;}
+function prog(vs,fs){const p=gl.createProgram(); gl.attachShader(p,compile(gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)||'link'); return p;}
 const VS=`
 attribute vec3 aPos; attribute vec3 aCol; attribute float aGlow;
 uniform mat4 uVP; uniform float uTime;
 varying vec3 vCol; varying float vGlow;
 void main(){
   vCol=aCol; float g=aGlow; vec3 p=aPos;
-  if(g<0.0){            // 낙하 파티클(눈/재)
+  // 낙하 파티클(눈/재)
+  if(g<0.0){
     float ph = fract(abs(g));
     float t = fract(uTime*(0.08+ph*0.12) + ph);
     p.y = -12.0 + t * 220.0;
@@ -144,40 +136,41 @@ void main(){
 const FS=`
 precision mediump float;
 varying vec3 vCol; varying float vGlow;
+uniform float uPass; // 0=불투명, 1=글로우(가산)
 void main(){
-  float a = clamp(0.06 + abs(vGlow)*0.9, 0.0, 1.0);
+  float a = (uPass>0.5) ? clamp(0.06 + abs(vGlow)*0.9, 0.0, 1.0) : 1.0;
   gl_FragColor = vec4(vCol, a);
 }`;
 const program=prog(VS,FS); gl.useProgram(program);
-const loc={aPos:gl.getAttribLocation(program,'aPos'), aCol:gl.getAttribLocation(program,'aCol'), aGlow:gl.getAttribLocation(program,'aGlow'), uVP:gl.getUniformLocation(program,'uVP'), uTime:gl.getUniformLocation(program,'uTime')};
+const loc={aPos:gl.getAttribLocation(program,'aPos'), aCol:gl.getAttribLocation(program,'aCol'), aGlow:gl.getAttribLocation(program,'aGlow'), uVP:gl.getUniformLocation(program,'uVP'), uTime:gl.getUniformLocation(program,'uTime'), uPass:gl.getUniformLocation(program,'uPass')};
 
-/* ---------- 지오 도우미 ---------- */
-const makeGeo=()=>({pos:[],col:[],glow:[]});
-const pushTri=(o,a,b,c,d,e,f,g,h,i,C,G)=>{o.pos.push(a,b,c,d,e,f,g,h,i); o.col.push(C[0],C[1],C[2],C[0],C[1],C[2],C[0],C[1],C[2]); o.glow.push(G,G,G)};
-const pushQuad=(o,a,b,c,d,e,f,g,h,i,j,k,l,C,G)=>{pushTri(o,a,b,c,d,e,f,g,h,i,C,G); pushTri(o,a,b,c,g,h,i,j,k,l,C,G)};
-const pushBox=(o,cx,cy,cz,sx,sy,sz,ct,cs,g=0.25)=>{const x=sx/2,y=sy/2,z=sz/2;
-  pushQuad(o,cx-x,cy+y,cz-z,cx+x,cy+y,cz-z,cx+x,cy+y,cz+z,cx-x,cy+y,cz+z,ct,g);
-  pushQuad(o,cx-x,cy-y,cz+z,cx+x,cy-y,cz+z,cx+x,cy-y,cz-z,cx-x,cy-y,cz-z,cs,g*0.85);
-  pushQuad(o,cx-x,cy-y,cz-z,cx-x,cy+y,cz-z,cx-x,cy+y,cz+z,cx-x,cy-y,cz+z,cs,g);
-  pushQuad(o,cx+x,cy-y,cz+z,cx+x,cy+y,cz+z,cx+x,cy+y,cz-z,cx+x,cy-y,cz-z,cs,g);
-  pushQuad(o,cx-x,cy-y,cz+z,cx-x,cy+y,cz+z,cx+x,cy+y,cz+z,cx+x,cy-y,cz+z,cs,g);
-  pushQuad(o,cx+x,cy-y,cz-z,cx+x,cy+y,cz-z,cx-x,cy+y,cz-z,cx-x,cy-y,cz-z,cs,g);
+/* ---------- 매트릭스 & 벡터 ---------- */
+function makeBuffer(data,item=3,type=gl.FLOAT){const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW); return {b,item,type};}
+function bind(buf,loc){gl.bindBuffer(gl.ARRAY_BUFFER,buf.b); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,buf.item,buf.type,false,0,0);}
+const M={
+  mul:(a,b)=>{const o=new Array(16); for(let r=0;r<4;r++) for(let c=0;c<4;c++){o[c*4+r]=a[r]*b[c*4]+a[r+4]*b[c*4+1]+a[r+8]*b[c*4+2]+a[r+12]*b[c*4+3];} return o;},
+  T:(x,y,z)=>[1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1],
+  R:(x,y,z)=>[x[0],x[1],x[2],0,  y[0],y[1],y[2],0,  z[0],z[1],z[2],0,  0,0,0,1],
+  look:(eye,at,up)=>{
+    const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+    const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+    const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l];};
+    const z=norm(sub(eye,at));            // 카메라는 -Z 를 본다(OpenGL)
+    let x=norm(cross(up,z));              // 오른쪽
+    let y=cross(z,x);                     // 위
+    const RT=[x[0],x[1],x[2],0, y[0],y[1],y[2],0, z[0],z[1],z[2],0, 0,0,0,1];
+    return M.mul(RT,M.T(-eye[0],-eye[1],-eye[2]));
+  }
 };
-
-/* ---------- 테마 ---------- */
-const THEMES={
-  SPACE:{bg:()=>`radial-gradient(1200px 700px at 70% -10%, #0b1740 0%, transparent 55%), linear-gradient(180deg,#030616,#071531)`,trackC1:[0.58,0.82,1.0],trackC2:[0.62,0.4,1.0],rail:[0.9,0.95,1],trackW:7.4,baseY:1.6,yAmp:6,car:[0.9,0.95,1],fog:[0.02,0.04,0.09],ground:false},
-  CYBERPUNK:{bg:()=>`radial-gradient(800px 500px at 80% -10%, #461058 0%, transparent 50%), linear-gradient(180deg,#16061e,#090a18)`,trackC1:[1.0,0.2,0.8],trackC2:[0.2,1.0,0.9],rail:[1,0.7,1],trackW:8.0,baseY:0.6,yAmp:2.2,car:[1.0,0.3,0.9],fog:[0.06,0.02,0.10],ground:true},
-  XMAS:{bg:()=>`radial-gradient(1000px 600px at 60% -10%, #0e1b3a 0%, transparent 52%), linear-gradient(180deg,#081226,#0a1a33)`,trackC1:[0.0,0.9,0.3],trackC2:[1.0,0.1,0.1],rail:[1,1,1],trackW:8.4,baseY:0.6,yAmp:0.9,car:[0.9,0.1,0.1],fog:[0.03,0.05,0.08],ground:true},
-  NEON:{bg:()=>`radial-gradient(900px 540px at 85% -10%, #103b6b 0%, transparent 52%), linear-gradient(180deg,#081022,#0a0f28)`,trackC1:[0.2,0.9,1.0],trackC2:[1.0,0.5,0.2],rail:[0.8,1,1],trackW:7.2,baseY:1.0,yAmp:3.2,car:[0.2,0.9,1.0],fog:[0.02,0.05,0.12],ground:true},
-  VOLCANO:{bg:()=>`radial-gradient(900px 540px at 85% -10%, #3b0f0f 0%, transparent 52%), linear-gradient(180deg,#140606,#230a0a)`,trackC1:[1.0,0.5,0.0],trackC2:[0.9,0.2,0.1],rail:[1,0.85,0.7],trackW:8.6,baseY:0.4,yAmp:1.8,car:[1.0,0.4,0.05],fog:[0.06,0.02,0.02],ground:true}
-};
-document.body.style.background=THEMES[cfg.theme].bg();
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], subV=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const scale=(v,s)=>[v[0]*s,v[1]*s,v[2]*s], cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l];};
 
 /* ---------- 트랙 ---------- */
-let samples=2200, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
+let samples=2400, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
 const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
+function getCenterLerp(s){const i=Math.floor(s), t=s-i; const p0=getCenter(i), p1=getCenter(i+1); return [lerp(p0[0],p1[0],t), lerp(p0[1],p1[1],t), lerp(p0[2],p1[2],t)];}
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
   return [0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
@@ -188,10 +181,10 @@ function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
           0.5*((-p0[1]+p2[1])+2*(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t+3*(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t2),
           0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
 }
-function basisAt(i){const p0=getCenter(i), p1=getCenter(i+1); const T=norm(sub(p1,p0)); let R=norm(cross(T,WORLD_UP)); if(!isFinite(R[0])) R=[1,0,0]; const B=norm(cross(R,T)); return {T,R,B};}
+function basisAt(i){const p0=getCenter(i), p1=getCenter(i+1); const T=norm(subV(p1,p0)); let R=norm(cross(T,WORLD_UP)); if(!isFinite(R[0])) R=[1,0,0]; const B=norm(cross(R,T)); return {T,R,B};}
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
 function genCP(seed,shape,yAmp,baseY){
-  const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=48,R=140,ph=rand(0,Math.PI*2);
+  const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=56,R=150,ph=rand(0,Math.PI*2);
   if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
   for(let i=0;i<N;i++){const t=i/N*2*Math.PI; let x=0,z=0;
     if(shape==='OVAL'){const rx=R*(1.3+0.18*Math.sin(3*t+ph)), rz=R*(0.95+0.18*Math.sin(2*t+ph)); x=rx*Math.cos(t); z=rz*Math.sin(t);}
@@ -206,9 +199,40 @@ function genCP(seed,shape,yAmp,baseY){
 }
 
 /* ---------- 버퍼들 ---------- */
-let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0;
+let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0;
 
-/* ---------- 트랙 & 환경 빌드 ---------- */
+/* ---------- 그리기 헬퍼(패스 분리) ---------- */
+function drawSolid(buf,count,mode){ if(!buf||!count) return; gl.disable(gl.BLEND); gl.uniform1f(loc.uPass,0.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
+function drawGlow(buf,count,mode){ if(!buf||!count) return; gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.uniform1f(loc.uPass,1.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
+
+/* ---------- 환경/지오 빌드 ---------- */
+const THEMES={
+  SPACE:{bg:()=>`radial-gradient(1200px 700px at 70% -10%, #0b1740 0%, transparent 55%), linear-gradient(180deg,#030616,#071531)`,trackC1:[0.58,0.82,1.0],trackC2:[0.62,0.4,1.0],rail:[0.9,0.95,1],trackW:7.6,baseY:1.6,yAmp:6,car:[0.9,0.95,1],fog:[0.02,0.04,0.09],ground:false},
+  CYBERPUNK:{bg:()=>`radial-gradient(800px 500px at 80% -10%, #461058 0%, transparent 50%), linear-gradient(180deg,#16061e,#090a18)`,trackC1:[1.0,0.2,0.8],trackC2:[0.2,1.0,0.9],rail:[1,0.7,1],trackW:8.2,baseY:0.6,yAmp:2.2,car:[1.0,0.3,0.9],fog:[0.06,0.02,0.10],ground:true},
+  XMAS:{bg:()=>`radial-gradient(1000px 600px at 60% -10%, #0e1b3a 0%, transparent 52%), linear-gradient(180deg,#081226,#0a1a33)`,trackC1:[0.0,0.9,0.3],trackC2:[1.0,0.1,0.1],rail:[1,1,1],trackW:8.6,baseY:0.6,yAmp:1.0,car:[0.9,0.1,0.1],fog:[0.03,0.05,0.08],ground:true},
+  NEON:{bg:()=>`radial-gradient(900px 540px at 85% -10%, #103b6b 0%, transparent 52%), linear-gradient(180deg,#081022,#0a0f28)`,trackC1:[0.2,0.9,1.0],trackC2:[1.0,0.5,0.2],rail:[0.8,1,1],trackW:7.4,baseY:1.0,yAmp:3.2,car:[0.2,0.9,1.0],fog:[0.02,0.05,0.12],ground:true},
+  VOLCANO:{bg:()=>`radial-gradient(900px 540px at 85% -10%, #3b0f0f 0%, transparent 52%), linear-gradient(180deg,#140606,#230a0a)`,trackC1:[1.0,0.5,0.0],trackC2:[0.9,0.2,0.1],rail:[1,0.85,0.7],trackW:8.8,baseY:0.4,yAmp:1.8,car:[1.0,0.4,0.05],fog:[0.06,0.02,0.02],ground:true}
+};
+document.body.style.background=THEMES[cfg.theme].bg();
+
+const makeGeo=()=>({pos:[],col:[],glow:[]});
+const pushTri=(o,a,b,c,d,e,f,g,h,i,C,G)=>{o.pos.push(a,b,c,d,e,f,g,h,i); o.col.push(C[0],C[1],C[2],C[0],C[1],C[2],C[0],C[1],C[2]); o.glow.push(G,G,G)};
+const pushQuad=(o,a,b,c,d,e,f,g,h,i,j,k,l,C,G)=>{pushTri(o,a,b,c,d,e,f,g,h,i,C,G); pushTri(o,a,b,c,g,h,i,j,k,l,C,G)};
+const pushBox=(o,cx,cy,cz,sx,sy,sz,ct,cs,g=0.0)=>{const x=sx/2,y=sy/2,z=sz/2;
+  pushQuad(o,cx-x,cy+y,cz-z,cx+x,cy+y,cz-z,cx+x,cy+y,cz+z,cx-x,cy+y,cz+z,ct,g);
+  pushQuad(o,cx-x,cy-y,cz+z,cx+x,cy-y,cz+z,cx+x,cy-y,cz-z,cx-x,cy-y,cz-z,cs,g);
+  pushQuad(o,cx-x,cy-y,cz-z,cx-x,cy+y,cz-z,cx-x,cy+y,cz+z,cx-x,cy-y,cz+z,cs,g);
+  pushQuad(o,cx+x,cy-y,cz+z,cx+x,cy+y,cz+z,cx+x,cy+y,cz-z,cx+x,cy-y,cz-z,cs,g);
+  pushQuad(o,cx-x,cy-y,cz+z,cx-x,cy+y,cz+z,cx+x,cy+y,cz+z,cx+x,cy-y,cz+z,cs,g);
+  pushQuad(o,cx+x,cy-y,cz-z,cx+x,cy+y,cz-z,cx-x,cy+y,cz-z,cx-x,cy-y,cz-z,cs,g);
+};
+/* 구/실린더/원뿔/토러스 고메쉬 */
+function addSphere(G,cx,cy,cz,R,lat=28,lon=42,col=[1,1,1],glw=0){for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI; for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI; const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)]; const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0); pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw); }}}
+function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0){const y0=cy-h/2,y1=cy+h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0), x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1); pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);} }
+function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){const tip=[cx,cy+h/2,cz], y0=cy-h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0),z0=cz+r*Math.sin(a0),x1=cx+r*Math.cos(a1),z1=cz+r*Math.sin(a1); pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);} }
+function addTorus(G,cx,cy,cz,R,r,segR=48,segr=24,col=[1,1,1],glw=0.6){for(let i=0;i<segR;i++){const u0=i/segR*2*Math.PI,u1=(i+1)/segR*2*Math.PI; for(let j=0;j<segr;j++){const v0=j/segr*2*Math.PI,v1=(j+1)/segr*2*Math.PI; const p=(u,v)=>[cx+(R+r*Math.cos(v))*Math.cos(u), cy+r*Math.sin(v), cz+(R+r*Math.cos(v))*Math.sin(u)]; const A=p(u0,v0),B=p(u1,v0),C=p(u1,v1),D=p(u0,v1); pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], col, glw);} }}
+
+/* ---------- 트랙 & 환경 ---------- */
 function buildTrack(theme){
   const T=THEMES[theme], seed2=(cfg.seed^hashStr(theme)^hashStr(cfg.shape))>>>0;
   trackW=T.trackW*2.0;
@@ -221,8 +245,8 @@ function buildTrack(theme){
     centerline.push(P[0],P[1],P[2]);
     if(i<samples-1){
       const L=add(P,scale(R,-trackW*0.5)), Rr=add(P,scale(R,trackW*0.5));
-      p.push(L[0],L[1],L[2], Rr[0],Rr[1],Rr[2]); c.push(...T.trackC1, ...T.trackC2); g.push(0.55,0.55); verts+=2;
-      rp.push(L[0],L[1]+0.10,L[2], Rr[0],Rr[1]+0.10,Rr[2]); rc.push(...T.rail, ...T.rail); rg.push(1.2,1.2); railVerts+=2;
+      p.push(L[0],L[1],L[2], Rr[0],Rr[1],Rr[2]); c.push(...T.trackC1, ...T.trackC2); g.push(0.0,0.0); verts+=2; // 트랙은 불투명
+      rp.push(L[0],L[1]+0.10,L[2], Rr[0],Rr[1]+0.10,Rr[2]); rc.push(...T.rail, ...T.rail); rg.push(1.2,1.2); railVerts+=2; // 레일은 글로우 포인트
     }
   }
   gl.clearColor(T.fog[0],T.fog[1],T.fog[2],1);
@@ -233,123 +257,129 @@ function buildTrack(theme){
 }
 function buildEnv(theme,seed2){
   envBuf=propBuf=geoBuf=snowBuf=ashBuf=null; envVerts=propVerts=geoVerts=snowVerts=ashVerts=0;
-  const pts=[],cols=[],glows=[], p2=[],c2=[],g2=[], GEO=makeGeo();
+  const pts=[],cols=[],glows=[], GEO=makeGeo();
   const rng=mulberry32(seed2), t=THEMES[theme], ringR=trackMaxR+trackW*2.8, groundY=0;
   const pushP=(x,y,z,c,g)=>{pts.push(x,y,z); cols.push(c[0],c[1],c[2]); glows.push(g)}
-  const push2=(x,y,z,c,g)=>{p2.push(x,y,z); c2.push(c[0],c[1],c[2]); g2.push(g)}
+  // 지면(불투명)
   if(t.ground){
-    const rad=ringR+160, step=12;
+    const rad=ringR+220, step=12;
     const baseCol=(theme==='XMAS')?[0.95,0.98,1]:(theme==='VOLCANO')?[0.25,0.08,0.06]:(theme==='CYBERPUNK')?[0.08,0.08,0.12]:[0.06,0.08,0.12];
     for(let x=-rad;x<rad;x+=step) for(let z=-rad;z<rad;z+=step){
       if(Math.hypot(x,z)<ringR-12) continue;
       const c0=[baseCol[0]*(0.94+0.12*rng()), baseCol[1]*(0.94+0.12*rng()), baseCol[2]*(0.94+0.12*rng())];
-      pushQuad(GEO,x,groundY,z, x+step,groundY,z, x+step,groundY,z+step, x,groundY,z+step, c0,0.12);
+      pushQuad(GEO,x,groundY,z, x+step,groundY,z, x+step,groundY,z+step, x,groundY,z+step, c0,0.0);
     }
   }
+  // 하늘/파티클(글로우) — 배경 깨짐 방지를 위해 지오(불투명) 먼저 그린 후 가산 합성
   if(theme==='SPACE'){
     const rngS=mulberry32(seed2^0x55aa);
-    const starCount= cfg.mobile?1600:3000;
+    const starCount= cfg.mobile?1600:3200;
     for(let i=0;i<starCount;i++){const rr=ringR+20+rngS()*420,a=rngS()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=(rngS()*2-1)*320+90; pushP(rx,ry,rz,[0.82+rngS()*0.18,0.88+rngS()*0.12,1],0.06);}
-    for(let j=0;j<260;j++){const rr2=ringR+60+rng()*380,a2=rng()*Math.PI*2; push2(Math.cos(a2)*rr2,(rng()*2-1)*260+60,Math.sin(a2)*rr2,[0.9,0.95,1],0.9);}
   }else if(theme==='CYBERPUNK'){
-    const starN= cfg.mobile?1200:2400;
-    for(let i=0;i<starN;i++){const rr=trackMaxR+260+Math.random()*420,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=120+Math.random()*320; pushP(rx,ry,rz,[0.85+Math.random()*0.15,0.9+Math.random()*0.1,1],0.08);}
-    const moonR=24, moonX=Math.cos(0.7)*(trackMaxR+300), moonZ=Math.sin(0.7)*(trackMaxR+300), moonY=160;
-    const sphere=(cx,cy,cz,R,lat,lon,col,glw)=>{for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI; for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI; const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)]; const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0); pushQuad(GEO,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw); }}};
-    sphere(moonX,moonY,moonZ,moonR,12,20,[0.95,0.95,1.0],0.2);
-    const addWindows=(cx,sy,cz,sx,sz)=>{ const strideX=2.2,strideY=2.6,strideZ=2.2; const halfX=sx/2,halfZ=sz/2,rows=Math.max(1,Math.floor((sy-3)/strideY));
-      const colsX=Math.max(1,Math.floor((sx-3)/strideX)), colsZ=Math.max(1,Math.floor((sz-3)/strideZ));
-      for(let iy=0;iy<rows;iy++){const y=-sy/2+2+iy*strideY;
-        for(let ix=0;ix<colsX;ix++){const u=-halfX+2+ix*strideX; pushBox(GEO,cx+u, sy/2+y, cz+halfZ+0.05, 1.4,1.2,0.05, [0.2,0.9,1],[0.2,0.9,1],1.2); pushBox(GEO,cx+u, sy/2+y, cz-halfZ-0.05, 1.4,1.2,0.05,[0.2,0.9,1],[0.2,0.9,1],1.2);}
-        for(let iz=0;iz<colsZ;iz++){const u=-halfZ+2+iz*strideZ; pushBox(GEO, cx+halfX+0.05, sy/2+y, cz+u, 0.05,1.2,1.4,[1,0.3,0.9],[1,0.3,0.9],1.1); pushBox(GEO, cx-halfX-0.05, sy/2+y, cz+u, 0.05,1.2,1.4,[1,0.3,0.9],[1,0.3,0.9],1.1); }
-      }
-    };
-    for(let i=0;i<520;i++){
-      const r=trackMaxR+trackW*2.8+12+Math.random()*320,a=Math.random()*Math.PI*2,xx=Math.cos(a)*r,zz=Math.sin(a)*r,sy=26+Math.random()*140;
-      const sx=6+Math.random()*32, sz=6+Math.random()*32;
-      pushBox(GEO,xx,sy/2,zz, sx,sy,sz, [0.08,0.1,0.14],[0.12,0.12,0.16],0.35);
-      addWindows(xx,sy,zz,sx,sz);
-    }
+    const starN= cfg.mobile?1000:2200;
+    for(let i=0;i<starN;i++){const rr=trackMaxR+260+Math.random()*420,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=140+Math.random()*320; pushP(rx,ry,rz,[0.85+Math.random()*0.15,0.9+Math.random()*0.1,1],0.08);}
   }else if(theme==='XMAS'){
-    const sPos=[],sCol=[],sGlow=[]; const snowCount= cfg.mobile?2400:5200;
-    for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+8+Math.random()*300, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=120+Math.random()*280; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
+    const snowCount= cfg.mobile?2400:5200;
+    const sPos=[],sCol=[],sGlow=[];
+    for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*320, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*300; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
-    for(let i=0;i<520;i++){const r=trackMaxR+trackW*2.8+14+Math.random()*260,a=Math.random()*Math.PI*2,x=Math.cos(a)*r,z=Math.sin(a)*r;
-      if(Math.random()<0.55){const sx=6+Math.random()*6,sz=6+Math.random()*6,sy=4+Math.random()*3; pushBox(GEO,x,sy/2,z, sx,sy,sz,[1,0.2,0.2],[0.9,0.9,0.95],0.35); pushBox(GEO,x,sy+1.4,z, sx*0.9,1.4,sz*0.9,[0.9,0.1,0.1],[0.9,0.1,0.1],0.4);}
-      else { pushBox(GEO,x,1.3,z, 1.0,3.0,1.0,[0.5,0.3,0.2],[0.5,0.3,0.2]); pushBox(GEO,x,4.0,z, 3.8,2.2,3.8,[0.1,0.6,0.2],[0.1,0.5,0.2]); pushBox(GEO,x,6.5,z, 3.0,2.0,3.0,[0.1,0.7,0.2],[0.1,0.6,0.2]); pushBox(GEO,x,8.9,z, 2.4,1.8,2.4,[0.1,0.8,0.2],[0.1,0.7,0.2]); }
-    }
-  }else if(theme==='NEON'){
-    const baseR=trackMaxR+trackW*2.8+18;
-    for(let ii=0;ii<36;ii++){const r=baseR+ii*10; for(let a=0;a<Math.PI;a+=Math.PI/28){const x=Math.cos(a)*r,y=Math.sin(a)*40+8,z=0; pushQuad(GEO,x,y,z, x+1.8,y,z, x+1.8,y+1.8,z, x,y+1.8,z, [0.2,0.8,1],0.75);}}
-    for(let i=0;i<3;i++){const y=160+i*10; pushQuad(GEO,-40,y,-(trackMaxR+320), 40,y,-(trackMaxR+320), 40,y+2,-(trackMaxR+320), -40,y+2,-(trackMaxR+320), [0.3,1,1],0.9);}
   }else if(theme==='VOLCANO'){
-    for(let i=0;i<420;i++){const r=trackMaxR+trackW*2.8+8+Math.random()*320,a=Math.random()*Math.PI*2,x=Math.cos(a)*r,z=Math.sin(a)*r,sy=9+Math.random()*40; pushBox(GEO,x,sy/2,z, 5,sy,5,[1,0.5,0.2],[1,0.35,0.15],0.44);}
     const aPos=[],aCol=[],aGlow=[]; const ashCount= cfg.mobile?2400:5200;
-    for(let i=0;i<ashCount;i++){const rr=trackMaxR+trackW*2.8+20+Math.random()*320,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=160+Math.random()*260; aPos.push(rx,ry,rz); aCol.push(0.6,0.35,0.25); aGlow.push(-(0.2+Math.random()*0.4)); }
+    for(let i=0;i<ashCount;i++){const rr=trackMaxR+trackW*2.8+40+Math.random()*360,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=160+Math.random()*260; aPos.push(rx,ry,rz); aCol.push(0.6,0.35,0.25); aGlow.push(-(0.2+Math.random()*0.4)); }
     ashBuf={pos:makeBuffer(new Float32Array(aPos),3), col:makeBuffer(new Float32Array(aCol),3), glow:makeBuffer(new Float32Array(aGlow),1)}; ashVerts=aPos.length/3;
   }
-  if(pts.length) envBuf={pos:makeBuffer(new Float32Array(pts),3), col:makeBuffer(new Float32Array(cols),3), glow:makeBuffer(new Float32Array(glows),1)}, envVerts=pts.length/3;
-  if(p2.length)  propBuf={pos:makeBuffer(new Float32Array(p2),3), col:makeBuffer(new Float32Array(c2),3), glow:makeBuffer(new Float32Array(g2),1)}, propVerts=p2.length/3;
-  if(GEO.pos.length) geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}, geoVerts=GEO.pos.length/3;
+  if(pts.length){ envBuf={pos:makeBuffer(new Float32Array(pts),3), col:makeBuffer(new Float32Array(cols),3), glow:makeBuffer(new Float32Array(glows),1)}; envVerts=pts.length/3; }
+  if(GEO.pos.length){ geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}; geoVerts=GEO.pos.length/3; }
 }
+
+/* ---------- 중앙 초거대 조형물 ---------- */
 function buildCenterpiece(theme,seed2){
-  const G=makeGeo();
-  const scaleHalf=0.5; // 구조물 절반
-  const sphere=(cx,cy,cz,R,lat,lon,col,glw)=>{R*=scaleHalf; for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI; for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI; const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)]; const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0); pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw); }}};
-  const boxH=(cx,cy,cz,sx,sy,sz,ct,cs,g)=>pushBox(G,cx,cy,cz,sx*scaleHalf,sy*scaleHalf,sz*scaleHalf,ct,cs,g);
-  const safety = trackW*0.7 + 10, safeR = Math.max(12, trackMinR - safety);
-  if(theme==='XMAS'){
-    const R1 = clamp(safeR*0.45, 10, 26), R2=R1*0.7, R3=R1*0.48, base=0;
-    sphere(0,base+R1,0,R1,16,22,[1,1,1],0.8);
-    sphere(0,base+R1*2+R2*0.2,0,R2,14,20,[1,1,1],0.85);
-    sphere(0,base+R1*2+R2*0.2+R2+R3*0.3,0,R3,12,18,[1,1,1],0.9);
-    boxH(-R3*0.57, base+R1*2+R2*0.2+R2+R3*0.3+R3*0.28, R3*1.1, R3*0.28, R3*0.28, 0.6,[0.05,0.05,0.08],[0.05,0.05,0.08],0.2);
-    boxH( R3*0.57, base+R1*2+R2*0.2+R2+R3*0.3+R3*0.28, R3*1.1, R3*0.28, R3*0.28, 0.6,[0.05,0.05,0.08],[0.05,0.05,0.08],0.2);
-    for(let i=-2;i<=2;i++){ const x=i*(R3*0.32), y=base+R1*2+R2*0.2+R2+R3*0.3-R3*0.28+Math.abs(i)*0.18*R3; boxH(x,y,R3*1.05, R3*0.18, R3*0.18, 0.5,[0.05,0.05,0.08],[0.05,0.05,0.08],0.25); }
-    boxH(0,base+R1*2+R2*0.2+R2+R3*0.3, R3*0.95, R3*0.35, R3*0.35, R3*0.9, [1.0,0.45,0.1],[1.0,0.4,0.08],0.9);
-  } else if(theme==='NEON'){
-    const half = clamp(safeR*0.38, 10, 24), h=clamp(safeR*4.0, 90, 160);
-    boxH(0,h*0.5,0, half*1.2,h,half*1.2,[0.08,0.1,0.14],[0.1,0.12,0.18],0.4);
-    for(let i=-4;i<=4;i++){ boxH(i*half*0.22, h-6, 0, half*0.18,10,half*0.18,[0.2,0.9,1],[0.2,0.9,1],1.2); }
-  } else if(theme==='CYBERPUNK'){
-    const half=clamp(safeR*0.4, 11, 26), h=clamp(safeR*4.2, 100, 180);
-    boxH(0,h*0.5,0, half*1.2,h,half*1.2,[0.08,0.1,0.14],[0.12,0.12,0.16],0.4);
-    for(let y=8;y<h;y+=6){ for(let x=-half+3;x<=half-3;x+=3){ boxH(x,y, half*1.2/2+0.05, 1.6,1.2,0.2, [0.2,0.9,1],[0.2,0.9,1],1.2); boxH(x,y,-half*1.2/2-0.05, 1.6,1.2,0.2,[0.2,0.9,1],[0.2,0.9,1],1.2);} }
-    for(let y=8;y<h;y+=6){ for(let z=-half+3;z<=half-3;z+=3){ boxH( half*1.2/2+0.05,y,z, 0.2,1.2,1.6,[1,0.3,0.9],[1,0.3,0.9],1.1); boxH(-half*1.2/2-0.05,y,z, 0.2,1.2,1.6,[1,0.3,0.9],[1,0.3,0.9],1.1);} }
-  } else if(theme==='VOLCANO'){
-    const baseW=clamp(safeR*1.2, 26, 84)*scaleHalf;
-    for(let i=0;i<12;i++){ const y=6*scaleHalf+i*5*scaleHalf, s=baseW - i*5*scaleHalf; if(s<=6*scaleHalf) break; boxH(0,y,0, s,5*scaleHalf,s,[0.5,0.16,0.08],[0.4,0.14,0.07],0.35); }
-  } else if(theme==='SPACE'){
-    const R=clamp(safeR*0.6, 16, 36);
-    sphere(0,(R+20)*scaleHalf,0,R,18,28,[0.55,0.8,1],0.6);
-    const ringR=clamp(R*1.5, 0, safeR-2), ringW=Math.min(4, safeR*0.12)*scaleHalf;
-    for(let a=0;a<Math.PI*2;a+=Math.PI/24){ const x0=Math.cos(a)*ringR, z0=Math.sin(a)*ringR, x1=Math.cos(a+Math.PI/24)*ringR, z1=Math.sin(a+Math.PI/24)*ringR;
-      pushQuad(G, x0, (R+20)*scaleHalf, z0, x1, (R+20)*scaleHalf, z1, x1, (R+20)*scaleHalf+ringW, z1, x0, (R+20)*scaleHalf+ringW, z0, [0.6,0.9,1],[0.6,0.9,1],0.9);
-    }
+  const G=makeGeo(); const safePad = trackW*0.7 + 14; const safeR = Math.max(16, trackMinR - safePad);
+  const big = safeR*0.95; const med = safeR*0.6;
+  if(theme==='SPACE'){
+    addSphere(G,0,med*0.5,0, med*0.55, 32,48, [0.55,0.8,1],0.0);                   // 거대한 행성(불투명)
+    addTorus(G,0,med*0.5,0, med*0.9, med*0.08, 72,28, [0.6,0.9,1],0.0);           // 두꺼운 반지(불투명)
+    addTorus(G,0,med*0.5,0, med*0.9, med*0.02, 96,20, [0.6,0.9,1],0.8);           // 얇은 글로우 띠는 추후 글로우 패스에서 처리(색/알파는 동일)
+  }else if(theme==='CYBERPUNK'){
+    addCylinder(G,0,big*0.65,0, big*0.28, big*1.3, 64, [0.08,0.1,0.14],[0.12,0.12,0.16],0.0); // 메가 리액터 코어
+    addTorus(G,0,big*1.3,0, big*0.5, big*0.06, 72,24, [0.2,0.9,1],0.0);
+  }else if(theme==='NEON'){
+    addCylinder(G,0,big*0.9,0, big*0.22, big*1.6, 72, [0.1,0.12,0.18],[0.12,0.14,0.2],0.0);
+    for(let i=-6;i<=6;i++){ addCylinder(G,i*big*0.12, big*1.52, 0, big*0.02, big*0.2, 24, [0.2,0.9,1],[0.2,0.9,1],0.0); }
+  }else if(theme==='XMAS'){
+    // 거대 트리(다층)
+    addCone(G,0,big*0.6,0, big*0.55, big*1.6, 64, [0.1,0.7,0.2],0.0);
+    addCone(G,0,big*1.2,0, big*0.42, big*1.2, 64, [0.1,0.8,0.25],0.0);
+    addCone(G,0,big*1.7,0, big*0.30, big*0.9, 64, [0.1,0.9,0.3],0.0);
+    addSphere(G,0,big*2.2,0, big*0.12, 18,28,[1,0.95,0.6],0.0); // 별 구체
+  }else if(theme==='VOLCANO'){
+    // 거대 화산체
+    addCone(G,0,big*0.9,0, big*0.9, big*1.4, 72, [0.32,0.12,0.08],0.0);
+    addCylinder(G,0,big*1.6,0, big*0.12, big*0.08, 36, [1,0.3,0.1],[1,0.35,0.12],0.0); // 용암 호수 림
   }
   centerBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; centerVerts=G.pos.length/3;
 }
+
+/* ---------- 터널(다양/웅장 + 글로우 라이트) ---------- */
 function buildTunnels(theme,seed2){
-  tunnelBuf=null; tunnelVerts=0; const G=makeGeo();
-  for(let i=160;i<samples;i+=420){
-    const {T,R}=basisAt(i); const C=getCenter(i);
-    const h=24, w=trackW*0.9, seg=24;
-    for(let s=0;s<seg;s++){
-      const a0=s/seg*Math.PI, a1=(s+1)/seg*Math.PI;
-      const p=(a)=>add(add(C,scale(R,Math.cos(a)*w*0.5)), [0,Math.sin(a)*h,0]);
-      const A=p(a0), B=p(a1), C1=add(A,scale(T,0.8)), C2=add(B,scale(T,0.8));
-      pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C2[0],C2[1],C2[2], C1[0],C1[1],C1[2], [0.2,0.8,1], 0.6);
+  tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
+  const G=makeGeo(), L=makeGeo(); // G: 불투명 구조, L: 글로우 라이트
+  const rng=mulberry32(seed2^0x999);
+  const placeEvery = 360; // 샘플 간격
+  for(let i=160;i<samples;i+=placeEvery){
+    const {T,R,B}=basisAt(i); const C=getCenter(i);
+    const style = (rng()<0.33)?'ARCH':(rng()<0.66)?'RIB':'CYL';
+    const w=trackW*0.95, h=28, seg=48;
+    if(style==='ARCH'){
+      // 반원 아치
+      for(let s=0;s<seg;s++){
+        const a0=s/seg*Math.PI, a1=(s+1)/seg*Math.PI;
+        const p=(a)=>add(add(C,scale(R,Math.cos(a)*w*0.5)), [0,Math.sin(a)*h,0]);
+        const A=p(a0), Bp=p(a1), C1=add(A,scale(T,1.2)), C2=add(Bp,scale(T,1.2));
+        pushQuad(G, A[0],A[1],A[2], Bp[0],Bp[1],Bp[2], C2[0],C2[1],C2[2], C1[0],C1[1],C1[2], [0.14,0.16,0.22],0.0);
+      }
+      // 내부 라이트 링
+      for(let s=0;s<=seg;s+=2){const a=s/seg*Math.PI; const P=add(add(C,scale(R,Math.cos(a)*(w*0.5-0.8))), [0,Math.sin(a)*(h-1.2),0]); L.pos.push(P[0],P[1],P[2]); L.col.push(1,0.8,0.4); L.glow.push(1.1);}
+    }else if(style==='RIB'){
+      // 리브(늑골) 형태의 반복 게이트
+      for(let k=-2;k<=2;k++){
+        const off=add(C,scale(T,k*8));
+        for(let s=0;s<seg;s++){
+          const a0=s/seg*Math.PI, a1=(s+1)/seg*Math.PI;
+          const p=(a)=>add(add(off,scale(R,Math.cos(a)*w*0.5)), [0,Math.sin(a)*h,0]);
+          const A=p(a0), Bp=p(a1);
+          pushQuad(G, A[0],A[1],A[2], Bp[0],Bp[1],Bp[2], Bp[0],Bp[1]-0.8,Bp[2], A[0],A[1]-0.8,A[2], [0.12,0.13,0.18],0.0);
+        }
+        // 라이트 스트립
+        for(let s=0;s<=seg;s+=3){const a=s/seg*Math.PI; const P=add(add(off,scale(R,Math.cos(a)*(w*0.5-0.6))), [0,Math.sin(a)*(h-1.0),0]); L.pos.push(P[0],P[1],P[2]); L.col.push(0.2,0.9,1); L.glow.push(1.0);}
+      }
+    }else{
+      // 원통형 구간
+      const rad=w*0.55, len=48;
+      for(let s=0;s<seg;s++){
+        const a0=s/seg*2*Math.PI, a1=(s+1)/seg*2*Math.PI;
+        const ring=(a,t)=>add(add(C, scale(T,t)), add(scale(R,Math.cos(a)*rad), scale(B,Math.sin(a)*rad)));
+        for(let t=-len;t<len;t+=2){
+          const A=ring(a0,t), Bp=ring(a1,t), C1=ring(a1,t+2), D=ring(a0,t+2);
+          pushQuad(G, A[0],A[1],A[2], Bp[0],Bp[1],Bp[2], C1[0],C1[1],C1[2], D[0],D[1],D[2], [0.1,0.11,0.16],0.0);
+        }
+      }
+      // 네온 링 라이트
+      for(let r=0;r<6;r++){ const t=(r-3)*12; for(let s=0;s<seg;s+=2){const a=s/seg*2*Math.PI; const P=add(add(C,scale(T,t)), add(scale(R,Math.cos(a)*rad), scale(B,Math.sin(a)*rad))); L.pos.push(P[0],P[1],P[2]); L.col.push(1,0.4,0.2); L.glow.push(1.0);} }
     }
   }
   tunnelBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; tunnelVerts=G.pos.length/3;
+  if(L.pos.length){ tunnelGlowBuf={pos:makeBuffer(new Float32Array(L.pos),3), col:makeBuffer(new Float32Array(L.col),3), glow:makeBuffer(new Float32Array(L.glow),1)}; tunnelGlowVerts=L.pos.length/3; }
 }
+
+/* ---------- 트랙 사이드 ---------- */
 function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
-  for(let i=40;i<samples;i+=Math.floor(20+rng()*26)){
+  for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
     const {R}=basisAt(i); const C=getCenter(i);
-    const side = (rng()<0.5?-1:1), off = side*(trackW*0.55), P=add(C,scale(R,off));
-    const h=2.5+rng()*6, s=0.6+rng()*1.2;
-    pushBox(G, P[0],h*0.5,P[2], s,h,s, [0.8,0.9,1],[0.2,0.9,1], 0.8);
+    const side = (rng()<0.5?-1:1), off = side*(trackW*0.58), P=add(C,scale(R,off));
+    const h=2.8+rng()*6.2, s=0.7+rng()*1.4;
+    pushBox(G, P[0],h*0.5,P[2], s,h,s, [0.8,0.9,1],[0.2,0.9,1], 0.9); // 글로우 기둥(글로우 패스에서 합성)
   }
   tracksideBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; tracksideVerts=G.pos.length/3;
 }
@@ -368,7 +398,7 @@ function makeCarGeom(themeCol){
     -hw,-hh,hl*0.2, hw,-hh,-hl, -hw,-hh,-hl
   ];
   const cols=[]; for(let i=0;i<P.length/3;i++) cols.push(color[0],color[1],color[2]);
-  const glow=new Float32Array(P.length/3).fill(0.9);
+  const glow=new Float32Array(P.length/3).fill(0.0); // 차는 불투명
   return {pos:makeBuffer(new Float32Array(P),3),col:makeBuffer(new Float32Array(cols),3),glow:makeBuffer(glow,1),verts:P.length/3};
 }
 let carGeom=makeCarGeom(THEMES[cfg.theme].car);
@@ -379,13 +409,11 @@ const input1={L:false,R:false,ACC:false,BR:false,DR:false, stickX:0};
 const input2={L:false,R:false,ACC:false,BR:false,DR:false, stickX:0};
 function setKeys(down,e){
   const code=e.code;
-  // 1P: WASD + SPACE
   if(code==='KeyA') input1.L=down;
   if(code==='KeyD') input1.R=down;
   if(code==='KeyW') input1.ACC=down;
   if(code==='KeyS') input1.BR=down;
   if(code==='Space') input1.DR=down;
-  // 2P: Arrows + Slash
   if(code==='ArrowLeft') input2.L=down;
   if(code==='ArrowRight') input2.R=down;
   if(code==='ArrowUp') input2.ACC=down;
@@ -400,15 +428,15 @@ function bindPad(btn){ const act=btn.dataset.act; btn.addEventListener('pointerd
 btn.addEventListener('pointerup',e=>{e.preventDefault(); if(act==='L') input1.L=false; if(act==='R') input1.R=false; if(act==='ACC') input1.ACC=false; if(act==='BR') input1.BR=false; if(act==='DR') input1.DR=false;},{passive:false}); }
 padL.querySelectorAll('.pbtn').forEach(bindPad); padR.querySelectorAll('.pbtn').forEach(bindPad);
 
-/* ---------- 자동차 로직(아케이드) ---------- */
+/* ---------- 자동차 로직 ---------- */
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, // ★ 카메라 상태
+    camEye:null, camAt:null, camFwd:null, // ★ 카메라 상태(방향 포함)
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
-      const maxV= (cfg.mobile?40:44);
-      const acc=ACC? 24 : 0;
+      const maxV= (cfg.mobile?40:44)*SPEED_SCALE;
+      const acc=ACC? 24*SPEED_SCALE : 0;
       const baseDec= 6.5, brakeDec = BR? 24 : 0;
       this.v = clamp(this.v + (acc - baseDec - brakeDec)*dt, 0, maxV);
       const target = (L?-1:0) + (R?1:0);
@@ -416,7 +444,7 @@ function makeCar(ctrl){
       const spring = 6.0, damp=3.6;
       const force = (aim - this.off)*spring - this.offV*damp;
       this.offV += force*dt;
-      if(DR){ this.offV*=1.02; this.v = Math.min(maxV, this.v + 10*dt); this.drift += Math.abs(this.offV)*1.2; }
+      if(DR){ this.offV*=1.03; this.v = Math.min(maxV, this.v + (10*SPEED_SCALE)*dt); this.drift += Math.abs(this.offV)*1.2; }
       this.off += this.offV*dt;
       const limit=trackW*0.48; if(this.off<-limit){this.off=-limit; this.offV=0;} if(this.off>limit){this.off=limit; this.offV=0;}
       this.prevS = this.s;
@@ -432,29 +460,32 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라(안정화 + 더 멀리) ---------- */
+/* ---------- 카메라(안정화+멀리) ---------- */
 function chaseVP(car, aspect, dt){
-  const i = Math.floor(car.s)|0;
-  const ahead = getCenter(i+10), behind = getCenter(i-10);
-  let fwd = safeNorm(sub(ahead, behind));
-  fwd = safeNorm([fwd[0], fwd[1]*0.35, fwd[2]]); // 수직성분 완화
+  // 방향 추정: 앞/뒤 샘플 + 이전 camFwd와의 부호 일관성 유지
+  const lookN = Math.floor(10 + Math.min(30, car.v*0.2));
+  let fwd = safeNorm(subV(getCenter(car.s+lookN), getCenter(car.s-lookN)));
+  fwd = safeNorm([fwd[0], fwd[1]*0.25, fwd[2]]); // 수직 성분 억제
+  if(car.camFwd){ if(car.camFwd[0]*fwd[0] + car.camFwd[1]*fwd[1] + car.camFwd[2]*fwd[2] < 0) fwd = [-fwd[0], -fwd[1], -fwd[2]]; }
+  const kF=1 - Math.exp(-dt*6.0);
+  car.camFwd = car.camFwd ? mixV(car.camFwd, fwd, kF) : fwd;
 
   const w = car.world();
-  const backBase=16.5, upBase=5.0;         // ★ 더 멀고 조금 높게
-  const extra = car.v*0.10;                // ★ 속도에 따른 추가 거리
+  const backBase=20.0, upBase=6.0;           // 더 멀고 높게
+  const extra = car.v*0.12;                  // 속도에 따른 줌아웃
   const targetEye = [
-    w.pos[0] - fwd[0]*(backBase+extra),
+    w.pos[0] - car.camFwd[0]*(backBase+extra),
     w.pos[1] + (upBase + extra*0.15),
-    w.pos[2] - fwd[2]*(backBase+extra)
+    w.pos[2] - car.camFwd[2]*(backBase+extra)
   ];
   const targetAt = [
-    w.pos[0] + fwd[0]*6.0,
-    w.pos[1] + 0.8,
-    w.pos[2] + fwd[2]*6.0
+    w.pos[0] + car.camFwd[0]*7.0,
+    w.pos[1] + 0.9,
+    w.pos[2] + car.camFwd[2]*7.0
   ];
 
   const kEye = 1 - Math.exp(-dt*6.0);
-  const kAt  = 1 - Math.exp(-dt*8.0);
+  const kAt  = 1 - Math.exp(-dt*9.0);
   car.camEye = car.camEye ? mixV(car.camEye, targetEye, kEye) : targetEye;
   car.camAt  = car.camAt  ? mixV(car.camAt,  targetAt,  kAt)  : targetAt;
 
@@ -462,65 +493,42 @@ function chaseVP(car, aspect, dt){
   const V=M.look(car.camEye, car.camAt, up);
 
   const P=[1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1];
-  const fov=58*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=1500, nf=1/(near-far);
+  const fov=58*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=2000, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
   return M.mul(P,V);
 }
 
 /* ---------- 드로우 ---------- */
-function drawBuf(buf,count,mode){ if(!buf||!count) return; gl.bindBuffer(gl.ARRAY_BUFFER,buf.pos.b); gl.enableVertexAttribArray(loc.aPos); gl.vertexAttribPointer(loc.aPos,buf.pos.item,buf.pos.type,false,0,0); gl.bindBuffer(gl.ARRAY_BUFFER,buf.col.b); gl.enableVertexAttribArray(loc.aCol); gl.vertexAttribPointer(loc.aCol,buf.col.item,buf.col.type,false,0,0); gl.bindBuffer(gl.ARRAY_BUFFER,buf.glow.b); gl.enableVertexAttribArray(loc.aGlow); gl.vertexAttribPointer(loc.aGlow,buf.glow.item,buf.glow.type,false,0,0); gl.drawArrays(mode,0,count); }
 function drawCar(VP,car){
   const Mcar = carModelMatrix(car.world());
   const VPc = M.mul(VP, Mcar);
   gl.uniformMatrix4fv(loc.uVP,false,new Float32Array(VPc));
-
-  // ★ 차 지오메트리 버퍼 명시 바인딩
-  gl.bindBuffer(gl.ARRAY_BUFFER, carGeom.pos.b);
-  gl.enableVertexAttribArray(loc.aPos);
-  gl.vertexAttribPointer(loc.aPos, carGeom.pos.item, carGeom.pos.type, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, carGeom.col.b);
-  gl.enableVertexAttribArray(loc.aCol);
-  gl.vertexAttribPointer(loc.aCol, carGeom.col.item, carGeom.col.type, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, carGeom.glow.b);
-  gl.enableVertexAttribArray(loc.aGlow);
-  gl.vertexAttribPointer(loc.aGlow, carGeom.glow.item, carGeom.glow.type, false, 0, 0);
-
-  gl.drawArrays(gl.TRIANGLES, 0, carGeom.verts);
+  drawSolid(carGeom, carGeom.verts, gl.TRIANGLES);
 }
 
 /* ---------- 게임 컨트롤 ---------- */
 let car1=makeCar(input1), car2=makeCar(input2), aiCars=[];
 const LAPS=3;
-const START_OFFSET_FRAC=0.25; // 결승선에서 25% 떨어진 지점
+const START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
-  c.prevS = c.s; // 랩 감지 초기화
-  c.off = lane;
-  c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-
-  // ★ 카메라 초기화(안정 방향 추정)
-  const i = Math.floor(c.s)|0;
-  const ahead = getCenter(i+8), behind = getCenter(i-8);
-  let fwd = safeNorm(sub(ahead, behind));
-  fwd = safeNorm([fwd[0], fwd[1]*0.35, fwd[2]]);
-  const w = c.world();
-  const backBase=16.5, upBase=5.0;
+  c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
+  const ahead = getCenter(c.s+10), behind = getCenter(c.s-10);
+  let fwd = safeNorm(subV(ahead, behind)); fwd = safeNorm([fwd[0], fwd[1]*0.25, fwd[2]]);
+  const w = c.world(); const backBase=20.0, upBase=6.0;
+  c.camFwd=fwd;
   c.camEye = [ w.pos[0]-fwd[0]*backBase, w.pos[1]+upBase, w.pos[2]-fwd[2]*backBase ];
-  c.camAt  = [ w.pos[0]+fwd[0]*6.0,     w.pos[1]+0.8,   w.pos[2]+fwd[2]*6.0   ];
+  c.camAt  = [ w.pos[0]+fwd[0]*7.0,     w.pos[1]+0.9,   w.pos[2]+fwd[2]*7.0   ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
   car2=makeCar(input2); car2.name='P2'; if(cfg.twoP) placeAtStart(car2, trackW*0.15);
-  aiCars=[]; for(let i=0;i<cfg.aiCount;i++){ const ai=makeCar(null); ai.name='AI'+(i+1); placeAtStart(ai, ((i%4)-1.5)*trackW*0.22); ai.v=20; aiCars.push(ai); }
+  aiCars=[]; for(let i=0;i<cfg.aiCount;i++){ const ai=makeCar(null); ai.name='AI'+(i+1); placeAtStart(ai, ((i%4)-1.5)*trackW*0.22); ai.v=22*SPEED_SCALE; aiCars.push(ai); }
 }
 function updateAI(dt){
   for(const ai of aiCars){
-    ai.v=clamp(ai.v + (30 - 6.5)*dt, 0, 42);
-    const spring=4.5,damp=3.2;
-    const force=(ai.off - ai.off)*spring - ai.offV*damp;
-    ai.offV += force*dt;
+    const targetV = 30*SPEED_SCALE;
+    ai.v=clamp(ai.v + (targetV - 6.5)*dt, 0, 50*SPEED_SCALE);
     ai.s = (ai.s + ai.v*dt) % samples;
   }
 }
@@ -530,28 +538,31 @@ function positions(){
   return arr.map(x=>x.c);
 }
 
-/* ---------- 빌드 & 초기화 ---------- */
+/* ---------- 빌드 & 렌더 ---------- */
 function applyTheme(key){ document.body.style.background=THEMES[key].bg(); carGeom=makeCarGeom(THEMES[key].car); buildTrack(key); renderOnce(); }
 function renderScene(VP, tSec){
   gl.uniformMatrix4fv(loc.uVP,false,new Float32Array(VP)); gl.uniform1f(loc.uTime, tSec);
-  drawBuf(geoBuf, geoVerts, gl.TRIANGLES);
-  drawBuf(envBuf, envVerts, gl.POINTS);
-  drawBuf(propBuf, propVerts, gl.POINTS);
-  drawBuf(tracksideBuf, tracksideVerts, gl.TRIANGLES);
-  drawBuf(tunnelBuf, tunnelVerts, gl.TRIANGLES);
-  drawBuf(bufRail, railVerts, gl.POINTS);
-  drawBuf(bufRibbon, verts, gl.TRIANGLE_STRIP);
-  if(snowBuf) drawBuf(snowBuf, snowVerts, gl.POINTS);
-  if(ashBuf) drawBuf(ashBuf, ashVerts, gl.POINTS);
+  // 불투명 패스
+  drawSolid(bufRibbon, verts, gl.TRIANGLE_STRIP);
+  drawSolid(tunnelBuf, tunnelVerts, gl.TRIANGLES);
+  drawSolid(geoBuf, geoVerts, gl.TRIANGLES);
+  drawSolid(centerBuf, centerVerts, gl.TRIANGLES);
+  // 글로우 패스 (가산 합성)
+  drawGlow(tracksideBuf, tracksideVerts, gl.TRIANGLES);
+  drawGlow(tunnelGlowBuf, tunnelGlowVerts, gl.POINTS);
+  drawGlow(envBuf, envVerts, gl.POINTS);
+  drawGlow(propBuf, propVerts, gl.POINTS);
+  drawGlow(bufRail, railVerts, gl.POINTS);
+  if(snowBuf) drawGlow(snowBuf, snowVerts, gl.POINTS);
+  if(ashBuf)  drawGlow(ashBuf, ashVerts, gl.POINTS);
 }
 function renderOnce(){
   const tSec=performance.now()/1000; gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  const dt = 1/60; // 안정용 고정 dt
+  const dt = 1/60;
   if(!cfg.twoP){
     const VP=chaseVP(car1, CW/CH, dt);
     renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
-  }
-  else{
+  } else {
     const half=CW>>1;
     gl.viewport(0,0,half,CH); const VP1=chaseVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
     gl.viewport(half,0,CW-half,CH); const VP2=chaseVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
@@ -559,8 +570,8 @@ function renderOnce(){
   }
 }
 
-/* ---------- 랩/결승선 판정 ---------- */
-function checkLaps(dt){
+/* ---------- 랩 ---------- */
+function checkLaps(){
   const now=performance.now();
   const racers=[car1, ...(cfg.twoP?[car2]:[]), ...aiCars];
   for(const c of racers){
@@ -580,7 +591,7 @@ function frame(){
   if(state===S.PLAY){
     car1.update(dt); if(cfg.twoP) car2.update(dt);
     updateAI(dt);
-    checkLaps(dt);
+    checkLaps();
 
     const ps=positions();
     const posIdx=ps.findIndex(p=>p===car1)+1;
@@ -589,7 +600,7 @@ function frame(){
 
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!cfg.twoP){
-      const VP=chaseVP(car1, CW/CH, dt);   // ★ dt 전달
+      const VP=chaseVP(car1, CW/CH, dt);
       renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
     } else {
       const half=CW>>1;
@@ -610,20 +621,19 @@ function frame(){
   }
 }
 
-/* ---------- UI 버튼 ---------- */
+/* ---------- UI ---------- */
 document.getElementById('btnPlay').onclick=()=>{ if(state!==S.PLAY){ clearPanel(); state=S.PLAY; last=performance.now(); frame(); }}; 
 document.getElementById('btnPause').onclick=()=>{ if(state===S.PLAY){ state=S.PAUSE; panel(`<h1>⏸ 일시정지</h1><div><button class="btn" id="btnResume">▶ 계속</button><button class="btn" id="btnMenu">메뉴</button></div>`); document.getElementById('btnResume').onclick=()=>{clearPanel(); state=S.PLAY; last=performance.now(); frame();}; document.getElementById('btnMenu').onclick=()=>{state=S.MENU; showMenu();}; } };
 function reset(){ buildTrack(cfg.theme); resetCars(); setHUD('uiLap',`0/${LAPS}`); setHUD('uiSpeed','0'); setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo'); renderOnce(); showMenu();}
 document.getElementById('btnReset').onclick=reset;
 document.getElementById('btnReroll').onclick=()=>{ cfg.seed=(Math.random()*1e9)|0; store.set(cfg); reset(); };
 document.getElementById('btnShape').onclick=()=>{ const idx=(SHAPES.indexOf(cfg.shape)+1)%SHAPES.length; cfg.shape=SHAPES[idx]; store.set(cfg); document.getElementById('btnShape').textContent='🛣 '+cfg.shape; reset(); };
-document.getElementById('btnAI').onclick=()=>{ cfg.aiCount=(cfg.aiCount+1)%5; store.set(cfg); document.getElementById('btnAI').textContent='🤖 AI: '+cfg.aiCount; reset(); };
+document.getElementById('btnAI').onclick=()=>{ cfg.aiCount=(cfg.aiCount+1)%6; store.set(cfg); document.getElementById('btnAI').textContent='🤖 AI: '+cfg.aiCount; reset(); };
 document.getElementById('btn2P').onclick=()=>{ cfg.twoP=!cfg.twoP; store.set(cfg); document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P'; reset(); };
 document.getElementById('btnMobile').onclick=()=>{ cfg.mobile=!cfg.mobile; store.set(cfg); document.getElementById('btnMobile').textContent= cfg.mobile?'📱 Mobile: ON':'📱 Mobile: OFF'; padL.style.display=padR.style.display=cfg.mobile?'flex':'none'; };
 document.getElementById('selTheme').value=cfg.theme;
 document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; store.set(cfg); applyTheme(cfg.theme); resetCars(); };
 
-/* ---------- 메뉴 ---------- */
 function showMenu(){
   const help=`<div class="keys">
   <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ / Space 드리프트<br/>
