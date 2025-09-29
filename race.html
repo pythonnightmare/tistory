@@ -23,6 +23,7 @@
   .panel{pointer-events:auto;background:var(--glass);border:1px solid rgba(255,255,255,.16);border-radius:18px;padding:18px;max-width:760px;width:min(92%,760px);text-align:center;box-shadow:0 16px 70px rgba(0,0,0,.55)}
   .panel h1{margin:0 0 10px}
   .keys{margin-top:8px;font-size:12px;color:var(--muted)}
+
   /* 모바일 패드 */
   .padL,.padR{position:absolute;bottom:12px;gap:12px;pointer-events:auto;display:none}
   .padL{left:12px}
@@ -30,6 +31,7 @@
   .pbtn{min-width:92px;min-height:92px;border-radius:20px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.10);color:#fff;font-weight:900;font-size:18px}
   .pbtn.small{min-width:88px;min-height:66px}
   .row{display:flex;gap:12px}
+
   /* 계기판 */
   #gauge{position:absolute;right:14px;bottom:14px;width:200px;height:200px;pointer-events:none;filter:drop-shadow(0 2px 10px rgba(0,0,0,.6))}
 </style>
@@ -67,7 +69,6 @@
 
     <div class="view" id="view">
       <canvas id="gl"></canvas>
-      <!-- 2D 계기판 -->
       <canvas id="gauge"></canvas>
       <div class="overlay" id="overlay"></div>
       <!-- 모바일 패드 -->
@@ -102,7 +103,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v19';
+const saveKey='vector_racing_v21';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 
 /* ---------- 상태 ---------- */
@@ -154,7 +155,7 @@ function bind(buf,loc){gl.bindBuffer(gl.ARRAY_BUFFER,buf.b); gl.enableVertexAttr
 const M={mul:(a,b)=>{const o=new Array(16); for(let r=0;r<4;r++) for(let c=0;c<4;c++){o[c*4+r]=a[r]*b[c*4]+a[r+4]*b[c*4+1]+a[r+8]*b[c*4+2]+a[r+12]*b[c*4+3];} return o;}, T:(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1], look:(eye,at,up)=>{const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]]; const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l];}; const z=norm(sub(eye,at)); let x=norm(cross(up,z)); let y=cross(z,x); const RT=[x[0],x[1],x[2],0, y[0],y[1],y[2],0, z[0],z[1],z[2],0, 0,0,0,1]; return M.mul(RT,M.T(-eye[0],-eye[1],-eye[2]));}};
 
 /* ---------- 트랙/곡선 ---------- */
-let samples=2400, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
+let samples=2600, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
 const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
@@ -178,7 +179,7 @@ function basisAt(i){
 }
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
 function genCP(seed,shape,yAmp,baseY){
-  const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=56,R=150,ph=rand(0,Math.PI*2);
+  const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=60,R=155,ph=rand(0,Math.PI*2);
   if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
   for(let i=0;i<N;i++){const t=i/N*2*Math.PI; let x=0,z=0;
     if(shape==='OVAL'){const rx=R*(1.3+0.18*Math.sin(3*t+ph)), rz=R*(0.95+0.18*Math.sin(2*t+ph)); x=rx*Math.cos(t); z=rz*Math.sin(t);}
@@ -216,7 +217,7 @@ function addTorus(G,cx,cy,cz,R,r,segR=48,segr=24,col=[1,1,1],glw=0.6){for(let i=
 /* ---------- 테마 ---------- */
 const THEMES={
   SPACE:{bg:()=>`radial-gradient(1200px 700px at 70% -10%, #0b1740 0%, transparent 55%), linear-gradient(180deg,#030616,#071531)`,trackC1:[0.58,0.82,1.0],trackC2:[0.62,0.4,1.0],rail:[0.9,0.95,1],trackW:7.8,baseY:1.6,yAmp:6,car:[0.9,0.95,1],fog:[0.02,0.04,0.09],ground:false},
-  CYBERPUNK:{bg:()=>`radial-gradient(800px 500px at 80% -10%, #461058 0%, transparent 50%), linear-gradient(180deg,#16061e,#090a18)`,trackC1:[1.0,0.2,0.8],trackC2:[0.2,1.0,0.9],rail:[1,0.7,1],trackW:8.4,baseY:0.6,yAmp:2.2,car:[1.0,0.3,0.9],fog:[0.06,0.02,0.10],ground:true},
+  CYBERPUNK:{bg:()=>`radial-gradient(800px 500px at 80% -10%, #461058 0%, transparent 50%), linear-gradient(180deg,#16061e,#090a18)`,trackC1:[1.0,0.2,0.8],trackC2:[0.2,1.0,0.9],rail:[1,0.7,1],trackW:8.5,baseY:0.6,yAmp:2.2,car:[1.0,0.3,0.9],fog:[0.06,0.02,0.10],ground:true},
   XMAS:{bg:()=>`radial-gradient(1000px 600px at 60% -10%, #0e1b3a 0%, transparent 52%), linear-gradient(180deg,#081226,#0a1a33)`,trackC1:[0.0,0.9,0.3],trackC2:[1.0,0.1,0.1],rail:[1,1,1],trackW:8.8,baseY:0.6,yAmp:1.0,car:[0.9,0.1,0.1],fog:[0.03,0.05,0.08],ground:true},
   NEON:{bg:()=>`radial-gradient(900px 540px at 85% -10%, #103b6b 0%, transparent 52%), linear-gradient(180deg,#081022,#0a0f28)`,trackC1:[0.2,0.9,1.0],trackC2:[1.0,0.5,0.2],rail:[0.8,1,1],trackW:7.6,baseY:1.0,yAmp:3.2,car:[0.2,0.9,1.0],fog:[0.02,0.05,0.12],ground:true},
   VOLCANO:{bg:()=>`radial-gradient(900px 540px at 85% -10%, #3b0f0f 0%, transparent 52%), linear-gradient(180deg,#140606,#230a0a)`,trackC1:[1.0,0.5,0.0],trackC2:[0.9,0.2,0.1],rail:[1,0.85,0.7],trackW:9.0,baseY:0.4,yAmp:1.8,car:[1.0,0.4,0.05],fog:[0.06,0.02,0.02],ground:true}
@@ -276,14 +277,25 @@ function buildEnv(theme,seed2){
     for(let i=0;i<starCount;i++){const rr=ringR+20+rngS()*420,a=rngS()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=(rngS()*2-1)*320+90; pushP(rx,ry,rz,[0.82+rngS()*0.18,0.88+rngS()*0.12,1],0.06);}
     // 작은 행성
     addSphere(GEO,Math.cos(0.7)*(ringR+300),160,Math.sin(0.7)*(ringR+300), 24, 18,28,[0.95,0.95,1.0],0.0);
-    // ★ 캐릭터: UFO들
-    function addUFO(x,y,z,s=1){ addTorus(GEO,x,y,z,1.6*s,0.25*s,56,20,[0.7,0.9,1],0.0); addSphere(GEO,x,y+0.18*s,z,0.55*s,16,22,[0.8,0.9,1],0.0); }
-    for(let i=0;i<12;i++){ const r=ringR+80+Math.random()*260, a=Math.random()*Math.PI*2; addUFO(Math.cos(a)*r, 80+Math.random()*120, Math.sin(a)*r, 1+Math.random()*1.4); }
+    // ★ 캐릭터: 외계인(우주복)
+    function addAlien(x,y,z,s=1){
+      // 몸통/팔/다리(단순화)
+      pushBox(GEO,x,y+0.8*s,z, 0.7*s,1.2*s,0.4*s, [0.75,0.85,1.0],[0.65,0.78,1.0],0.0);
+      pushBox(GEO,x-0.45*s,y+0.75*s,z, 0.25*s,0.9*s,0.25*s,[0.72,0.84,1.0],[0.64,0.76,0.98],0.0);
+      pushBox(GEO,x+0.45*s,y+0.75*s,z, 0.25*s,0.9*s,0.25*s,[0.72,0.84,1.0],[0.64,0.76,0.98],0.0);
+      pushBox(GEO,x-0.18*s,y+0.2*s,z, 0.22*s,0.7*s,0.22*s,[0.7,0.82,0.98],[0.6,0.74,0.95],0.0);
+      pushBox(GEO,x+0.18*s,y+0.2*s,z, 0.22*s,0.7*s,0.22*s,[0.7,0.82,0.98],[0.6,0.74,0.95],0.0);
+      // 헬멧(투명 느낌)
+      addSphere(GEO,x,y+1.6*s,z,0.42*s,16,22,[0.8,0.95,1.0],0.0);
+      // 얼굴(외계인 피부)
+      addSphere(GEO,x,y+1.55*s,z,0.30*s,14,18,[0.6,1.0,0.7],0.0);
+    }
+    for(let i=0;i<32;i++){ const r=ringR+60+Math.random()*260, a=Math.random()*Math.PI*2; addAlien(Math.cos(a)*r, 22+Math.random()*18, Math.sin(a)*r, 0.8+Math.random()*0.8); }
 
   } else if(theme==='CYBERPUNK'){
     const starN= cfg.mobile?1000:2200;
     for(let i=0;i<starN;i++){const rr=trackMaxR+260+Math.random()*420,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=140+Math.random()*320; pushP(rx,ry,rz,[0.85+Math.random()*0.15,0.9+Math.random()*0.1,1],0.08);}
-    // 스카이라인
+    // 스카이라인 + 네온 창
     function addWindows(cx,sy,cz,sx,sz){
       const strideX=2.2,strideY=2.6,strideZ=2.2;
       const halfX=sx/2,halfZ=sz/2,rows=Math.max(1,Math.floor((sy-3)/strideY));
@@ -300,9 +312,6 @@ function buildEnv(theme,seed2){
       pushBox(GEO,x,sy/2,z, sx,sy,sz, [0.08,0.1,0.14],[0.12,0.12,0.16],0.0);
       addWindows(x,sy,z,sx,sz);
     }
-    // ★ 캐릭터: 호버 드론(링+구)
-    function addDrone(x,y,z,s=1){ addTorus(GEO,x,y,z,0.8*s,0.12*s,40,16,[0.2,0.9,1],0.0); addSphere(GEO,x,y,z,0.28*s,14,20,[0.8,0.9,1],0.0); }
-    for(let i=0;i<18;i++){ const r=ringR+60+Math.random()*240, a=Math.random()*Math.PI*2; addDrone(Math.cos(a)*r, 60+Math.random()*160, Math.sin(a)*r, 0.8+Math.random()*1.2); }
 
   } else if(theme==='XMAS'){
     // 눈
@@ -310,7 +319,7 @@ function buildEnv(theme,seed2){
     for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*340, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*300; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
 
-    // 마을
+    // 마을 (집/전나무/눈사람/산타)
     function addWindowsRect(G,cx,cy,cz, sx,sy, sz, strideX=2.0,strideY=2.4, glowCol=[1,0.92,0.65]){
       const hx=sx/2, hy=sy/2, hz=sz/2;
       const win=(x,y,z,w,h)=>pushBox(G,x,y,z,w,h,0.06,glowCol,glowCol,1.15);
@@ -329,32 +338,31 @@ function buildEnv(theme,seed2){
     }
     function addPine(G,cx,cy,cz, h, r){ pushBox(G,cx,cy,cz, 0.9, h*0.16, 0.9, [0.5,0.3,0.2],[0.5,0.3,0.2],0.0); addCone(G,cx,cy+h*0.16/2+ h*0.30,cz, r*0.8, h*0.6, 40, [0.1,0.7,0.2],0.0); addCone(G,cx,cy+h*0.16/2+ h*0.55,cz, r*0.6, h*0.5, 40, [0.1,0.8,0.25],0.0); addCone(G,cx,cy+h*0.16/2+ h*0.75,cz, r*0.45, h*0.4, 40, [0.1,0.9,0.3],0.0); }
     function addSnowman(G,cx,cz, s=1){ addSphere(G,cx, 0.9*s, cz, 0.9*s, 16,22,[1,1,1],0.0); addSphere(G,cx, 2.0*s, cz, 0.6*s, 16,22,[1,1,1],0.0); addSphere(G,cx, 2.8*s, cz, 0.42*s,14,18,[1,1,1],0.0); }
-    // ★ 캐릭터: 산타(간단형)
     function addSanta(G,x,z, s=1){ pushBox(G,x,1.0*s,z, 0.9*s,1.2*s,0.6*s, [0.9,0.1,0.1],[0.8,0.1,0.1],0.0); addSphere(G,x,1.9*s,z,0.35*s,12,16,[1,0.92,0.85],0.0); addCone(G,x,2.4*s,z,0.40*s,0.7*s,28,[0.9,0.1,0.1],0.0); }
+    function addRudolph(G,x,z, s=1){ // 간단한 루돌프
+      pushBox(G,x,0.8*s,z, 1.2*s,0.8*s,0.5*s,[0.55,0.3,0.18],[0.5,0.28,0.16],0.0);
+      addSphere(G,x+0.7*s,1.2*s,z,0.25*s,12,16,[0.6,0.34,0.2],0.0);
+      addSphere(G,x+0.9*s,1.2*s,z,0.12*s,10,12,[1,0.1,0.1],0.0);
+    }
+
     const baseR=ringR+trackW*1.0+40;
     for(let i=0;i<260;i++){
       const r=baseR+Math.random()*260, a=Math.random()*Math.PI*2, x=Math.cos(a)*r, z=Math.sin(a)*r;
       if(Math.random()<0.6){ const sc=0.8+Math.random()*0.8; addHouse(GEO,x,z,sc); if(Math.random()<0.35){ addSnowman(GEO, x+1.6*sc, z+1.0*sc, 0.7); } }
       else{ const n=2+(Math.random()*4|0); for(let k=0;k<n;k++){ const ox=(Math.random()*3-1.5), oz=(Math.random()*3-1.5); addPine(GEO, x+ox,0, z+oz, 8+Math.random()*6, 2.0+Math.random()*1.4); } }
       if(Math.random()<0.08){ addSanta(GEO, x+Math.random()*2-1, z+Math.random()*2-1, 1.0); }
+      if(Math.random()<0.08){ addRudolph(GEO, x-1.5+Math.random()*3, z-1.5+Math.random()*3, 1.0); }
     }
 
   } else if(theme==='NEON'){
     const baseR=ringR+trackW*2.8+18;
     for(let ii=0;ii<36;ii++){const r=baseR+ii*10; for(let a=0;a<Math.PI;a+=Math.PI/28){const x=Math.cos(a)*r,y=Math.sin(a)*40+8,z=0; pushQuad(GEO,x,y,z, x+1.8,y,z, x+1.8,y+1.8,z, x,y+1.8,z, [0.2,0.8,1],0.0);} }
-    // ★ 캐릭터: 러너 실루엣(박스 조합)
-    function addRunner(x,z,s=1){ pushBox(GEO,x,1.2*s,z,0.4*s,2.0*s,0.25*s,[0.2,0.9,1],[0.2,0.9,1],0.0); pushBox(GEO,x,2.4*s,z,0.6*s,0.4*s,0.4*s,[0.2,0.9,1],[0.2,0.9,1],0.0); }
-    for(let i=0;i<40;i++){ const r=baseR-40+Math.random()*160, a=Math.random()*Math.PI*2; addRunner(Math.cos(a)*r, Math.sin(a)*r, 1+Math.random()*0.6); }
 
   } else if(theme==='VOLCANO'){
     for(let i=0;i<420;i++){const r=ringR+8+Math.random()*320,a=Math.random()*Math.PI*2,x=Math.cos(a)*r,z=Math.sin(a)*r,sy=9+Math.random()*40; pushBox(GEO,x,sy/2,z, 5,sy,5,[1,0.5,0.2],[1,0.35,0.15],0.0);}
     const aPos=[],aCol=[],aGlow=[]; const ashCount= cfg.mobile?2400:5200;
     for(let i=0;i<ashCount;i++){const rr=ringR+40+Math.random()*360,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=160+Math.random()*260; aPos.push(rx,ry,rz); aCol.push(0.6,0.35,0.25); aGlow.push(-(0.2+Math.random()*0.4)); }
     ashBuf={pos:makeBuffer(new Float32Array(aPos),3), col:makeBuffer(new Float32Array(aCol),3), glow:makeBuffer(new Float32Array(aGlow),1)}; ashVerts=aPos.length/3;
-    // ★ 캐릭터: 라바 골렘(상자+구)
-    function addGolem(x,z,s=1){ addBoxStack(x, z, s); }
-    function addBoxStack(x,z,s){ pushBox(GEO,x,1.0*s,z, 1.2*s,1.2*s,0.8*s,[0.5,0.18,0.09],[0.45,0.16,0.08],0.0); pushBox(GEO,x,2.2*s,z, 1.6*s,1.0*s,1.0*s,[0.5,0.18,0.09],[0.45,0.16,0.08],0.0); addSphere(GEO,x,3.1*s,z,0.6*s,14,20,[0.9,0.5,0.2],0.0);}
-    for(let i=0;i<18;i++){ const r=ringR+30+Math.random()*200, a=Math.random()*Math.PI*2; addGolem(Math.cos(a)*r, Math.sin(a)*r, 1.2+Math.random()*0.8); }
   }
 
   if(pts.length){ envBuf={pos:makeBuffer(new Float32Array(pts),3), col:makeBuffer(new Float32Array(cols),3), glow:makeBuffer(new Float32Array(glows),1)}; envVerts=pts.length/3; }
@@ -363,13 +371,55 @@ function buildEnv(theme,seed2){
 
 /* ---------- 중앙 거대 조형물 ---------- */
 function buildCenterpiece(theme,seed2){
-  const G=makeGeo(); const safePad = trackW*0.7 + 14; const safeR = Math.max(16, trackMinR - safePad);
-  const big = safeR*0.95; const med = safeR*0.6;
-  if(theme==='SPACE'){ addSphere(G,0,med*0.5,0, med*0.55, 36,56, [0.55,0.8,1],0.0); addTorus(G,0,med*0.5,0, med*0.95, med*0.08, 96,32, [0.6,0.9,1],0.0); }
-  else if(theme==='CYBERPUNK'){ addCylinder(G,0,big*0.65,0, big*0.3, big*1.4, 72, [0.08,0.1,0.14],[0.12,0.12,0.16],0.0); addTorus(G,0,big*1.3,0, big*0.56, big*0.07, 84,28, [0.2,0.9,1],0.0); }
-  else if(theme==='NEON'){ addCylinder(G,0,big*0.9,0, big*0.24, big*1.7, 84, [0.1,0.12,0.18],[0.12,0.14,0.2],0.0); for(let i=-6;i<=6;i++){ addCylinder(G,i*big*0.12, big*1.6, 0, big*0.02, big*0.22, 24, [0.2,0.9,1],[0.2,0.9,1],0.0); } }
-  else if(theme==='XMAS'){ addCone(G,0,big*0.6,0, big*0.6, big*1.8, 72, [0.1,0.7,0.2],0.0); addCone(G,0,big*1.25,0, big*0.45, big*1.25, 72, [0.1,0.8,0.25],0.0); addCone(G,0,big*1.8,0, big*0.32, big*0.9, 72, [0.1,0.9,0.3],0.0); addSphere(G,0,big*2.35,0, big*0.14, 20,30,[1,0.95,0.6],0.0); }
-  else if(theme==='VOLCANO'){ addCone(G,0,big*0.9,0, big*0.95, big*1.5, 80, [0.32,0.12,0.08],0.0); addCylinder(G,0,big*1.62,0, big*0.14, big*0.1, 40, [1,0.3,0.1],[1,0.35,0.12],0.0); }
+  const G=makeGeo(); const safePad = trackW*0.8 + 16; const safeR = Math.max(18, trackMinR - safePad);
+  const big = safeR*1.05; const med = safeR*0.7;
+  if(theme==='SPACE'){
+    addSphere(G,0,med*0.6,0, med*0.55, 36,56, [0.55,0.8,1],0.0);
+    addTorus(G,0,med*0.6,0, med*1.0, med*0.08, 96,32, [0.6,0.9,1],0.0);
+    // 주변 외계인 몇 명 포즈
+    for(let i=0;i<10;i++){ const a=i/10*2*Math.PI; const r=med*1.35; const x=Math.cos(a)*r, z=Math.sin(a)*r; // 재사용
+      // 몸/헬멧 간단 추가
+      pushBox(G,x,1.6,z, 0.6,1.1,0.4,[0.72,0.84,1.0],[0.64,0.76,0.98],0.0);
+      addSphere(G,x,2.2,z,0.32,14,18,[0.6,1.0,0.7],0.0);
+    }
+  }
+  else if(theme==='CYBERPUNK'){
+    addCylinder(G,0,big*0.65,0, big*0.34, big*1.4, 84, [0.08,0.1,0.14],[0.12,0.12,0.16],0.0);
+    addTorus(G,0,big*1.32,0, big*0.6, big*0.07, 88,30, [0.2,0.9,1],0.0);
+  }
+  else if(theme==='NEON'){
+    addCylinder(G,0,big*0.9,0, big*0.26, big*1.7, 96, [0.1,0.12,0.18],[0.12,0.14,0.2],0.0);
+    for(let i=-6;i<=6;i++){ addCylinder(G,i*big*0.12, big*1.6, 0, big*0.02, big*0.24, 24, [0.2,0.9,1],[0.2,0.9,1],0.0); }
+  }
+  else if(theme==='XMAS'){
+    // 초거대 트리 + 별 + 장식 (산타/루돌프/눈사람 부착)
+    addCone(G,0,big*0.6,0, big*0.65, big*1.9, 96, [0.1,0.7,0.2],0.0);
+    addCone(G,0,big*1.28,0, big*0.48, big*1.3, 96, [0.1,0.8,0.25],0.0);
+    addCone(G,0,big*1.84,0, big*0.36, big*0.95, 96, [0.1,0.9,0.3],0.0);
+    // 트리 탑 별
+    const starR=big*0.16, starY=big*2.28;
+    for(let k=0;k<5;k++){
+      const ang=k/5*2*Math.PI;
+      addCone(G, Math.cos(ang)*starR, starY, Math.sin(ang)*starR, starR*0.25, starR*0.6, 24, [1,0.95,0.6],0.0);
+    }
+    // 장식: 작은 구슬
+    for(let a=0;a<40;a++){
+      const ang=a/40*2*Math.PI; const r=big*0.52; addSphere(G, Math.cos(ang)*r, big*1.05 + (Math.random()*0.4-0.2), Math.sin(ang)*r, big*0.05, 10,14, [1,0.2+Math.random()*0.8,0.2],0.0);
+    }
+    // 산타, 루돌프, 눈사람 배치(둘러가며)
+    const decoR=big*0.75;
+    for(let i=0;i<6;i++){
+      const ang=i/6*2*Math.PI; const x=Math.cos(ang)*decoR, z=Math.sin(ang)*decoR;
+      // 산타/루돌프/눈사람 순환
+      if(i%3===0){ pushBox(G,x,1.2,z, 0.9,1.2,0.6, [0.9,0.1,0.1],[0.8,0.1,0.1],0.0); addSphere(G,x,2.0,z,0.35,12,16,[1,0.92,0.85],0.0); }
+      else if(i%3===1){ pushBox(G,x,0.8,z, 1.2,0.8,0.5,[0.55,0.3,0.18],[0.5,0.28,0.16],0.0); addSphere(G,x+0.6,1.2,z,0.25,12,16,[0.6,0.34,0.2],0.0); addSphere(G,x+0.82,1.2,z,0.12,10,12,[1,0.1,0.1],0.0); }
+      else{ addSphere(G,x, 0.9, z, 0.9, 16,22,[1,1,1],0.0); addSphere(G,x, 2.0, z, 0.6, 16,22,[1,1,1],0.0); addSphere(G,x, 2.8, z, 0.42,14,18,[1,1,1],0.0); }
+    }
+  }
+  else if(theme==='VOLCANO'){
+    addCone(G,0,big*0.9,0, big*0.95, big*1.5, 96, [0.32,0.12,0.08],0.0);
+    addCylinder(G,0,big*1.62,0, big*0.14, big*0.1, 48, [1,0.3,0.1],[1,0.35,0.12],0.0);
+  }
   centerBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; centerVerts=G.pos.length/3;
 }
 
@@ -377,8 +427,8 @@ function buildCenterpiece(theme,seed2){
 function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
   const G=makeGeo(), L=makeGeo();
-  const step = 420; const len = 70; const segAround = 40;
-  const radius = trackW*0.58;
+  const step = 420; const len = 80; const segAround = 44;
+  const radius = trackW*0.6;
   for(let base=140;base<samples;base+=step){
     for(let k=0;k<len-1;k++){
       const i0=base+k, i1=base+k+1;
@@ -413,7 +463,7 @@ function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
   for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
     const {R}=basisAt(i); const C=getCenter(i);
-    const side = (rng()<0.5?-1:1), off = side*(trackW*0.58), P=[C[0]+R[0]*off, C[1]+R[1]*off, C[2]+R[2]*off];
+    const side = (rng()<0.5?-1:1), off = side*(trackW*0.6), P=[C[0]+R[0]*off, C[1]+R[1]*off, C[2]+R[2]*off];
     const h=2.8+rng()*6.2, s=0.7+rng()*1.4;
     pushBox(G, P[0],h*0.5,P[2], s,h,s, [0.8,0.9,1],[0.2,0.9,1], 0.9);
   }
@@ -468,12 +518,12 @@ const MAX_KMH=360, MAX_V=MAX_KMH/3.6; // 100 m/s
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, camDir:null, // ★ yaw용 2D 방향 벡터
+    camEye:null, camAt:null, camYaw:null, // 근본개선: yaw만 유지
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
-      const acc = ACC? 0.35*MAX_V : 0;          // ≈35 m/s^2
-      const baseDec = 0.065*MAX_V;              // ≈6.5 m/s^2
-      const brakeDec= BR? 0.28*MAX_V : 0;       // ≈28 m/s^2
+      const acc = ACC? 0.38*MAX_V : 0;          // 가속강화
+      const baseDec = 0.070*MAX_V;
+      const brakeDec= BR? 0.30*MAX_V : 0;
       this.v = clamp(this.v + (acc - baseDec - brakeDec)*dt, 0, MAX_V);
       const target = (L?-1:0) + (R?1:0);
       const aim = target * (trackW*0.46);
@@ -496,23 +546,36 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라(수평 Yaw 고정 + 방향 벡터 필터) ---------- */
+/* ---------- 카메라 (근본 개선: 순수 Yaw 추적 + unwrap + 속도제한) ---------- */
+// 트랙 상의 진행 방향(XZ)에서 목표 yaw 산출
+function sampleDirYaw(s){
+  const ds=10; // 앞으로 조금 본다
+  const c0=getCenter(Math.floor(s)), c1=getCenter(Math.floor(s+ds));
+  const dx=c1[0]-c0[0], dz=c1[2]-c0[2];
+  return Math.atan2(dz,dx);
+}
+function unwrapAngle(curr,target){
+  // target을 curr 주변으로 래핑해 최소 차이 유지
+  let d = target - curr;
+  d = ((d + Math.PI) % (2*Math.PI)); if(d<0) d += 2*Math.PI;
+  d -= Math.PI;
+  return curr + d;
+}
 function chaseVP(car, aspect, dt){
-  const i=Math.floor(car.s)|0;
   const w=car.world();
-  const T=basisAt(i).T;
-  const targetDir = (()=>{
-    const x=T[0], z=T[2]; const L=Math.hypot(x,z)||1; return [x/L, z/L];
-  })();
-  const alpha = 1 - Math.exp(-dt*10.0); // 방향 필터 강도
-  if(!car.camDir) car.camDir=[targetDir[0],targetDir[1]];
-  // 저역필터 + 정규화 (각도 점프 없음)
-  const mixX = car.camDir[0]*(1-alpha) + targetDir[0]*alpha;
-  const mixZ = car.camDir[1]*(1-alpha) + targetDir[1]*alpha;
-  const L=Math.hypot(mixX,mixZ)||1; car.camDir=[mixX/L, mixZ/L];
-  const cosY=car.camDir[0], sinY=car.camDir[1];
+  let tyaw = sampleDirYaw(car.s);
+  if(car.camYaw==null){ car.camYaw = tyaw; }
+  // 가장 가까운 목표 각으로 보정 후, yaw 속도 제한
+  tyaw = unwrapAngle(car.camYaw, tyaw);
+  const yawRate = 6.5; // rad/s
+  const maxStep = yawRate*dt;
+  let diff = tyaw - car.camYaw;
+  if(diff >  maxStep) diff =  maxStep;
+  if(diff < -maxStep) diff = -maxStep;
+  car.camYaw += diff;
 
-  const backBase=26.0, upBase=7.2;
+  const cosY=Math.cos(car.camYaw), sinY=Math.sin(car.camYaw);
+  const backBase=27.0, upBase=7.6;
   const extra = car.v * 0.10;
   const eye = [
     w.pos[0] - cosY*(backBase+extra),
@@ -520,17 +583,17 @@ function chaseVP(car, aspect, dt){
     w.pos[2] - sinY*(backBase+extra)
   ];
   const at = [
-    w.pos[0] + cosY*8.2,
-    w.pos[1] + 1.0,
-    w.pos[2] + sinY*8.2
+    w.pos[0] + cosY*9.0,
+    w.pos[1] + 1.2,
+    w.pos[2] + sinY*9.0
   ];
   const kEye=1 - Math.exp(-dt*8.0), kAt=1 - Math.exp(-dt*10.0);
   car.camEye = car.camEye ? mixV(car.camEye, eye, kEye) : eye;
   car.camAt  = car.camAt  ? mixV(car.camAt,  at,  kAt)  : at;
 
-  const V=M.look(car.camEye, car.camAt, [0,1,0]); // 업 고정
+  const V=M.look(car.camEye, car.camAt, [0,1,0]); // 업 Y 고정 → 롤/피치 차단
   const P=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
-  const fov=58*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=2400, nf=1/(near-far);
+  const fov=58*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=2600, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
   return M.mul(P,V);
 }
@@ -576,18 +639,18 @@ const LAPS=3, START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-  const i=Math.floor(c.s)|0; const w=c.world(); const T=basisAt(i).T;
-  const d=(()=>{const L=Math.hypot(T[0],T[2])||1; return [T[0]/L,T[2]/L];})();
-  c.camDir=[d[0],d[1]];
-  c.camEye=[ w.pos[0]-d[0]*26, w.pos[1]+7.2, w.pos[2]-d[1]*26 ];
-  c.camAt =[ w.pos[0]+d[0]*8.2, w.pos[1]+1.0, w.pos[2]+d[1]*8.2 ];
+  const yaw0 = sampleDirYaw(c.s);
+  c.camYaw = yaw0;
+  const w = c.world(); const cosY=Math.cos(yaw0), sinY=Math.sin(yaw0);
+  c.camEye=[ w.pos[0]-cosY*27, w.pos[1]+7.6, w.pos[2]-sinY*27 ];
+  c.camAt =[ w.pos[0]+cosY*9.0, w.pos[1]+1.2, w.pos[2]+sinY*9.0 ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
   car2=makeCar(input2); car2.name='P2'; if(cfg.twoP) placeAtStart(car2, trackW*0.15);
   aiCars=[]; for(let i=0;i<cfg.aiCount;i++){ const ai=makeCar(null); ai.name='AI'+(i+1); placeAtStart(ai, ((i%4)-1.5)*trackW*0.22); ai.v=0.6*MAX_V; aiCars.push(ai); }
 }
-function updateAI(dt){ for(const ai of aiCars){ const targetV=0.75*MAX_V; ai.v=clamp(ai.v + (targetV - 0.06*MAX_V)*dt, 0, MAX_V*0.92); ai.s = (ai.s + ai.v*dt) % samples; } }
+function updateAI(dt){ for(const ai of aiCars){ const targetV=0.78*MAX_V; ai.v=clamp(ai.v + (targetV - 0.06*MAX_V)*dt, 0, MAX_V*0.92); ai.s = (ai.s + ai.v*dt) % samples; } }
 function positions(){ const all=[car1, ...(cfg.twoP?[car2]:[]), ...aiCars]; const arr=all.map(c=>({c,progress:c.lap*samples + c.s})).sort((a,b)=>b.progress-a.progress); return arr.map(x=>x.c); }
 function checkLaps(){ const now=performance.now(); const racers=[car1, ...(cfg.twoP?[car2]:[]), ...aiCars]; for(const c of racers){ const wrapped=(c.prevS>samples*0.75)&&(c.s<samples*0.25); if(wrapped && now-c.lastLapTs>2000 && c.v>6){ c.lap++; c.lastLapTs=now; if(c===car1) setHUD('uiLap', `${Math.min(c.lap,LAPS)}/${LAPS}`); if(c.lap>=LAPS) c.finished=true; } } }
 
@@ -654,37 +717,29 @@ function showMenu(){
   document.getElementById('start').onclick=()=>{ clearPanel(); state=S.PLAY; last=performance.now(); frame(); };
 }
 
-/* ---------- 계기판(2D Canvas) ---------- */
-const gauge=document.getElementById('gauge'); const g2=gauge.getContext('2d');
-function resizeGauge(){ const r=gauge.getBoundingClientRect(); gauge.width=(r.width*DPR)|0; gauge.height=(r.height*DPR)|0; }
+/* ---------- 계기판(2D Canvas) : 안전가드 포함 ---------- */
+let gauge=null, g2=null, gaugeReady=false;
+function ensureGauge(){ if(!gauge) gauge=document.getElementById('gauge'); if(gauge && !g2) g2=gauge.getContext('2d'); return !!(gauge && g2); }
+function resizeGauge(){ if(!ensureGauge()) { gaugeReady=false; return; } const r=gauge.getBoundingClientRect(); const w=(r.width*DPR)|0, h=(r.height*DPR)|0; if(gauge.width!==w) gauge.width=w; if(gauge.height!==h) gauge.height=h; gaugeReady=(w>0&&h>0); }
 function drawGauge(speedKmh){
-  const w=gauge.width, h=gauge.height; if(!w||!h) return;
-  g2.clearRect(0,0,w,h);
-  g2.save(); g2.translate(w/2,h/2); const R=Math.min(w,h)*0.46;
-  // 배경 원
-  g2.beginPath(); g2.arc(0,0,R+8,0,Math.PI*2); g2.fillStyle='rgba(10,14,34,0.65)'; g2.fill();
-  // 눈금
-  const minA=-140*Math.PI/180, maxA=140*Math.PI/180;
-  for(let v=0; v<=360; v+=20){
-    const t=(v/360), ang=minA+(maxA-minA)*t;
-    const inner= R - (v%40===0?16:10), outer=R;
-    g2.beginPath(); g2.moveTo(inner*Math.cos(ang), inner*Math.sin(ang)); g2.lineTo(outer*Math.cos(ang), outer*Math.sin(ang));
-    g2.lineWidth=(v%40===0?4:2); g2.strokeStyle='rgba(200,230,255,0.9)'; g2.stroke();
-    if(v%40===0){
-      g2.save(); g2.translate((inner-18)*Math.cos(ang),(inner-18)*Math.sin(ang));
-      g2.rotate(ang+Math.PI/2); g2.fillStyle='rgba(230,245,255,0.95)'; g2.font=(14*DPR)+'px ui-sans-serif'; g2.textAlign='center'; g2.textBaseline='middle';
-      g2.fillText(v.toString(),0,0); g2.restore();
+  if(!gaugeReady || !ensureGauge()) return;
+  try{
+    const w=gauge.width, h=gauge.height; if(!w||!h) return;
+    const ctx=g2; ctx.clearRect(0,0,w,h); ctx.save(); ctx.translate(w/2,h/2); const R=Math.min(w,h)*0.46;
+    ctx.beginPath(); ctx.arc(0,0,R+8,0,Math.PI*2); ctx.fillStyle='rgba(10,14,34,0.65)'; ctx.fill();
+    const minA=-140*Math.PI/180, maxA=140*Math.PI/180;
+    for(let v=0; v<=360; v+=20){
+      const t=(v/360), ang=minA+(maxA-minA)*t, inner= R - (v%40===0?16:10), outer=R;
+      ctx.beginPath(); ctx.moveTo(inner*Math.cos(ang), inner*Math.sin(ang)); ctx.lineTo(outer*Math.cos(ang), outer*Math.sin(ang));
+      ctx.lineWidth=(v%40===0?4:2); ctx.strokeStyle='rgba(200,230,255,0.9)'; ctx.stroke();
+      if(v%40===0){ ctx.save(); ctx.translate((inner-18)*Math.cos(ang),(inner-18)*Math.sin(ang)); ctx.rotate(ang+Math.PI/2); ctx.fillStyle='rgba(230,245,255,0.95)'; ctx.font=(14*DPR)+'px ui-sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(v.toString(),0,0); ctx.restore(); }
     }
-  }
-  // 바늘
-  const sv=clamp(speedKmh,0,360)/360, ang=minA+(maxA-minA)*sv;
-  g2.beginPath(); g2.moveTo(-10,0); g2.lineTo((R-22)*Math.cos(ang),(R-22)*Math.sin(ang)); g2.lineWidth=6; g2.strokeStyle='rgba(255,120,80,0.95)'; g2.stroke();
-  // 중앙 캡
-  g2.beginPath(); g2.arc(0,0,10,0,Math.PI*2); g2.fillStyle='rgba(255,160,120,0.95)'; g2.fill();
-  // 수치
-  g2.fillStyle='rgba(230,245,255,0.95)'; g2.font=(24*DPR)+'px ui-sans-serif'; g2.textAlign='center';
-  g2.fillText(speedKmh.toString()+' km/h',0, R*0.55);
-  g2.restore();
+    const sv=Math.max(0,Math.min(360, speedKmh))/360; const ang=minA+(maxA-minA)*sv;
+    ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo((R-22)*Math.cos(ang),(R-22)*Math.sin(ang)); ctx.lineWidth=6; ctx.strokeStyle='rgba(255,120,80,0.95)'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fillStyle='rgba(255,160,120,0.95)'; ctx.fill();
+    ctx.fillStyle='rgba(230,245,255,0.95)'; ctx.font=(24*DPR)+'px ui-sans-serif'; ctx.textAlign='center'; ctx.fillText(Math.round(speedKmh)+' km/h',0, R*0.55);
+    ctx.restore();
+  }catch(e){}
 }
 
 /* ---------- 시작 ---------- */
@@ -695,6 +750,7 @@ document.getElementById('btnAI').textContent='🤖 AI: '+cfg.aiCount;
 document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P';
 document.getElementById('btnMobile').textContent= cfg.mobile?'📱 Mobile: ON':'📱 Mobile: OFF';
 padL.style.display=padR.style.display=cfg.mobile?'flex':'none';
+resizeGauge(); drawGauge(0);
 showMenu(); renderOnce();
 })();</script>
 </body>
