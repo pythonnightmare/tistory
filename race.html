@@ -187,7 +187,6 @@ function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
 }
 function basisAt(i){const p0=getCenter(i), p1=getCenter(i+1); const T=norm(sub(p1,p0)); let R=norm(cross(T,WORLD_UP)); if(!isFinite(R[0])) R=[1,0,0]; const B=norm(cross(R,T)); return {T,R,B};}
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
-const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY'];
 function genCP(seed,shape,yAmp,baseY){
   const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=48,R=140,ph=rand(0,Math.PI*2);
   if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
