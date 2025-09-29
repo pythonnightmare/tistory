@@ -161,7 +161,7 @@ function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
 function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
   return [0.5*((-p0[0]+p2[0])+2*(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t+3*(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t2),
           0.5*((-p0[1]+p2[1])+2*(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t+3*(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t2),
-          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
+          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[0])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[0])*t2)];
 }
 function basisAt(i){
   const p0=getCenter(i), p1=getCenter(i+1);
@@ -304,12 +304,15 @@ function buildEnv(theme,seed2){
     }
 
   } else if(theme==='XMAS'){
-    // 눈 파티클
+    /* ---- XMAS: 소형 오브젝트 3배 확대 ---- */
+    const SCALE = 3.0;
+
+    // 눈 파티클(그대로 유지)
     const sPos=[],sCol=[],sGlow=[]; const snowCount= cfg.mobile?2400:5200;
     for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*340, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*300; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
 
-    // 마을 구성(집/전나무/ 눈사람/산타/루돌프)
+    // 마을 구성(집/전나무/ 눈사람/산타/루돌프) — 내부 s, h, r, 오프셋 모두 SCALE 반영
     function addWindowsRect(G,cx,cy,cz, sx,sy, sz, strideX=2.0,strideY=2.4, glowCol=[1,0.92,0.65]){
       const hx=sx/2, hy=sy/2, hz=sz/2;
       const win=(x,y,z,w,h)=>pushBox(G,x,y,z,w,h,0.06,glowCol,glowCol,1.15);
@@ -326,18 +329,47 @@ function buildEnv(theme,seed2){
       addWindowsRect(G,cx,y,cz, sx-0.8, sy-1.6, sz-0.8, 2.0*s, 2.2*s, [1.0,0.92,0.7]);
       pushBox(G, cx+sx*0.28, sy+0.9, cz-sz*0.25, 0.7,1.2,0.7, [0.5,0.5,0.6],[0.45,0.45,0.55],0.0);
     }
-    function addPine(G,cx,cy,cz, h, r){ pushBox(G,cx,cy,cz, 0.9, h*0.16, 0.9, [0.5,0.3,0.2],[0.5,0.3,0.2],0.0); addCone(G,cx,cy+h*0.16/2+ h*0.30,cz, r*0.8, h*0.6, 40, [0.1,0.7,0.2],0.0); addCone(G,cx,cy+h*0.16/2+ h*0.55,cz, r*0.6, h*0.5, 40, [0.1,0.8,0.25],0.0); addCone(G,cx,cy+h*0.16/2+ h*0.75,cz, r*0.45, h*0.4, 40, [0.1,0.9,0.3],0.0); }
-    function addSnowman(G,cx,cz, s=1){ addSphere(G,cx, 0.9*s, cz, 0.9*s, 16,22,[1,1,1],0.0); addSphere(G,cx, 2.0*s, cz, 0.6*s, 16,22,[1,1,1],0.0); addSphere(G,cx, 2.8*s, cz, 0.42*s,14,18,[1,1,1],0.0); }
-    function addSanta(G,x,z, s=1){ pushBox(G,x,1.0*s,z, 0.9*s,1.2*s,0.6*s, [0.9,0.1,0.1],[0.8,0.1,0.1],0.0); addSphere(G,x,1.9*s,z,0.35*s,12,16,[1,0.92,0.85],0.0); addCone(G,x,2.4*s,z,0.40*s,0.7*s,28,[0.9,0.1,0.1],0.0); }
-    function addRudolph(G,x,z, s=1){ pushBox(G,x,0.8*s,z, 1.2*s,0.8*s,0.5*s,[0.55,0.3,0.18],[0.5,0.28,0.16],0.0); addSphere(G,x+0.7*s,1.2*s,z,0.25*s,12,16,[0.6,0.34,0.2],0.0); addSphere(G,x+0.9*s,1.2*s,z,0.12*s,10,12,[1,0.1,0.1],0.0); }
+    function addPine(G,cx,cy,cz, h, r){
+      pushBox(G,cx,cy,cz, 0.9*SCALE, h*0.16, 0.9*SCALE, [0.5,0.3,0.2],[0.5,0.3,0.2],0.0);
+      addCone(G,cx,cy+h*0.16/2+ h*0.30,cz, r*0.8, h*0.6, 40, [0.1,0.7,0.2],0.0);
+      addCone(G,cx,cy+h*0.16/2+ h*0.55,cz, r*0.6, h*0.5, 40, [0.1,0.8,0.25],0.0);
+      addCone(G,cx,cy+h*0.16/2+ h*0.75,cz, r*0.45, h*0.4, 40, [0.1,0.9,0.3],0.0);
+    }
+    function addSnowman(G,cx,cz, s=1){
+      addSphere(G,cx, 0.9*s, cz, 0.9*s, 16,22,[1,1,1],0.0);
+      addSphere(G,cx, 2.0*s, cz, 0.6*s, 16,22,[1,1,1],0.0);
+      addSphere(G,cx, 2.8*s, cz, 0.42*s,14,18,[1,1,1],0.0);
+    }
+    function addSanta(G,x,z, s=1){
+      pushBox(G,x,1.0*s,z, 0.9*s,1.2*s,0.6*s, [0.9,0.1,0.1],[0.8,0.1,0.1],0.0);
+      addSphere(G,x,1.9*s,z,0.35*s,12,16,[1,0.92,0.85],0.0);
+      addCone(G,x,2.4*s,z,0.40*s,0.7*s,28,[0.9,0.1,0.1],0.0);
+    }
+    function addRudolph(G,x,z, s=1){
+      pushBox(G,x,0.8*s,z, 1.2*s,0.8*s,0.5*s,[0.55,0.3,0.18],[0.5,0.28,0.16],0.0);
+      addSphere(G,x+0.7*s,1.2*s,z,0.25*s,12,16,[0.6,0.34,0.2],0.0);
+      addSphere(G,x+0.9*s,1.2*s,z,0.12*s,10,12,[1,0.1,0.1],0.0);
+    }
 
     const baseR=ringR+trackW*1.0+40;
     for(let i=0;i<260;i++){
       const r=baseR+Math.random()*260, a=Math.random()*Math.PI*2, x=Math.cos(a)*r, z=Math.sin(a)*r;
-      if(Math.random()<0.6){ const sc=0.8+Math.random()*0.8; addHouse(GEO,x,z,sc); if(Math.random()<0.35){ addSnowman(GEO, x+1.6*sc, z+1.0*sc, 0.7); } }
-      else{ const n=2+(Math.random()*4|0); for(let k=0;k<n;k++){ const ox=(Math.random()*3-1.5), oz=(Math.random()*3-1.5); addPine(GEO, x+ox,0, z+oz, 8+Math.random()*6, 2.0+Math.random()*1.4); } }
-      if(Math.random()<0.08){ addSanta(GEO, x+Math.random()*2-1, z+Math.random()*2-1, 1.0); }
-      if(Math.random()<0.08){ addRudolph(GEO, x-1.5+Math.random()*3, z-1.5+Math.random()*3, 1.0); }
+      if(Math.random()<0.6){
+        const sc=(0.8+Math.random()*0.8)*SCALE;
+        addHouse(GEO,x,z,sc);
+        if(Math.random()<0.35){
+          addSnowman(GEO, x+1.6*sc, z+1.0*sc, 0.7*SCALE);
+        }
+      } else {
+        const n=2+(Math.random()*4|0);
+        for(let k=0;k<n;k++){
+          const ox=(Math.random()*3-1.5)*SCALE, oz=(Math.random()*3-1.5)*SCALE;
+          const h=(8+Math.random()*6)*SCALE, rr=(2.0+Math.random()*1.4)*SCALE;
+          addPine(GEO, x+ox,0, z+oz, h, rr);
+        }
+      }
+      if(Math.random()<0.08){ addSanta(GEO, x+(Math.random()*2-1)*SCALE, z+(Math.random()*2-1)*SCALE, 1.0*SCALE); }
+      if(Math.random()<0.08){ addRudolph(GEO, x-1.5*SCALE+Math.random()*3*SCALE, z-1.5*SCALE+Math.random()*3*SCALE, 1.0*SCALE); }
     }
 
   } else if(theme==='NEON'){
@@ -402,7 +434,7 @@ function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
   const G=makeGeo(), L=makeGeo();
   const step = 420; const len = 80; const segAround = 44;
-  const radius = trackW*0.6; // 트랙 절반폭보다 약간 크게
+  const radius = trackW*0.6;
   for(let base=140;base<samples;base+=step){
     for(let k=0;k<len-1;k++){
       const i0=base+k, i1=base+k+1;
@@ -417,7 +449,6 @@ function buildTunnels(theme,seed2){
         pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], [0.12,0.13,0.18],0.0);
       }
     }
-    // 라이트 스트립
     for(let k=0;k<len;k+=6){
       const i=base+k; const c=getCenter(i); const b=basisAt(i);
       for(let s=0;s<segAround;s+=4){
@@ -493,7 +524,7 @@ const MAX_KMH=360, MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, camYaw:null,
+    camEye:null, camAt:null, camYaw:null, // camYaw 안써도 남겨둠(호환)
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
       const acc = ACC? 0.38*MAX_V : 0;
@@ -521,8 +552,7 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라: 추적 카메라 ---------- */
-// 중심선 임의 위치 샘플링
+/* ---------- 카메라: '각도' 제거, 벡터 기반 카트식 ---------- */
 function centerPosAt(s){
   const i=Math.floor(s)|0, t=s-i;
   const p0=getCenter(i), p1=getCenter(i+1);
@@ -534,53 +564,34 @@ function forwardAt(s, ahead=16){
   const L=Math.hypot(dx,dy,dz)||1;
   return [dx/L, dy/L, dz/L];
 }
-function yawFromDir(f){ return Math.atan2(f[2], f[0]); }
-function unwrapAngle(curr,target){
-  let d = target - curr;
-  d = ((d + Math.PI) % (2*Math.PI)); if(d<0) d += 2*Math.PI;
-  d -= Math.PI;
-  return curr + d;
-}
 const CAM = {
-  backBase: 38.0,   // 기본 뒤로 거리 (기존 27 → 더 멀게)
-  upBase:   9.5,    // 기본 높이 (기존 7.6 → 더 높게)
-  lookAhead: 18,    // 진행 방향을 미리 보는 샘플 수
-  atForward: 12,    // 시선이 전방으로 나가는 거리
-  yawRate: 7.5,     // 초당 최대 요 변화(라디안 제한)
-  eyeSmooth: 8.0,   // 카메라 eye 지수 보간
-  atSmooth: 12.0,   // 카메라 at 지수 보간
-  fovDeg: 54        // FOV(°) – 살짝 좁혀서 덜 가까워 보이게
+  backBase: 46.0,   // 훨씬 뒤
+  upBase:   12.0,   // 더 위
+  lookAhead: 20,    // 진행방향 샘플
+  atForward: 14,    // 시선 전방
+  eyeSmooth: 8.0,   // 부드러움
+  atSmooth:  12.0,
+  fovDeg:    54
 };
 function kartCamVP(car, aspect, dt){
   const w=car.world();
-  // 진행 방향을 lookAhead 만큼 앞에서 계산
-  const fwd = forwardAt(car.s + CAM.lookAhead, CAM.lookAhead);
-  let tyaw = yawFromDir(fwd);
-
-  // 초기화/연속성 유지
-  if(car.camYaw==null){ car.camYaw = tyaw; }
-  tyaw = unwrapAngle(car.camYaw, tyaw);
-  const maxStep = CAM.yawRate * dt;
-  let diff = tyaw - car.camYaw;
-  if(diff >  maxStep) diff =  maxStep;
-  if(diff < -maxStep) diff = -maxStep;
-  car.camYaw += diff;
-
-  const cosY=Math.cos(car.camYaw), sinY=Math.sin(car.camYaw);
+  const F = forwardAt(car.s + CAM.lookAhead, CAM.lookAhead); // 전방 단위벡터
   const speedK = car.v; // m/s
-  const distExtra = speedK * 0.12;   // 속도에 따른 추가 뒤거리
-  const upExtra   = speedK * 0.08;   // 속도에 따른 추가 높이
-  const lateralLag = clamp(car.offV*0.35, -2.0, 2.0); // 약간의 측면 추적 지연
+  const distExtra = speedK * 0.12;
+  const upExtra   = speedK * 0.08;
+
+  // 오른쪽 벡터(필요시 사용). 흔들림 방지를 위해 측면 오프셋은 0으로.
+  // const Right = [ -F[2], 0, F[0] ];
 
   const eye = [
-    w.pos[0] - cosY*(CAM.backBase+distExtra) - sinY*lateralLag,
+    w.pos[0] - F[0]*(CAM.backBase+distExtra),
     w.pos[1] + (CAM.upBase+upExtra),
-    w.pos[2] - sinY*(CAM.backBase+distExtra) + cosY*lateralLag
+    w.pos[2] - F[2]*(CAM.backBase+distExtra)
   ];
   const at = [
-    w.pos[0] + cosY*(CAM.atForward + speedK*0.05),
+    w.pos[0] + F[0]*(CAM.atForward + speedK*0.05),
     w.pos[1] + 1.2,
-    w.pos[2] + sinY*(CAM.atForward + speedK*0.05)
+    w.pos[2] + F[2]*(CAM.atForward + speedK*0.05)
   ];
 
   const kEye=1 - Math.exp(-dt*CAM.eyeSmooth);
@@ -589,7 +600,6 @@ function kartCamVP(car, aspect, dt){
   car.camAt  = car.camAt  ? mixV(car.camAt,  at,  kAt)  : at;
 
   const V=M.look(car.camEye, car.camAt, [0,1,0]);
-  // 투영
   const P=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
   const fov = CAM.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
@@ -637,13 +647,11 @@ const LAPS=3, START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-  // 카메라 초기 yaw를 진행 방향으로 셋업
-  const fwd = forwardAt(c.s + CAM.lookAhead, CAM.lookAhead);
-  c.camYaw = yawFromDir(fwd);
+
+  const F = forwardAt(c.s + CAM.lookAhead, CAM.lookAhead);
   const w = c.world();
-  const cosY=Math.cos(c.camYaw), sinY=Math.sin(c.camYaw);
-  c.camEye=[ w.pos[0]-cosY*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-sinY*CAM.backBase ];
-  c.camAt =[ w.pos[0]+cosY*CAM.atForward, w.pos[1]+1.2, w.pos[2]+sinY*CAM.atForward ];
+  c.camEye=[ w.pos[0]-F[0]*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-F[2]*CAM.backBase ];
+  c.camAt =[ w.pos[0]+F[0]*CAM.atForward, w.pos[1]+1.2,       w.pos[2]+F[2]*CAM.atForward ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
