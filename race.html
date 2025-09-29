@@ -98,7 +98,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v23';
+const saveKey='vector_racing_v24';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 
 /* ---------- 상태 ---------- */
@@ -150,7 +150,7 @@ function bind(buf,loc){gl.bindBuffer(gl.ARRAY_BUFFER,buf.b); gl.enableVertexAttr
 const M={mul:(a,b)=>{const o=new Array(16); for(let r=0;r<4;r++) for(let c=0;c<4;c++){o[c*4+r]=a[r]*b[c*4]+a[r+4]*b[c*4+1]+a[r+8]*b[c*4+2]+a[r+12]*b[c*4+3];} return o;}, T:(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1], look:(eye,at,up)=>{const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]]; const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l];}; const z=norm(sub(eye,at)); let x=norm(cross(up,z)); let y=cross(z,x); const RT=[x[0],x[1],x[2],0, y[0],y[1],y[2],0, z[0],z[1],z[2],0, 0,0,0,1]; return M.mul(RT,M.T(-eye[0],-eye[1],-eye[2]));}};
 
 /* ---------- 트랙/곡선 ---------- */
-let samples=2600, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
+let samples=5200, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
 const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
@@ -158,7 +158,7 @@ function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
           0.5*((2*p1[2])+(-p0[2]+p2[2])*t+(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2+(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)];
 }
-function catmullTangent(p0,p1,p2,p3,t){const t2=t*t; // **z 항 p3[2]로 수정**
+function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
   return [0.5*((-p0[0]+p2[0])+2*(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t+3*(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t2),
           0.5*((-p0[1]+p2[1])+2*(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t+3*(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t2),
           0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
@@ -427,7 +427,7 @@ function buildCenterpiece(theme,seed2){
   centerBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; centerVerts=G.pos.length/3;
 }
 
-/* ---------- 터널 ---------- */
+/* ---------- 터널(트랙 스윕) ---------- */
 function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
   const G=makeGeo(), L=makeGeo();
@@ -462,7 +462,7 @@ function buildTunnels(theme,seed2){
   if(L.pos.length){ tunnelGlowBuf={pos:makeBuffer(new Float32Array(L.pos),3), col:makeBuffer(new Float32Array(L.col),3), glow:makeBuffer(new Float32Array(L.glow),1)}; tunnelGlowVerts=L.pos.length/3; }
 }
 
-/* ---------- 트랙사이드 ---------- */
+/* ---------- 트랙사이드 소품 ---------- */
 function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
   for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
@@ -522,7 +522,7 @@ const MAX_KMH=360, MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, camF:null,
+    camEye:null, camAt:null, camYaw:null,
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
       const acc = ACC? 0.38*MAX_V : 0;
@@ -550,58 +550,54 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카트 시점(완전 안도는 카메라) ---------- */
+/* ---------- 카트라이더식 카메라 (수평 고정, 스핀 완전 차단) ---------- */
+function sampleDirYaw(s, ds=12){
+  const c0=getCenter(Math.floor(s)|0), c1=getCenter(Math.floor(s+ds)|0);
+  const dx=c1[0]-c0[0], dz=c1[2]-c0[2];
+  return Math.atan2(dz,dx);
+}
+function unwrapAngle(curr,target){
+  let d = target - curr;
+  d = ((d + Math.PI) % (2*Math.PI)); if(d<0) d += 2*Math.PI;
+  d -= Math.PI;
+  return curr + d;
+}
 const CAM = {
-  backBase: 50.0,
-  upBase:   14.0,
-  atForward: 16.0,
-  fSmooth:   10.0,  // 진행방향 벡터 보간
+  backBase: 22.0, // 너무 멀어 보이면 줄이기, 가깝게는 늘리기
+  upBase:    6.5,
+  atForward: 10.0,
+  yawRate:   10.0, // rad/s (최대 회전속도)
   eyeSmooth:  8.0,
   atSmooth:  12.0,
-  fovDeg:    54
+  fovDeg:    58
 };
-function forwardXZ(s){
-  const p0=getCenter(Math.floor(s)|0), p1=getCenter(Math.floor(s+12)|0);
-  let fx=p1[0]-p0[0], fy=0, fz=p1[2]-p0[2]; // XZ 투영(수평)
-  const L=Math.hypot(fx,fz)||1; fx/=L; fz/=L;
-  return [fx,fy,fz];
-}
-function stableKartCamVP(car, aspect, dt){
+function kartCamVP(car, aspect, dt){
   const w=car.world();
+  let tyaw = sampleDirYaw(car.s, 18);
+  if(car.camYaw==null){ car.camYaw = tyaw; }
+  tyaw = unwrapAngle(car.camYaw, tyaw);
+  const maxStep = CAM.yawRate*dt;
+  let diff = tyaw - car.camYaw;
+  if(diff >  maxStep) diff =  maxStep;
+  if(diff < -maxStep) diff = -maxStep;
+  car.camYaw += diff;
 
-  // 1) 원시 진행방향(XZ), 2) 이전 camF와 연속성 유지(dot<0면 뒤집기), 3) 지수보간
-  let F = forwardXZ(car.s);
-  if(car.camF){
-    const dot = car.camF[0]*F[0] + car.camF[1]*F[1] + car.camF[2]*F[2];
-    if(dot < 0) F=[-F[0],-F[1],-F[2]];
-    const kF = 1 - Math.exp(-dt*CAM.fSmooth);
-    F = [ car.camF[0]*(1-kF)+F[0]*kF,
-          car.camF[1]*(1-kF)+F[1]*kF,
-          car.camF[2]*(1-kF)+F[2]*kF ];
-    const L=Math.hypot(F[0],F[2])||1; F=[F[0]/L,0,F[2]/L];
-  }
-  car.camF = F;
+  const cosY=Math.cos(car.camYaw), sinY=Math.sin(car.camYaw);
+  const back = CAM.backBase + car.v*0.08;
+  const up    = CAM.upBase   + car.v*0.04;
+  const fwd   = CAM.atForward+ car.v*0.05;
 
-  const speedK = car.v;
-  const eye = [
-    w.pos[0] - F[0]*(CAM.backBase + speedK*0.10),
-    w.pos[1] + (CAM.upBase + speedK*0.06),
-    w.pos[2] - F[2]*(CAM.backBase + speedK*0.10)
-  ];
-  const at = [
-    w.pos[0] + F[0]*(CAM.atForward + speedK*0.05),
-    w.pos[1] + 1.2,
-    w.pos[2] + F[2]*(CAM.atForward + speedK*0.05)
-  ];
+  const eye = [ w.pos[0] - cosY*back,  w.pos[1] + up,  w.pos[2] - sinY*back ];
+  const at  = [ w.pos[0] + cosY*fwd,   w.pos[1] + 1.2, w.pos[2] + sinY*fwd ];
 
   const kEye=1 - Math.exp(-dt*CAM.eyeSmooth);
   const kAt =1 - Math.exp(-dt*CAM.atSmooth);
   car.camEye = car.camEye ? mixV(car.camEye, eye, kEye) : eye;
   car.camAt  = car.camAt  ? mixV(car.camAt,  at,  kAt)  : at;
 
-  const V=M.look(car.camEye, car.camAt, [0,1,0]); // 수평 고정, '도는' 효과 없음
+  const V=M.look(car.camEye, car.camAt, [0,1,0]); // 수평 유지
   const P=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
-  const fov = CAM.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
+  const fov=CAM.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
   return M.mul(P,V);
 }
@@ -631,12 +627,12 @@ function renderOnce(){
   const tSec=performance.now()/1000; gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const dt=1/60;
   if(!cfg.twoP){
-    const VP=stableKartCamVP(car1, CW/CH, dt);
+    const VP=kartCamVP(car1, CW/CH, dt);
     renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
   }else{
     const half=CW>>1;
-    gl.viewport(0,0,half,CH); const VP1=stableKartCamVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-    gl.viewport(half,0,CW-half,CH); const VP2=stableKartCamVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+    gl.viewport(0,0,half,CH); const VP1=kartCamVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+    gl.viewport(half,0,CW-half,CH); const VP2=kartCamVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
     gl.viewport(0,0,CW,CH);
   }
 }
@@ -649,10 +645,11 @@ function placeAtStart(c, lane=0){
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
 
   const w = c.world();
-  const F = forwardXZ(c.s);
-  c.camF = F.slice();
-  c.camEye=[ w.pos[0]-F[0]*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-F[2]*CAM.backBase ];
-  c.camAt =[ w.pos[0]+F[0]*CAM.atForward, w.pos[1]+1.2,       w.pos[2]+F[2]*CAM.atForward ];
+  const yaw0 = sampleDirYaw(c.s);
+  c.camYaw = yaw0;
+  const cosY=Math.cos(yaw0), sinY=Math.sin(yaw0);
+  c.camEye=[ w.pos[0]-cosY*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-sinY*CAM.backBase ];
+  c.camAt =[ w.pos[0]+cosY*CAM.atForward, w.pos[1]+1.2,        w.pos[2]+sinY*CAM.atForward ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
@@ -679,11 +676,11 @@ function frame(){
 
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!cfg.twoP){
-      const VP=stableKartCamVP(car1, CW/CH, dt); renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
+      const VP=kartCamVP(car1, CW/CH, dt); renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
     }else{
       const half=CW>>1;
-      gl.viewport(0,0,half,CH); const VP1=stableKartCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-      gl.viewport(half,0,CW-half,CH); const VP2=stableKartCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+      gl.viewport(0,0,half,CH); const VP1=kartCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+      gl.viewport(half,0,CW-half,CH); const VP2=kartCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
       gl.viewport(0,0,CW,CH);
     }
 
