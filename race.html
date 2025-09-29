@@ -98,7 +98,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v22';
+const saveKey='vector_racing_v23';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 
 /* ---------- 상태 ---------- */
@@ -158,10 +158,10 @@ function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
           0.5*((2*p1[2])+(-p0[2]+p2[2])*t+(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2+(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)];
 }
-function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
+function catmullTangent(p0,p1,p2,p3,t){const t2=t*t; // **z 항 p3[2]로 수정**
   return [0.5*((-p0[0]+p2[0])+2*(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t+3*(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t2),
           0.5*((-p0[1]+p2[1])+2*(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t+3*(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t2),
-          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[0])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[0])*t2)];
+          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
 }
 function basisAt(i){
   const p0=getCenter(i), p1=getCenter(i+1);
@@ -271,15 +271,14 @@ function buildEnv(theme,seed2){
     const starCount= cfg.mobile?1600:3200;
     for(let i=0;i<starCount;i++){const rr=ringR+20+rngS()*420,a=rngS()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=(rngS()*2-1)*320+90; pushP(rx,ry,rz,[0.82+rngS()*0.18,0.88+rngS()*0.12,1],0.06);}
     addSphere(GEO,Math.cos(0.7)*(ringR+300),160,Math.sin(0.7)*(ringR+300), 24, 18,28,[0.95,0.95,1.0],0.0);
-    // 외계인 우주복 캐릭터
     function addAlien(x,y,z,s=1){
       pushBox(GEO,x,y+0.8*s,z, 0.7*s,1.2*s,0.4*s, [0.75,0.85,1.0],[0.65,0.78,1.0],0.0);
       pushBox(GEO,x-0.45*s,y+0.75*s,z, 0.25*s,0.9*s,0.25*s,[0.72,0.84,1.0],[0.64,0.76,0.98],0.0);
       pushBox(GEO,x+0.45*s,y+0.75*s,z, 0.25*s,0.9*s,0.25*s,[0.72,0.84,1.0],[0.64,0.76,0.98],0.0);
       pushBox(GEO,x-0.18*s,y+0.2*s,z, 0.22*s,0.7*s,0.22*s,[0.7,0.82,0.98],[0.6,0.74,0.95],0.0);
       pushBox(GEO,x+0.18*s,y+0.2*s,z, 0.22*s,0.7*s,0.22*s,[0.7,0.82,0.98],[0.6,0.74,0.95],0.0);
-      addSphere(GEO,x,y+1.6*s,z,0.42*s,16,22,[0.8,0.95,1.0],0.0); // 헬멧
-      addSphere(GEO,x,y+1.55*s,z,0.30*s,14,18,[0.6,1.0,0.7],0.0); // 얼굴
+      addSphere(GEO,x,y+1.6*s,z,0.42*s,16,22,[0.8,0.95,1.0],0.0);
+      addSphere(GEO,x,y+1.55*s,z,0.30*s,14,18,[0.6,1.0,0.7],0.0);
     }
     for(let i=0;i<32;i++){ const r=ringR+60+Math.random()*260, a=Math.random()*Math.PI*2; addAlien(Math.cos(a)*r, 22+Math.random()*18, Math.sin(a)*r, 0.8+Math.random()*0.8); }
 
@@ -304,15 +303,14 @@ function buildEnv(theme,seed2){
     }
 
   } else if(theme==='XMAS'){
-    /* ---- XMAS: 소형 오브젝트 3배 확대 ---- */
     const SCALE = 3.0;
 
-    // 눈 파티클(그대로 유지)
+    // 눈 파티클
     const sPos=[],sCol=[],sGlow=[]; const snowCount= cfg.mobile?2400:5200;
     for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*340, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*300; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
 
-    // 마을 구성(집/전나무/ 눈사람/산타/루돌프) — 내부 s, h, r, 오프셋 모두 SCALE 반영
+    // 마을 구성(집/전나무/눈사람/산타/루돌프) 3배 스케일
     function addWindowsRect(G,cx,cy,cz, sx,sy, sz, strideX=2.0,strideY=2.4, glowCol=[1,0.92,0.65]){
       const hx=sx/2, hy=sy/2, hz=sz/2;
       const win=(x,y,z,w,h)=>pushBox(G,x,y,z,w,h,0.06,glowCol,glowCol,1.15);
@@ -429,7 +427,7 @@ function buildCenterpiece(theme,seed2){
   centerBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; centerVerts=G.pos.length/3;
 }
 
-/* ---------- 터널(트랙 스윕 정렬) ---------- */
+/* ---------- 터널 ---------- */
 function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
   const G=makeGeo(), L=makeGeo();
@@ -464,7 +462,7 @@ function buildTunnels(theme,seed2){
   if(L.pos.length){ tunnelGlowBuf={pos:makeBuffer(new Float32Array(L.pos),3), col:makeBuffer(new Float32Array(L.col),3), glow:makeBuffer(new Float32Array(L.glow),1)}; tunnelGlowVerts=L.pos.length/3; }
 }
 
-/* ---------- 트랙사이드 소품 ---------- */
+/* ---------- 트랙사이드 ---------- */
 function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
   for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
@@ -524,7 +522,7 @@ const MAX_KMH=360, MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, camYaw:null, // camYaw 안써도 남겨둠(호환)
+    camEye:null, camAt:null, camF:null,
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
       const acc = ACC? 0.38*MAX_V : 0;
@@ -552,41 +550,43 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라: '각도' 제거, 벡터 기반 카트식 ---------- */
-function centerPosAt(s){
-  const i=Math.floor(s)|0, t=s-i;
-  const p0=getCenter(i), p1=getCenter(i+1);
-  return [lerp(p0[0],p1[0],t), lerp(p0[1],p1[1],t), lerp(p0[2],p1[2],t)];
-}
-function forwardAt(s, ahead=16){
-  const p0=centerPosAt(s), p1=centerPosAt(s+ahead);
-  const dx=p1[0]-p0[0], dy=p1[1]-p0[1], dz=p1[2]-p0[2];
-  const L=Math.hypot(dx,dy,dz)||1;
-  return [dx/L, dy/L, dz/L];
-}
+/* ---------- 카트 시점(완전 안도는 카메라) ---------- */
 const CAM = {
-  backBase: 46.0,   // 훨씬 뒤
-  upBase:   12.0,   // 더 위
-  lookAhead: 20,    // 진행방향 샘플
-  atForward: 14,    // 시선 전방
-  eyeSmooth: 8.0,   // 부드러움
+  backBase: 50.0,
+  upBase:   14.0,
+  atForward: 16.0,
+  fSmooth:   10.0,  // 진행방향 벡터 보간
+  eyeSmooth:  8.0,
   atSmooth:  12.0,
   fovDeg:    54
 };
-function kartCamVP(car, aspect, dt){
+function forwardXZ(s){
+  const p0=getCenter(Math.floor(s)|0), p1=getCenter(Math.floor(s+12)|0);
+  let fx=p1[0]-p0[0], fy=0, fz=p1[2]-p0[2]; // XZ 투영(수평)
+  const L=Math.hypot(fx,fz)||1; fx/=L; fz/=L;
+  return [fx,fy,fz];
+}
+function stableKartCamVP(car, aspect, dt){
   const w=car.world();
-  const F = forwardAt(car.s + CAM.lookAhead, CAM.lookAhead); // 전방 단위벡터
-  const speedK = car.v; // m/s
-  const distExtra = speedK * 0.12;
-  const upExtra   = speedK * 0.08;
 
-  // 오른쪽 벡터(필요시 사용). 흔들림 방지를 위해 측면 오프셋은 0으로.
-  // const Right = [ -F[2], 0, F[0] ];
+  // 1) 원시 진행방향(XZ), 2) 이전 camF와 연속성 유지(dot<0면 뒤집기), 3) 지수보간
+  let F = forwardXZ(car.s);
+  if(car.camF){
+    const dot = car.camF[0]*F[0] + car.camF[1]*F[1] + car.camF[2]*F[2];
+    if(dot < 0) F=[-F[0],-F[1],-F[2]];
+    const kF = 1 - Math.exp(-dt*CAM.fSmooth);
+    F = [ car.camF[0]*(1-kF)+F[0]*kF,
+          car.camF[1]*(1-kF)+F[1]*kF,
+          car.camF[2]*(1-kF)+F[2]*kF ];
+    const L=Math.hypot(F[0],F[2])||1; F=[F[0]/L,0,F[2]/L];
+  }
+  car.camF = F;
 
+  const speedK = car.v;
   const eye = [
-    w.pos[0] - F[0]*(CAM.backBase+distExtra),
-    w.pos[1] + (CAM.upBase+upExtra),
-    w.pos[2] - F[2]*(CAM.backBase+distExtra)
+    w.pos[0] - F[0]*(CAM.backBase + speedK*0.10),
+    w.pos[1] + (CAM.upBase + speedK*0.06),
+    w.pos[2] - F[2]*(CAM.backBase + speedK*0.10)
   ];
   const at = [
     w.pos[0] + F[0]*(CAM.atForward + speedK*0.05),
@@ -599,7 +599,7 @@ function kartCamVP(car, aspect, dt){
   car.camEye = car.camEye ? mixV(car.camEye, eye, kEye) : eye;
   car.camAt  = car.camAt  ? mixV(car.camAt,  at,  kAt)  : at;
 
-  const V=M.look(car.camEye, car.camAt, [0,1,0]);
+  const V=M.look(car.camEye, car.camAt, [0,1,0]); // 수평 고정, '도는' 효과 없음
   const P=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
   const fov = CAM.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
@@ -631,12 +631,12 @@ function renderOnce(){
   const tSec=performance.now()/1000; gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const dt=1/60;
   if(!cfg.twoP){
-    const VP=kartCamVP(car1, CW/CH, dt);
+    const VP=stableKartCamVP(car1, CW/CH, dt);
     renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
   }else{
     const half=CW>>1;
-    gl.viewport(0,0,half,CH); const VP1=kartCamVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-    gl.viewport(half,0,CW-half,CH); const VP2=kartCamVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+    gl.viewport(0,0,half,CH); const VP1=stableKartCamVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+    gl.viewport(half,0,CW-half,CH); const VP2=stableKartCamVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
     gl.viewport(0,0,CW,CH);
   }
 }
@@ -648,8 +648,9 @@ function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
 
-  const F = forwardAt(c.s + CAM.lookAhead, CAM.lookAhead);
   const w = c.world();
+  const F = forwardXZ(c.s);
+  c.camF = F.slice();
   c.camEye=[ w.pos[0]-F[0]*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-F[2]*CAM.backBase ];
   c.camAt =[ w.pos[0]+F[0]*CAM.atForward, w.pos[1]+1.2,       w.pos[2]+F[2]*CAM.atForward ];
 }
@@ -678,11 +679,11 @@ function frame(){
 
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!cfg.twoP){
-      const VP=kartCamVP(car1, CW/CH, dt); renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
+      const VP=stableKartCamVP(car1, CW/CH, dt); renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
     }else{
       const half=CW>>1;
-      gl.viewport(0,0,half,CH); const VP1=kartCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-      gl.viewport(half,0,CW-half,CH); const VP2=kartCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+      gl.viewport(0,0,half,CH); const VP1=stableKartCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+      gl.viewport(half,0,CW-half,CH); const VP2=stableKartCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
       gl.viewport(0,0,CW,CH);
     }
 
