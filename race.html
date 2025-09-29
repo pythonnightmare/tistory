@@ -521,51 +521,77 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라 (Yaw 고정 추적: 빙글 방지) ---------- */
-function sampleDirYaw(s){
-  const ds=10;
-  const c0=getCenter(Math.floor(s)), c1=getCenter(Math.floor(s+ds));
-  const dx=c1[0]-c0[0], dz=c1[2]-c0[2];
-  return Math.atan2(dz,dx);
+/* ---------- 카메라: 추적 카메라 ---------- */
+// 중심선 임의 위치 샘플링
+function centerPosAt(s){
+  const i=Math.floor(s)|0, t=s-i;
+  const p0=getCenter(i), p1=getCenter(i+1);
+  return [lerp(p0[0],p1[0],t), lerp(p0[1],p1[1],t), lerp(p0[2],p1[2],t)];
 }
+function forwardAt(s, ahead=16){
+  const p0=centerPosAt(s), p1=centerPosAt(s+ahead);
+  const dx=p1[0]-p0[0], dy=p1[1]-p0[1], dz=p1[2]-p0[2];
+  const L=Math.hypot(dx,dy,dz)||1;
+  return [dx/L, dy/L, dz/L];
+}
+function yawFromDir(f){ return Math.atan2(f[2], f[0]); }
 function unwrapAngle(curr,target){
   let d = target - curr;
   d = ((d + Math.PI) % (2*Math.PI)); if(d<0) d += 2*Math.PI;
   d -= Math.PI;
   return curr + d;
 }
-function chaseVP(car, aspect, dt){
+const CAM = {
+  backBase: 38.0,   // 기본 뒤로 거리 (기존 27 → 더 멀게)
+  upBase:   9.5,    // 기본 높이 (기존 7.6 → 더 높게)
+  lookAhead: 18,    // 진행 방향을 미리 보는 샘플 수
+  atForward: 12,    // 시선이 전방으로 나가는 거리
+  yawRate: 7.5,     // 초당 최대 요 변화(라디안 제한)
+  eyeSmooth: 8.0,   // 카메라 eye 지수 보간
+  atSmooth: 12.0,   // 카메라 at 지수 보간
+  fovDeg: 54        // FOV(°) – 살짝 좁혀서 덜 가까워 보이게
+};
+function kartCamVP(car, aspect, dt){
   const w=car.world();
-  let tyaw = sampleDirYaw(car.s);
+  // 진행 방향을 lookAhead 만큼 앞에서 계산
+  const fwd = forwardAt(car.s + CAM.lookAhead, CAM.lookAhead);
+  let tyaw = yawFromDir(fwd);
+
+  // 초기화/연속성 유지
   if(car.camYaw==null){ car.camYaw = tyaw; }
   tyaw = unwrapAngle(car.camYaw, tyaw);
-  const yawRate = 6.5; // rad/s
-  const maxStep = yawRate*dt;
+  const maxStep = CAM.yawRate * dt;
   let diff = tyaw - car.camYaw;
   if(diff >  maxStep) diff =  maxStep;
   if(diff < -maxStep) diff = -maxStep;
   car.camYaw += diff;
 
   const cosY=Math.cos(car.camYaw), sinY=Math.sin(car.camYaw);
-  const backBase=27.0, upBase=7.6;   // 좀 더 멀리
-  const extra = car.v * 0.10;
+  const speedK = car.v; // m/s
+  const distExtra = speedK * 0.12;   // 속도에 따른 추가 뒤거리
+  const upExtra   = speedK * 0.08;   // 속도에 따른 추가 높이
+  const lateralLag = clamp(car.offV*0.35, -2.0, 2.0); // 약간의 측면 추적 지연
+
   const eye = [
-    w.pos[0] - cosY*(backBase+extra),
-    w.pos[1] + (upBase + extra*0.14),
-    w.pos[2] - sinY*(backBase+extra)
+    w.pos[0] - cosY*(CAM.backBase+distExtra) - sinY*lateralLag,
+    w.pos[1] + (CAM.upBase+upExtra),
+    w.pos[2] - sinY*(CAM.backBase+distExtra) + cosY*lateralLag
   ];
   const at = [
-    w.pos[0] + cosY*9.0,
+    w.pos[0] + cosY*(CAM.atForward + speedK*0.05),
     w.pos[1] + 1.2,
-    w.pos[2] + sinY*9.0
+    w.pos[2] + sinY*(CAM.atForward + speedK*0.05)
   ];
-  const kEye=1 - Math.exp(-dt*8.0), kAt=1 - Math.exp(-dt*10.0);
+
+  const kEye=1 - Math.exp(-dt*CAM.eyeSmooth);
+  const kAt =1 - Math.exp(-dt*CAM.atSmooth);
   car.camEye = car.camEye ? mixV(car.camEye, eye, kEye) : eye;
   car.camAt  = car.camAt  ? mixV(car.camAt,  at,  kAt)  : at;
 
-  const V=M.look(car.camEye, car.camAt, [0,1,0]); // 업 Y 고정
+  const V=M.look(car.camEye, car.camAt, [0,1,0]);
+  // 투영
   const P=[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
-  const fov=58*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
+  const fov = CAM.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
   return M.mul(P,V);
 }
@@ -595,12 +621,12 @@ function renderOnce(){
   const tSec=performance.now()/1000; gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const dt=1/60;
   if(!cfg.twoP){
-    const VP=chaseVP(car1, CW/CH, dt);
+    const VP=kartCamVP(car1, CW/CH, dt);
     renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
   }else{
     const half=CW>>1;
-    gl.viewport(0,0,half,CH); const VP1=chaseVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-    gl.viewport(half,0,CW-half,CH); const VP2=chaseVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+    gl.viewport(0,0,half,CH); const VP1=kartCamVP(car1, (half)/CH, dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+    gl.viewport(half,0,CW-half,CH); const VP2=kartCamVP(car2, (CW-half)/CH, dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
     gl.viewport(0,0,CW,CH);
   }
 }
@@ -611,11 +637,13 @@ const LAPS=3, START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-  const yaw0 = sampleDirYaw(c.s);
-  c.camYaw = yaw0;
-  const w = c.world(); const cosY=Math.cos(yaw0), sinY=Math.sin(yaw0);
-  c.camEye=[ w.pos[0]-cosY*27, w.pos[1]+7.6, w.pos[2]-sinY*27 ];
-  c.camAt =[ w.pos[0]+cosY*9.0, w.pos[1]+1.2, w.pos[2]+sinY*9.0 ];
+  // 카메라 초기 yaw를 진행 방향으로 셋업
+  const fwd = forwardAt(c.s + CAM.lookAhead, CAM.lookAhead);
+  c.camYaw = yawFromDir(fwd);
+  const w = c.world();
+  const cosY=Math.cos(c.camYaw), sinY=Math.sin(c.camYaw);
+  c.camEye=[ w.pos[0]-cosY*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-sinY*CAM.backBase ];
+  c.camAt =[ w.pos[0]+cosY*CAM.atForward, w.pos[1]+1.2, w.pos[2]+sinY*CAM.atForward ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
@@ -642,11 +670,11 @@ function frame(){
 
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!cfg.twoP){
-      const VP=chaseVP(car1, CW/CH, dt); renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
+      const VP=kartCamVP(car1, CW/CH, dt); renderScene(VP,tSec); drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
     }else{
       const half=CW>>1;
-      gl.viewport(0,0,half,CH); const VP1=chaseVP(car1,(half)/CH,dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-      gl.viewport(half,0,CW-half,CH); const VP2=chaseVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+      gl.viewport(0,0,half,CH); const VP1=kartCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+      gl.viewport(half,0,CW-half,CH); const VP2=kartCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
       gl.viewport(0,0,CW,CH);
     }
 
