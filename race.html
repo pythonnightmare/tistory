@@ -224,7 +224,7 @@ const pushBox=(o,cx,cy,cz,sx,sy,sz,ct,cs,g=0.0)=>{const x=sx/2,y=sy/2,z=sz/2;
 };
 function addSphere(G,cx,cy,cz,R,lat=28,lon=42,col=[1,1,1],glw=0){for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI; for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI; const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)]; const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0); pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw); }}}
 function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0){const y0=cy-h/2,y1=cy+h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0), x1=cx+r*Math.cos(a1), z1=cz*r*Math.sin(a1); pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);} }
-function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){const tip=[cx,cy+h/2,cz], y0=cy-h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0),z0=cz+r*Math.sin(a0),x1=cx+r*Math.cos(a1),z1=cz+r*Math.sin(a1); pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);} }
+function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){const tip=[cx,cy+h/2,cz], y0=cy-h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0),z0=cz*r*Math.sin(a0),x1=cx*r*Math.cos(a1),z1=cz*r*Math.sin(a1); pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);} }
 function addTorus(G,cx,cy,cz,R,r,segR=48,segr=24,col=[1,1,1],glw=0.6){for(let i=0;i<segR;i++){const u0=i/segR*2*Math.PI,u1=(i+1)/segR*2*Math.PI; for(let j=0;j<segr;j++){const v0=j/segr*2*Math.PI,v1=(j+1)/segr*2*Math.PI; const p=(u,v)=>[cx+(R+r*Math.cos(v))*Math.cos(u), cy+r*Math.sin(v), cz+(R+r*Math.cos(v))*Math.sin(u)]; const A=p(u0,v0),B=p(u1,v0),C=p(u1,v1),D=p(u0,v1); pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], col, glw);} }}
 
 /* ---------- 테마 ---------- */
@@ -328,7 +328,7 @@ function buildEnv(theme,seed2){
     for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*340, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*300; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
 
-    // (마을 구성 생략 없이 그대로)
+    // (마을 구성)
     function addWindowsRect(G,cx,cy,cz, sx,sy, sz, strideX=2.0,strideY=2.4, glowCol=[1,0.92,0.65]){
       const hx=sx/2, hy=sy/2, hz=sz/2;
       const win=(x,y,z,w,h)=>pushBox(G,x,y,z,w,h,0.06,glowCol,glowCol,1.15);
@@ -568,7 +568,7 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라: 이동벡터 기반 요 + 연속성 확보 ---------- */
+/* ---------- 카메라: 이동벡터 기반 요 + 연속성 확보 (시점만 적용) ---------- */
 function yawFromTangent(s){
   const {T} = basisAt(Math.floor(s)|0);
   return Math.atan2(T[2], T[0]);
@@ -576,12 +576,11 @@ function yawFromTangent(s){
 function normalizeAngle(a){ return Math.atan2(Math.sin(a), Math.cos(a)); }
 function coherentYaw(prev, cand){
   let d = normalizeAngle(cand - prev);
-  // 이전 방향과 90° 이상 어긋나면 반전(π 보정)
   if (Math.abs(d) > Math.PI/2) cand = normalizeAngle(cand - Math.sign(d)*Math.PI);
   return cand;
 }
 function stepYaw(curr, target, maxStep){
-  let d = normalizeAngle(target - curr);           // [-π, π]
+  let d = normalizeAngle(target - curr);
   if (d >  maxStep) d =  maxStep;
   if (d < -maxStep) d = -maxStep;
   return curr + d;
@@ -589,16 +588,14 @@ function stepYaw(curr, target, maxStep){
 const CAM = {
   backBase: 22.0,
   upBase:    6.5,
-  atForward:  8.0,        // 차 + 약간 앞을 보게 (차가 프레임에서 안 튀게)
-  yawRate:   18.0,        // 더 잘 따라오게
+  atForward:  8.0,
+  yawRate:   18.0,
   eyeSmooth:  8.0,
   atSmooth:  12.0,
   fovDeg:    58
 };
 function kartCamVP(car, aspect, dt){
   const w=car.world();
-
-  // 1) 이동 벡터 우선, 정지/저속이면 접선 fallback
   let tyaw;
   if (car.camPrevPos){
     const dx = w.pos[0] - car.camPrevPos[0];
@@ -606,10 +603,7 @@ function kartCamVP(car, aspect, dt){
     if (dx*dx + dz*dz > 1e-6) tyaw = Math.atan2(dz, dx);
   }
   if (tyaw==null || !isFinite(tyaw)) tyaw = yawFromTangent(car.s);
-
-  // 2) 이전 요와의 일관성 확보(갑작스런 180° 반전 방지)
   if (car.camYaw!=null) tyaw = coherentYaw(car.camYaw, tyaw);
-
   if (car.camYaw==null) car.camYaw = tyaw;
   car.camYaw = stepYaw(car.camYaw, tyaw, CAM.yawRate*dt);
   car.camPrevPos = w.pos.slice();
@@ -619,7 +613,6 @@ function kartCamVP(car, aspect, dt){
   const up    = CAM.upBase   + car.v*0.04;
   const lead  = CAM.atForward+ car.v*0.03;
 
-  // 차를 항상 프레임에: at을 "차 + 앞"으로, eye는 뒤/위에서 추적
   const eye = [ w.pos[0] - cosY*back,  w.pos[1] + up,  w.pos[2] - sinY*back ];
   const at  = [ w.pos[0] + cosY*lead,  w.pos[1] + 1.2, w.pos[2] + sinY*lead ];
 
@@ -629,7 +622,7 @@ function kartCamVP(car, aspect, dt){
   car.camAt  = car.camAt  ? mixV(car.camAt,  at,  kAt)  : at;
 
   const V=M.look(car.camEye, car.camAt, [0,1,0], /*safe=*/true);
-  const P=[1,0,0,0, 0,1,0,0, 0,0,1,0,  0,0,0,1];
+  const P=[1,0,0,0, 0,1,0,0,  0,0,1,0,  0,0,0,1];
   const fov=CAM.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
   P[0]=f/((aspect>0)?aspect:1); P[5]=f; P[10]=(far+near)*nf; P[11]=-1; P[14]=(2*far*near)*nf; P[15]=0;
   return M.mul(P,V);
@@ -638,15 +631,14 @@ function kartCamVP(car, aspect, dt){
 /* ---------- 드로우 ---------- */
 function drawCar(VP,car){
   const w=car.world();
-  const VPc = M.mul(VP, M.T(w.pos[0],w.pos[1]+0.60,w.pos[2])); // 살짝 띄워 Z-fighting 방지
+  const VPc = M.mul(VP, M.T(w.pos[0],w.pos[1]+0.60,w.pos[2])); // 살짝 띄워 깊이충돌 방지
   gl.uniformMatrix4fv(loc.uVP,false,new Float32Array(VPc));
   drawSolid(carGeom, carGeom.verts, gl.TRIANGLES);
 }
 function renderScene(VP, tSec){
   gl.uniformMatrix4fv(loc.uVP,false,new Float32Array(VP)); gl.uniform1f(loc.uTime, tSec);
 
-  // 트랙 폴리곤 오프셋으로 깊이 충돌 최소화
-  gl.enable(gl.POLYGON_OFFSET_FILL);
+  gl.enable(gl.POLYGON_OFFSET_FILL); // 트랙 Z-fighting 완화
   gl.polygonOffset(1,1);
   drawSolid(bufRibbon, verts, gl.TRIANGLE_STRIP);
   gl.disable(gl.POLYGON_OFFSET_FILL);
@@ -683,12 +675,12 @@ function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
 
+  // 카메라 초기화(1회)
   const w = c.world();
   const yaw0 = yawFromTangent(c.s);
   c.camYaw = yaw0;
-  const cosY=Math.cos(yaw0), sinY=Math.sin(yaw0);
-  c.camEye=[ w.pos[0]-cosY*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-sinY*CAM.backBase ];
-  c.camAt =[ w.pos[0]+cosY*CAM.atForward, w.pos[1]+1.2,        w.pos[2]+sinY*CAM.atForward ];
+  c.camEye=[ w.pos[0]-Math.cos(yaw0)*CAM.backBase, w.pos[1]+CAM.upBase, w.pos[2]-Math.sin(yaw0)*CAM.backBase ];
+  c.camAt =[ w.pos[0]+Math.cos(yaw0)*CAM.atForward, w.pos[1]+1.2,        w.pos[2]+Math.sin(yaw0)*CAM.atForward ];
   c.camPrevPos = w.pos.slice();
 }
 function resetCars(){
@@ -752,6 +744,7 @@ document.getElementById('btnMobile').onclick=()=>{ cfg.mobile=!cfg.mobile; store
 document.getElementById('selTheme').value=cfg.theme;
 document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; store.set(cfg); applyTheme(cfg.theme); resetCars(); };
 
+/* ---------- 도움말/메뉴 ---------- */
 function showMenu(){
   const help=`<div class="keys">
   <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ / Space 드리프트<br/>
@@ -771,6 +764,19 @@ document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P';
 document.getElementById('btnMobile').textContent= cfg.mobile?'📱 Mobile: ON':'📱 Mobile: OFF';
 padL.style.display=padR.style.display=cfg.mobile?'flex':'none';
 showMenu(); renderOnce();
+
+/* ---------- (옵션) 간단 스모크 테스트: ?debug=1 --------- */
+function __smokeTests(){
+  try{
+    const VP = kartCamVP(car1, 1.0, 1/60);
+    if (!Array.isArray(VP) || VP.length!==16) throw new Error('VP matrix invalid');
+    console.log('[TEST] VP OK');
+  }catch(e){
+    console.error('[TEST FAIL]', e);
+  }
+}
+if (location.search.includes('debug=1')) __smokeTests();
+
 })();</script>
 </body>
 </html>
