@@ -81,7 +81,6 @@
   </div>
 </div>
 
-<!-- three.js -->
 <!-- three.js robust loader with fallbacks -->
 <script>
 (function loadThree(){
@@ -95,16 +94,14 @@
     if (window.THREE) return;
     if (i >= cdns.length) {
       const overlay = document.getElementById('overlay');
-      overlay.innerHTML = `<div class="panel"><h1>⚠ three.js 로드 실패</h1><p>네트워크에서 three.js를 받지 못했습니다.</p></div>`;
+      overlay.innerHTML = `<div class="panel"><h1>⚠ three.js 로드 실패</h1><p>네트워크 문제로 three.js를 받지 못했습니다.</p></div>`;
       return;
     }
     const s = document.createElement('script');
     s.src = cdns[i++];
     s.defer = true;
-    s.onload = () => { /* ok */ };
     s.onerror = tryNext;
     document.head.appendChild(s);
-    // 2초 내 미탑재면 다음 CDN 시도
     setTimeout(()=>{ if(!window.THREE) tryNext(); }, 2000);
   }
   tryNext();
@@ -127,7 +124,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_three_cam_v2';
+const saveKey='vector_racing_three_cam_v3';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 
@@ -135,7 +132,7 @@ function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v
 const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY'];
 const cfg=Object.assign({seed:(Math.random()*1e9)|0,theme:'SPACE',shape:'RANDOM',aiCount:1,twoP:false,mobile:false,best:null}, store.get());
 
-/* ---------- WebGL ---------- */
+/* ---------- WebGL 기본 ---------- */
 const view=document.getElementById('view'), canvas=document.getElementById('gl');
 const gl=canvas.getContext('webgl',{antialias:false,preserveDrawingBuffer:false});
 if(!gl){ panel('<h1>⚠ WebGL 미지원</h1>'); throw new Error('WebGL not supported'); }
@@ -153,7 +150,7 @@ uniform mat4 uVP; uniform float uTime;
 varying vec3 vCol; varying float vGlow;
 void main(){
   vCol=aCol; float g=aGlow; vec3 p=aPos;
-  if(g<0.0){
+  if(g<0.0){ // 낙하 파티클(눈/재)
     float ph = fract(abs(g));
     float t = fract(uTime*(0.08+ph*0.12) + ph);
     p.y = -12.0 + t * 220.0;
@@ -225,7 +222,9 @@ function basisAt(i){ const idx=((i%samples)+samples)%samples; return {T:Frames.T
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
 
 /* ---------- 버퍼 핸들 ---------- */
-let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0,bufRibbon=null,bufRail=null,verts=0,railVerts=0;
+let envBuf=null, envVerts=0, propBuf=null, propVerts=0, geoBuf=null, geoVerts=0, centerBuf=null, centerVerts=0;
+let tunnelBuf=null, tunnelVerts=0, tunnelGlowBuf=null, tunnelGlowVerts=0, tracksideBuf=null, tracksideVerts=0;
+let snowBuf=null, snowVerts=0, ashBuf=null, ashVerts=0, bufRibbon=null, bufRail=null, verts=0, railVerts=0;
 
 /* ---------- 지오 빌더 ---------- */
 const makeGeo=()=>({pos:[],col:[],glow:[]});
@@ -322,6 +321,7 @@ function buildTrack(theme){
   }
   bufRibbon={pos:makeBuffer(new Float32Array(p),3),col:makeBuffer(new Float32Array(c),3),glow:makeBuffer(new Float32Array(g),1)};
   bufRail  ={pos:makeBuffer(new Float32Array(rp),3),col:makeBuffer(new Float32Array(rc),3),glow:makeBuffer(new Float32Array(rg),1)};
+  gl.clearColor(T.fog[0],T.fog[1],T.fog[2],1);
 
   buildEnv(theme,seed2);
   buildCenterpiece(theme,seed2);
@@ -329,8 +329,7 @@ function buildTrack(theme){
   buildTrackside(theme,seed2);
 }
 
-/* ---------- 환경/오브젝트 (생략 없이 동일) ---------- */
-let envVerts=0, geoVerts=0, centerVerts=0, tunnelVerts=0, tunnelGlowVerts=0, tracksideVerts=0, snowVerts=0, ashVerts=0, propVerts=0;
+/* ---------- 환경/오브젝트 ---------- */
 function buildEnv(theme,seed2){
   envBuf=propBuf=geoBuf=snowBuf=ashBuf=null; envVerts=propVerts=geoVerts=snowVerts=ashVerts=0;
   const pts=[],cols=[],glows=[], GEO=makeGeo();
@@ -368,6 +367,8 @@ function buildEnv(theme,seed2){
   if(pts.length){ envBuf={pos:makeBuffer(new Float32Array(pts),3), col:makeBuffer(new Float32Array(cols),3), glow:makeBuffer(new Float32Array(glows),1)}; envVerts=pts.length/3; }
   if(GEO.pos.length){ geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}; geoVerts=GEO.pos.length/3; }
 }
+
+/* ---------- 중앙/터널/사이드 ---------- */
 function buildCenterpiece(theme,seed2){
   const G=makeGeo(); const safePad=trackW*0.8+16; const safeR=Math.max(18,trackMinR-safePad);
   const big=safeR*1.05; const med=safeR*0.7;
@@ -421,7 +422,7 @@ function buildTrackside(theme,seed2){
 
 /* ---------- 차량 ---------- */
 function makeCarGeom(themeCol){
-  const hw=0.8, hh=0.28, hl=1.36, nose=0.55, color=themeCol;
+  const hw=0.8, hh=0.28, hl=1.36, nose=0.55;
   const P=[
     -hw,hh,-hl,  hw,hh,-hl,  0,hh+nose,-hl*0.2,
     -hw,hh, hl*0.2, 0,hh+nose,-hl*0.2,  hw,hh, hl*0.2,
@@ -462,7 +463,7 @@ btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{pa
 padL.querySelectorAll('.pbtn').forEach(bindPad); padR.querySelectorAll('.pbtn').forEach(bindPad);
 
 /* ---------- 물리/레이스 ---------- */
-const MAX_KMH=450;               // ★ FIX: 25% 상향
+const MAX_KMH=450;                // 25% 상향
 const MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
@@ -474,8 +475,8 @@ function makeCar(ctrl){
       const brakeDec= BR? 0.30*MAX_V : 0;
       this.v = clamp(this.v + (acc - baseDec - brakeDec)*dt, 0, MAX_V);
 
-      // ★ FIX: 좌/우 스티어 뒤집힘 교정
-      const target = (L?1:0) + (R?-1:0);
+      // 좌/우 스티어 정상화: 왼쪽키면 -오프셋, 오른쪽키면 +오프셋
+      const target = (L?-1:0) + (R?1:0);
       const aim = target * (trackW*0.46);
       const spring=6.0, damp=3.6;
       const force = (aim - this.off)*spring - this.offV*damp;
@@ -533,14 +534,12 @@ class ThreeChaseCam {
 
     const upWorld = tmp.v2.set(0,1,0);
 
-    // ★ FIX: 시점 거꾸로 보정 — Right/Up을 RH 규칙에 맞게 재정의
-    // 기존: R = up × dir, U = dir × R  → 일부 상황에서 Up 뒤집힘
-    // 교정: R = dir × up (부호 반전), U = R × dir, 필요 시 (R,U) 동시 반전해 Up을 위로 유지
+    // 시점 뒤집힘 보정: R = dir × up, U = R × dir, U가 아래로 가면 (R,U) 동시 반전
     let R = this.dir.clone().cross(upWorld).normalize(); // dir × up
     let U = R.clone().cross(this.dir).normalize();       // R × dir
-    if (U.dot(upWorld) < 0) { R.multiplyScalar(-1); U.multiplyScalar(-1); } // ★ FIX: Up 하향시 반전
+    if (U.dot(upWorld) < 0) { R.multiplyScalar(-1); U.multiplyScalar(-1); }
 
-    // 곡률 기반 뱅킹(roll)
+    // 곡률 기반 뱅킹
     const i = Math.floor(car.s)|0;
     const curv = (Frames.curv && Frames.curv[i]) || 0;
     const bank = THREE.MathUtils.clamp(CHASE.bankK*curv, -CHASE.bankLimitDeg*Math.PI/180, CHASE.bankLimitDeg*Math.PI/180);
@@ -553,7 +552,7 @@ class ThreeChaseCam {
     // 타깃 eye/at
     const speedRatio = THREE.MathUtils.clamp((car.v||0)/MAX_V, 0, 1);
     const eyeTarget = tmp.v3.set(w.pos[0],w.pos[1],w.pos[2])
-      .addScaledVector(this.dir, -CHASE.back)   // 뒤쪽으로
+      .addScaledVector(this.dir, -CHASE.back)
       .addScaledVector(U, CHASE.height)
       .addScaledVector(R, CHASE.lateral);
 
@@ -576,11 +575,10 @@ class ThreeChaseCam {
     cam.updateMatrixWorld(true);
 
     const PV = tmp.m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    return PV.elements; // Float32Array(16)
+    return PV.elements;
   }
 }
-const chaseCam1 = new ThreeChaseCam();
-const chaseCam2 = new ThreeChaseCam();
+let chaseCam1=null, chaseCam2=null;
 function camVP(car, aspect, dt, which=1){
   return (which===1?chaseCam1:chaseCam2).vp(car, aspect, dt);
 }
@@ -601,6 +599,7 @@ function renderScene(VP, tSec){
   gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1,1);
   drawSolid(bufRibbon, verts, gl.TRIANGLE_STRIP);
   gl.disable(gl.POLYGON_OFFSET_FILL);
+
   drawSolid(tunnelBuf, tunnelVerts, gl.TRIANGLES);
   drawSolid(geoBuf, geoVerts, gl.TRIANGLES);
   drawSolid(centerBuf, centerVerts, gl.TRIANGLES);
@@ -720,8 +719,11 @@ function showMenu(){
 }
 
 /* ---------- 시작 ---------- */
+// three.js 준비 확인 후에만 부트스트랩
 function bootstrap(){
-  if(!window.THREE){ panel('<h1>⚠ three.js 로드 실패</h1>'); return; }
+  if(!window.THREE){ panel('<h1>⚠ three.js 로드 대기중…</h1>'); return; }
+  chaseCam1=new ThreeChaseCam();
+  chaseCam2=new ThreeChaseCam();
   applyTheme(cfg.theme);
   carGeom=makeCarGeom(THEMES[cfg.theme].car);
   resetCars();
@@ -734,13 +736,11 @@ function bootstrap(){
   document.getElementById('padL').style.display=document.getElementById('padR').style.display=cfg.mobile?'flex':'none';
   showMenu(); renderOnce();
 }
-<script>
-// three.js 준비 확인 후 부트스트랩
-(function waitThree(){
+window.__waitThree = function waitThree(){
   if (window.THREE) { bootstrap(); return; }
-  setTimeout(waitThree, 50);
-})();
-</script>
+  setTimeout(window.__waitThree, 50);
+};
+window.__waitThree();
 
 })();</script>
 </body>
