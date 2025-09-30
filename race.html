@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>벡터 레이싱 — three.js ChaseCam</title>
+<title>벡터 레이싱 — three.js ChaseCam (Stable)</title>
 <style>
   :root{ --bg:#070a16; --bg2:#0b1230; --ink:#eaf2ff; --muted:#9aa9c6; --glass:rgba(10,14,34,.82) }
   *{box-sizing:border-box}
@@ -35,7 +35,7 @@
 <div class="wrap">
   <div class="card">
     <div class="hud">
-      <div class="title">🏁 벡터 레이싱 (three.js ChaseCam)</div>
+      <div class="title">🏁 벡터 레이싱 (three.js ChaseCam stable)</div>
       <div class="stats">
         <div class="stat" id="uiSpeed"><span class="label">SPEED</span> <b class="val">0</b></div>
         <div class="stat" id="uiLap"><span class="label">LAP</span> <b class="val">0/3</b></div>
@@ -65,7 +65,6 @@
     <div class="view" id="view">
       <canvas id="gl"></canvas>
       <div class="overlay" id="overlay"></div>
-      <!-- 모바일 패드 -->
       <div class="padL" id="padL">
         <button class="pbtn" data-act="L">◀</button>
         <button class="pbtn" data-act="R">▶</button>
@@ -124,7 +123,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_three_cam_v3';
+const saveKey='vector_racing_three_cam_v4';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 
@@ -132,7 +131,7 @@ function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v
 const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY'];
 const cfg=Object.assign({seed:(Math.random()*1e9)|0,theme:'SPACE',shape:'RANDOM',aiCount:1,twoP:false,mobile:false,best:null}, store.get());
 
-/* ---------- WebGL 기본 ---------- */
+/* ---------- WebGL ---------- */
 const view=document.getElementById('view'), canvas=document.getElementById('gl');
 const gl=canvas.getContext('webgl',{antialias:false,preserveDrawingBuffer:false});
 if(!gl){ panel('<h1>⚠ WebGL 미지원</h1>'); throw new Error('WebGL not supported'); }
@@ -150,7 +149,7 @@ uniform mat4 uVP; uniform float uTime;
 varying vec3 vCol; varying float vGlow;
 void main(){
   vCol=aCol; float g=aGlow; vec3 p=aPos;
-  if(g<0.0){ // 낙하 파티클(눈/재)
+  if(g<0.0){
     float ph = fract(abs(g));
     float t = fract(uTime*(0.08+ph*0.12) + ph);
     p.y = -12.0 + t * 220.0;
@@ -171,7 +170,7 @@ void main(){
 const program=prog(VS,FS); gl.useProgram(program);
 const loc={aPos:gl.getAttribLocation(program,'aPos'), aCol:gl.getAttribLocation(program,'aCol'), aGlow:gl.getAttribLocation(program,'aGlow'), uVP:gl.getUniformLocation(program,'uVP'), uTime:gl.getUniformLocation(program,'uTime'), uPass:gl.getUniformLocation(program,'uPass')};
 
-/* ---------- 매트릭스/버퍼 ---------- */
+/* ---------- 행렬/버퍼 ---------- */
 function makeBuffer(data,item=3,type=gl.FLOAT){const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW); return {b,item,type};}
 function bind(buf,loc){gl.bindBuffer(gl.ARRAY_BUFFER,buf.b); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,buf.item,buf.type,false,0,0);}
 const M={
@@ -221,12 +220,21 @@ const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[i
 function basisAt(i){ const idx=((i%samples)+samples)%samples; return {T:Frames.T[idx],R:Frames.R[idx],B:Frames.B[idx]} }
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
 
-/* ---------- 버퍼 핸들 ---------- */
-let envBuf=null, envVerts=0, propBuf=null, propVerts=0, geoBuf=null, geoVerts=0, centerBuf=null, centerVerts=0;
-let tunnelBuf=null, tunnelVerts=0, tunnelGlowBuf=null, tunnelGlowVerts=0, tracksideBuf=null, tracksideVerts=0;
-let snowBuf=null, snowVerts=0, ashBuf=null, ashVerts=0, bufRibbon=null, bufRail=null, verts=0, railVerts=0;
+/* 고정밀 샘플(보간) & 곡률 스무딩 */
+function sampleCenterLerp(s){
+  const N=samples;
+  let i0=Math.floor(s)%N; if(i0<0) i0+=N;
+  let i1=(i0+1)%N, a=s-Math.floor(s);
+  const p0=getCenter(i0), p1=getCenter(i1);
+  return [lerp(p0[0],p1[0],a), lerp(p0[1],p1[1],a), lerp(p0[2],p1[2],a)];
+}
+function smoothCurv(i){
+  let acc=0, n=0;
+  for(let k=-2;k<=2;k++){ const idx=(i+k+Frames.N)%Frames.N; acc+=Frames.curv[idx]; n++; }
+  return acc/n;
+}
 
-/* ---------- 지오 빌더 ---------- */
+/* ---------- 버퍼 핸들/지오 빌더(생략 없이 기존과 동일) ---------- */
 const makeGeo=()=>({pos:[],col:[],glow:[]});
 const pushTri=(o,a,b,c,d,e,f,g,h,i,C,G)=>{o.pos.push(a,b,c,d,e,f,g,h,i); o.col.push(C[0],C[1],C[2],C[0],C[1],C[2],C[0],C[1],C[2]); o.glow.push(G,G,G)};
 const pushQuad=(o,a,b,c,d,e,f,g,h,i,j,k,l,C,G)=>{pushTri(o,a,b,c,d,e,f,g,h,i,C,G); pushTri(o,a,b,c,g,h,i,j,k,l,C,G)};
@@ -238,40 +246,10 @@ const pushBox=(o,cx,cy,cz,sx,sy,sz,ct,cs,g=0.0)=>{const x=sx/2,y=sy/2,z=sz/2;
   pushQuad(o,cx-x,cy-y,cz+z,cx-x,cy+y,cz+z,cx+x,cy+y,cz+z,cx+x,cy-y,cz+z,cs,g);
   pushQuad(o,cx+x,cy-y,cz-z,cx+x,cy+y,cz-z,cx-x,cy+y,cz-z,cx-x,cy-y,cz-z,cs,g);
 };
-function addSphere(G,cx,cy,cz,R,lat=28,lon=42,col=[1,1,1],glw=0){
-  for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI;
-    for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI;
-      const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)];
-      const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0);
-      pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw);
-}}}
-function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0){
-  const y0=cy-h/2,y1=cy+h/2;
-  for(let i=0;i<seg;i++){
-    const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;
-    const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0);
-    const x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1);
-    pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);
-  }
-}
-function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){
-  const tip=[cx,cy+h/2,cz], y0=cy-h/2;
-  for(let i=0;i<seg;i++){
-    const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;
-    const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0);
-    const x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1);
-    pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);
-  }
-}
-function addTorus(G,cx,cy,cz,R,r,segR=48,segr=24,col=[1,1,1],glw=0.6){
-  for(let i=0;i<segR;i++){
-    const u0=i/segR*2*Math.PI,u1=(i+1)/segR*2*Math.PI;
-    for(let j=0;j<segr;j++){
-      const v0=j/segr*2*Math.PI,v1=(j+1)/segr*2*Math.PI;
-      const p=(u,v)=>[cx+(R+r*Math.cos(v))*Math.cos(u), cy+r*Math.sin(v), cz+(R+r*Math.cos(v))*Math.sin(u)];
-      const A=p(u0,v0),B=p(u1,v0),C=p(u1,v1),D=p(u0,v1);
-      pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], col, glw);
-}}}
+function addSphere(G,cx,cy,cz,R,lat=28,lon=42,col=[1,1,1],glw=0){for(let a=0;a<lat;a++){const v0=a/lat*Math.PI,v1=(a+1)/lat*Math.PI;for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI;const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u),cy+R*Math.cos(v),cz+R*Math.sin(v)*Math.sin(u)];const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0);pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw);}}}
+function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0){const y0=cy-h/2,y1=cy+h/2;for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0);const x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1);pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);}}
+function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){const tip=[cx,cy+h/2,cz], y0=cy-h/2;for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0);const x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1);pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);}}
+function addTorus(G,cx,cy,cz,R,r,segR=48,segr=24,col=[1,1,1],glw=0.6){for(let i=0;i<segR;i++){const u0=i/segR*2*Math.PI,u1=(i+1)/segR*2*Math.PI;for(let j=0;j<segr;j++){const v0=j/segr*2*Math.PI,v1=(j+1)/segr*2*Math.PI;const p=(u,v)=>[cx+(R+r*Math.cos(v))*Math.cos(u), cy+r*Math.sin(v), cz+(R+r*Math.cos(v))*Math.sin(u)];const A=p(u0,v0),B=p(u1,v0),C=p(u1,v1),D=p(u0,v1);pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], col, glw);}}}
 
 /* ---------- 테마 ---------- */
 const THEMES={
@@ -298,6 +276,10 @@ function genCP(seed,shape,yAmp,baseY){
     const y=baseY+rand(-yAmp,yAmp)*(0.6+0.4*Math.sin(2*t+ph)); arr.push([x,y,z]); }
   arr.push(arr[0],arr[1],arr[2]); return arr;
 }
+let envBuf=null, envVerts=0, propBuf=null, propVerts=0, geoBuf=null, geoVerts=0, centerBuf=null, centerVerts=0;
+let tunnelBuf=null, tunnelVerts=0, tunnelGlowBuf=null, tunnelGlowVerts=0, tracksideBuf=null, tracksideVerts=0;
+let snowBuf=null, snowVerts=0, ashBuf=null, ashVerts=0, bufRibbon=null, bufRail=null, verts=0, railVerts=0;
+
 function buildTrack(theme){
   const T=THEMES[theme], seed2=(cfg.seed^hashStr(theme)^hashStr(cfg.shape))>>>0;
   trackW=T.trackW*2.0;
@@ -329,7 +311,7 @@ function buildTrack(theme){
   buildTrackside(theme,seed2);
 }
 
-/* ---------- 환경/오브젝트 ---------- */
+/* ---------- 환경/오브젝트(기존과 동일) ---------- */
 function buildEnv(theme,seed2){
   envBuf=propBuf=geoBuf=snowBuf=ashBuf=null; envVerts=propVerts=geoVerts=snowVerts=ashVerts=0;
   const pts=[],cols=[],glows=[], GEO=makeGeo();
@@ -475,7 +457,7 @@ function makeCar(ctrl){
       const brakeDec= BR? 0.30*MAX_V : 0;
       this.v = clamp(this.v + (acc - baseDec - brakeDec)*dt, 0, MAX_V);
 
-      // 좌/우 스티어 정상화: 왼쪽키면 -오프셋, 오른쪽키면 +오프셋
+      // 좌/우 스티어 정상화
       const target = (L?-1:0) + (R?1:0);
       const aim = target * (trackW*0.46);
       const spring=6.0, damp=3.6;
@@ -498,21 +480,37 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- three.js 3rd-Person 추격 카메라 ---------- */
+/* ---------- three.js 3rd-Person 추격 카메라 (스테빌) ---------- */
 const CHASE = {
   baseFov: 68, maxFov: 92,
-  back: 4.6, height: 1.6, lateral: 0.0,
-  lookBase: 7.5, lookSpeedK: 5.0, lookCurveK: -16.0,
-  bankK: 0.9, bankLimitDeg: 10,
-  lag: { dir:10, eye:12, at:18 }
+  back: 5.0, height: 1.6, lateral: 0.0,
+  lookBase: 8.0, lookSpeedK: 5.0, lookCurveK: -12.0,
+  bankK: 0.8, bankLimitDeg: 8,
+  lag: { dir:12, eye:14, at:20 },
+  atBlend: 0.5 // dir-기반 vs 센터라인 ahead 혼합비
 };
 class ThreeChaseCam {
   constructor(){
     this.camera = new THREE.PerspectiveCamera(CHASE.baseFov, 16/9, 0.1, 4000);
-    this.dir = new THREE.Vector3(0,0,1);
+    this.dir = new THREE.Vector3(0,0,0); // 초기 미정
     this.eye = new THREE.Vector3();
     this.at  = new THREE.Vector3();
     this.tmp = { v1:new THREE.Vector3(), v2:new THREE.Vector3(), v3:new THREE.Vector3(), q:new THREE.Quaternion(), m:new THREE.Matrix4() };
+    this.initialized = false;
+  }
+  snapToCar(car){
+    const w=car.world();
+    const upWorld = new THREE.Vector3(0,1,0);
+    this.dir.set(w.T[0],w.T[1],w.T[2]).normalize();
+    let R = this.dir.clone().cross(upWorld).normalize();
+    let U = R.clone().cross(this.dir).normalize();
+    if (U.dot(upWorld) < 0) { R.multiplyScalar(-1); U.multiplyScalar(-1); }
+    this.eye.set(w.pos[0],w.pos[1],w.pos[2])
+      .addScaledVector(this.dir, -CHASE.back)
+      .addScaledVector(U, CHASE.height);
+    this.at.set(w.pos[0],w.pos[1]+1.2,w.pos[2])
+      .addScaledVector(this.dir, CHASE.lookBase);
+    this.initialized = true;
   }
   vp(car, aspect, dt){
     const cam=this.camera, tmp=this.tmp;
@@ -527,21 +525,27 @@ class ThreeChaseCam {
     }
 
     const w = car.world();
-    tmp.v1.set(w.T[0],w.T[1],w.T[2]).normalize();
-    if(this.dir.dot(tmp.v1) < 0) tmp.v1.multiplyScalar(-1);
-    const kDir = 1 - Math.exp(-dt*CHASE.lag.dir);
-    this.dir.lerp(tmp.v1, kDir).normalize();
-
     const upWorld = tmp.v2.set(0,1,0);
 
-    // 시점 뒤집힘 보정: R = dir × up, U = R × dir, U가 아래로 가면 (R,U) 동시 반전
-    let R = this.dir.clone().cross(upWorld).normalize(); // dir × up
-    let U = R.clone().cross(this.dir).normalize();       // R × dir
+    // 초기 스냅 미실행 시 안전 스냅
+    if(!this.initialized){ this.snapToCar(car); }
+
+    // 진행방향 타깃
+    const aimDir = tmp.v1.set(w.T[0],w.T[1],w.T[2]).normalize();
+    // 반전 방지: 타깃이 아니라 이전 방향을 반전
+    if (this.dir.dot(aimDir) < 0) this.dir.multiplyScalar(-1);
+    const kDir = 1 - Math.exp(-dt*CHASE.lag.dir);
+    this.dir.lerp(aimDir, kDir).normalize();
+
+    // R,U 재계산 + 뒤집힘 방지
+    let R = this.dir.clone().cross(upWorld).normalize();
+    if (!isFinite(R.x) || R.lengthSq()<1e-6) R.set(1,0,0);
+    let U = R.clone().cross(this.dir).normalize();
     if (U.dot(upWorld) < 0) { R.multiplyScalar(-1); U.multiplyScalar(-1); }
 
-    // 곡률 기반 뱅킹
+    // 뱅킹(곡률 평활)
     const i = Math.floor(car.s)|0;
-    const curv = (Frames.curv && Frames.curv[i]) || 0;
+    const curv = smoothCurv(i);
     const bank = THREE.MathUtils.clamp(CHASE.bankK*curv, -CHASE.bankLimitDeg*Math.PI/180, CHASE.bankLimitDeg*Math.PI/180);
     if (Math.abs(bank)>1e-6){
       tmp.q.setFromAxisAngle(this.dir, bank);
@@ -549,23 +553,35 @@ class ThreeChaseCam {
       U = R.clone().cross(this.dir).normalize();
     }
 
-    // 타깃 eye/at
+    // 타깃 eye
     const speedRatio = THREE.MathUtils.clamp((car.v||0)/MAX_V, 0, 1);
     const eyeTarget = tmp.v3.set(w.pos[0],w.pos[1],w.pos[2])
       .addScaledVector(this.dir, -CHASE.back)
       .addScaledVector(U, CHASE.height)
       .addScaledVector(R, CHASE.lateral);
 
+    // at: 진행방향 + 센터라인 보간 ahead 혼합 → 지터 감소
     const look = CHASE.lookBase + CHASE.lookSpeedK*speedRatio + CHASE.lookCurveK*curv;
-    const aheadIdx = (car.s + Math.max(0,look)) % samples;
-    const a = getCenter(Math.floor(aheadIdx)|0);
-    const atTarget = new THREE.Vector3(a[0], a[1]+1.2, a[2]);
+    const aheadS = (car.s + Math.max(0,look)) % samples;
+    const aheadPos = sampleCenterLerp(aheadS);
+    const atDir = [
+      w.pos[0] + this.dir.x*look,
+      w.pos[1] + this.dir.y*look + 1.2,
+      w.pos[2] + this.dir.z*look
+    ];
+    const atTarget = [
+      lerp(atDir[0], aheadPos[0], CHASE.atBlend),
+      lerp(atDir[1], aheadPos[1]+1.2, CHASE.atBlend),
+      lerp(atDir[2], aheadPos[2], CHASE.atBlend)
+    ];
 
+    // 스무딩
     const kEye = 1 - Math.exp(-dt*CHASE.lag.eye);
     const kAt  = 1 - Math.exp(-dt*CHASE.lag.at);
-    this.eye.lerp(eyeTarget, kEye);
-    this.at .lerp(atTarget,  kAt);
+    this.eye.lerp(new THREE.Vector3().fromArray(eyeTarget.toArray()), kEye);
+    this.at .lerp(new THREE.Vector3(atTarget[0],atTarget[1],atTarget[2]), kAt);
 
+    // FOV 다이내믹
     cam.fov = THREE.MathUtils.lerp(CHASE.baseFov, CHASE.maxFov, speedRatio);
     cam.updateProjectionMatrix();
 
@@ -641,6 +657,9 @@ function resetCars(){
   for(let i=0;i<cfg.aiCount;i++){
     const ai=makeCar(null); ai.name='AI'+(i+1); placeAtStart(ai, ((i%4)-1.5)*trackW*0.22); ai.v=0.6*MAX_V; aiCars.push(ai);
   }
+  // 카메라를 항상 "뒤에서" 스냅
+  if(chaseCam1) chaseCam1.snapToCar(car1);
+  if(cfg.twoP && chaseCam2) chaseCam2.snapToCar(car2);
 }
 function updateAI(dt){ for(const ai of aiCars){ const targetV=0.78*MAX_V; ai.v=clamp(ai.v + (targetV - 0.06*MAX_V)*dt, 0, MAX_V*0.92); ai.s = (ai.s + ai.v*dt) % samples; } }
 function positions(){ const all=[car1, ...(cfg.twoP?[car2]:[]), ...aiCars]; const arr=all.map(c=>({c,progress:c.lap*samples + c.s})).sort((a,b)=>b.progress-a.progress); return arr.map(x=>x.c); }
@@ -719,14 +738,13 @@ function showMenu(){
 }
 
 /* ---------- 시작 ---------- */
-// three.js 준비 확인 후에만 부트스트랩
 function bootstrap(){
   if(!window.THREE){ panel('<h1>⚠ three.js 로드 대기중…</h1>'); return; }
   chaseCam1=new ThreeChaseCam();
   chaseCam2=new ThreeChaseCam();
   applyTheme(cfg.theme);
   carGeom=makeCarGeom(THEMES[cfg.theme].car);
-  resetCars();
+  resetCars(); // 여기서 snapToCar 호출됨
   setHUD('uiLap',`0/${LAPS}`);
   setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo');
   document.getElementById('btnShape').textContent='🛣 '+cfg.shape;
