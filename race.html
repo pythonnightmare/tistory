@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>벡터 레이싱 — 2P/드리프트/컬러/코너링</title>
+<title>벡터 레이싱</title>
 <style>
   :root{ --bg:#070a16; --bg2:#0b1230; --ink:#eaf2ff; --muted:#9aa9c6; --glass:rgba(10,14,34,.82) }
   *{box-sizing:border-box}
@@ -35,7 +35,7 @@
 <div class="wrap">
   <div class="card">
     <div class="hud">
-      <div class="title">🏁 벡터 레이싱 (2P 색/가시성 + 드리프트 FX + 코너 물리)</div>
+      <div class="title">🏁 벡터 레이싱 (code by soo)</div>
       <div class="stats">
         <div class="stat" id="uiSpeed"><span class="label">SPEED</span> <b class="val">0</b></div>
         <div class="stat" id="uiLap"><span class="label">LAP</span> <b class="val">0/3</b></div>
@@ -444,7 +444,7 @@ btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{pa
 padL.querySelectorAll('.pbtn').forEach(bindPad); padR.querySelectorAll('.pbtn').forEach(bindPad);
 
 /* ---------- 물리/레이스 (+ 드리프트 + 코너 원심) ---------- */
-const MAX_KMH=450; // +25%
+const MAX_KMH=550; // +25%
 const MAX_V=MAX_KMH/3.6;
 
 function makeCar(ctrl, tint){
@@ -845,8 +845,8 @@ document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; st
 
 function showMenu(){
   const help=`<div class="keys">
-  <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ / Space 드리프트<br/>
-  <b>2P</b>: ↑ 가속 / ↓ 브레이크 / ←◀ →▶ / / 드리프트<br/>
+  <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ 드리프트<br/>
+  <b>2P</b>: ↑ 가속 / ↓ 브레이크 / ←◀ →▶ 드리프트<br/>
   </div>`;
   panel(`<h1>🏎 시작할 준비!</h1>${help}<div style="margin-top:10px"><button class="btn" id="start">▶ 시작</button></div>`);
   document.getElementById('start').onclick=()=>{ clearPanel(); state=S.PLAY; last=performance.now(); frame(); };
