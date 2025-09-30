@@ -81,7 +81,7 @@
   </div>
 </div>
 
-<!-- three.js UMD (전역 THREE) -->
+<!-- three.js -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
 <script>
@@ -100,14 +100,9 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_three_cam_v1';
+const saveKey='vector_racing_three_cam_v2';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
-function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
-function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
-function sub(a,b){ return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
-function mul(v,s){ return [v[0]*s,v[1]*s,v[2]*s]; }
-function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
 
 /* ---------- 상태 ---------- */
 const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY'];
@@ -160,7 +155,7 @@ const M={
   F:(R,B,T,P)=>[ R[0],R[1],R[2],0,  B[0],B[1],B[2],0,  T[0],T[1],T[2],0,  P[0],P[1],P[2],1 ]
 };
 
-/* ---------- 트랙/곡선 ---------- */
+/* ---------- 트랙/곡선 + RMF ---------- */
 let samples=5200, trackW=8, CP=[], centerline=[], trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
@@ -168,41 +163,38 @@ function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
           0.5*((2*p1[2])+(-p0[2]+p2[2])*t+(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2+(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)];
 }
-function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
-  return [0.5*((-p0[0]+p2[0])+2*(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t+3*(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t2),
-          0.5*((-p0[1]+p2[1])+2*(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t+3*(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t2),
-          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
-}
-
-/* RMF (Rotation-Minimizing Frame) */
-let Frames = { T:[], R:[], B:[], curv:[], N:0 };
-const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
 function computeRMF(){
-  const N = samples, T = new Array(N), R = new Array(N), B = new Array(N), curv = new Array(N).fill(0);
-  const P = (i)=>getCenter(i);
-  T[0] = norm(sub(P(1), P(0)));
-  let R0 = cross( Math.abs(dot(T[0], WORLD_UP))>0.98 ? [1,0,0] : WORLD_UP, T[0] );
-  R0 = norm(R0); R[0]=R0; B[0]=cross(T[0],R[0]);
+  const N=samples, T=new Array(N), R=new Array(N), B=new Array(N), curv=new Array(N).fill(0);
+  const getC=i=>{const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
+  const normV=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]};
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+
+  T[0]=normV(sub(getC(1),getC(0)));
+  let R0=cross(Math.abs(dot(T[0],WORLD_UP))>0.98?[1,0,0]:WORLD_UP,T[0]); R0=normV(R0); R[0]=R0; B[0]=cross(T[0],R[0]);
+
   for(let i=1;i<N;i++){
-    const tPrev=T[i-1], tCur=norm(sub(P(i+1),P(i)));
+    const tPrev=T[i-1], tCur=normV(sub(getC(i+1),getC(i)));
     T[i]=tCur;
-    const axis=cross(tPrev,tCur), lv=Math.hypot(axis[0],axis[1],axis[2]), c=clamp(dot(tPrev,tCur),-1,1), th=Math.atan2(lv,c);
+    const axis=cross(tPrev,tCur), lv=Math.hypot(axis[0],axis[1],axis[2]), c=Math.max(-1,Math.min(1,dot(tPrev,tCur))), th=Math.atan2(lv,c);
     if(lv>1e-6){
-      // R을 회전축으로 회전
       const u=[axis[0]/lv,axis[1]/lv,axis[2]/lv];
-      const ux=cross(u,R[i-1]);
-      const c2=Math.cos(th), s2=Math.sin(th), uv=(u[0]*R[i-1][0]+u[1]*R[i-1][1]+u[2]*R[i-1][2]);
-      const Rn=[ R[i-1][0]*c2 + ux[0]*s2 + u[0]*uv*(1-c2),
-                 R[i-1][1]*c2 + ux[1]*s2 + u[1]*uv*(1-c2),
-                 R[i-1][2]*c2 + ux[2]*s2 + u[2]*uv*(1-c2) ];
-      R[i]=Rn;
-    } else { R[i]=R[i-1].slice(); }
-    R[i]=norm( sub(R[i], mul(tCur, dot(R[i],tCur))) ); B[i]=cross(tCur,R[i]);
-    const sgn = dot(axis, B[i-1]||B[i]) >= 0 ? 1 : -1; curv[i]=sgn*th;
+      const ux=cross(u,R[i-1]); const c2=Math.cos(th), s2=Math.sin(th), uv=(u[0]*R[i-1][0]+u[1]*R[i-1][1]+u[2]*R[i-1][2]);
+      let Rn=[ R[i-1][0]*c2 + ux[0]*s2 + u[0]*uv*(1-c2),
+               R[i-1][1]*c2 + ux[1]*s2 + u[1]*uv*(1-c2),
+               R[i-1][2]*c2 + ux[2]*s2 + u[2]*uv*(1-c2) ];
+      const dR=Rn[0]*tCur[0]+Rn[1]*tCur[1]+Rn[2]*tCur[2];
+      R[i]=normV([Rn[0]-tCur[0]*dR, Rn[1]-tCur[1]*dR, Rn[2]-tCur[2]*dR]);
+    }else R[i]=R[i-1].slice();
+    B[i]=cross(tCur,R[i]);
+    const sgn = (axis[0]*B[i-1][0]+axis[1]*B[i-1][1]+axis[2]*B[i-1][2])>=0?1:-1; curv[i]=sgn*th;
   }
   Frames={T,R,B,curv,N};
 }
-function basisAt(i){ const N=samples; const idx=((i%N)+N)%N; return { T:Frames.T[idx], R:Frames.R[idx], B:Frames.B[idx] }; }
+let Frames={T:[],R:[],B:[],curv:[],N:0};
+const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
+function basisAt(i){ const idx=((i%samples)+samples)%samples; return {T:Frames.T[idx],R:Frames.R[idx],B:Frames.B[idx]} }
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
 
 /* ---------- 버퍼 핸들 ---------- */
@@ -221,10 +213,8 @@ const pushBox=(o,cx,cy,cz,sx,sy,sz,ct,cs,g=0.0)=>{const x=sx/2,y=sy/2,z=sz/2;
   pushQuad(o,cx+x,cy-y,cz-z,cx+x,cy+y,cz-z,cx-x,cy+y,cz-z,cx-x,cy-y,cz-z,cs,g);
 };
 function addSphere(G,cx,cy,cz,R,lat=28,lon=42,col=[1,1,1],glw=0){
-  for(let a=0;a<lat;a++){
-    const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI;
-    for(let b=0;b<lon;b++){
-      const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI;
+  for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI;
+    for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI;
       const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)];
       const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0);
       pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw);
@@ -295,7 +285,6 @@ function buildTrack(theme){
   computeTrackRadii();
   computeRMF();
 
-  // 리본 & 레일
   const p=[],c=[],g=[], rp=[],rc=[],rg=[]; verts=0; railVerts=0;
   for(let i=0;i<samples-1;i++){
     const C=getCenter(i); const {R}=basisAt(i);
@@ -313,7 +302,8 @@ function buildTrack(theme){
   buildTrackside(theme,seed2);
 }
 
-/* ---------- 환경/오브젝트(생략 없이 동일) ---------- */
+/* ---------- 환경/오브젝트 (생략 없이 동일) ---------- */
+let envVerts=0, geoVerts=0, centerVerts=0, tunnelVerts=0, tunnelGlowVerts=0, tracksideVerts=0, snowVerts=0, ashVerts=0, propVerts=0;
 function buildEnv(theme,seed2){
   envBuf=propBuf=geoBuf=snowBuf=ashBuf=null; envVerts=propVerts=geoVerts=snowVerts=ashVerts=0;
   const pts=[],cols=[],glows=[], GEO=makeGeo();
@@ -352,8 +342,8 @@ function buildEnv(theme,seed2){
   if(GEO.pos.length){ geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}; geoVerts=GEO.pos.length/3; }
 }
 function buildCenterpiece(theme,seed2){
-  const G=makeGeo(); const safePad = trackW*0.8 + 16; const safeR = Math.max(18, trackMinR - safePad);
-  const big = safeR*1.05; const med = safeR*0.7;
+  const G=makeGeo(); const safePad=trackW*0.8+16; const safeR=Math.max(18,trackMinR-safePad);
+  const big=safeR*1.05; const med=safeR*0.7;
   if(theme==='SPACE'){ addSphere(G,0,med*0.6,0, med*0.55, 36,56, [0.55,0.8,1],0.0); addTorus(G,0,med*0.6,0, med*1.0, med*0.08, 96,32, [0.6,0.9,1],0.0); }
   else if(theme==='CYBERPUNK'){ addCylinder(G,0,big*0.65,0, big*0.34, big*1.4, 84, [0.08,0.1,0.14],[0.12,0.12,0.16],0.0); addTorus(G,0,big*1.32,0, big*0.6, big*0.07, 88,30, [0.2,0.9,1],0.0); }
   else if(theme==='NEON'){ addCylinder(G,0,big*0.9,0, big*0.26, big*1.7, 96, [0.1,0.12,0.18],[0.12,0.14,0.2],0.0); }
@@ -363,7 +353,7 @@ function buildCenterpiece(theme,seed2){
 }
 function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
-  const G=makeGeo(), L=makeGeo(); const step = 420; const len = 80; const segAround = 44; const radius = trackW*0.6;
+  const G=makeGeo(), L=makeGeo(); const step=420; const len=80; const segAround=44; const radius=trackW*0.6;
   for(let base=140;base<samples;base+=step){
     for(let k=0;k<len-1;k++){
       const i0=base+k, i1=base+k+1;
@@ -395,7 +385,7 @@ function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
   for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
     const {R}=basisAt(i); const C=getCenter(i);
-    const side = (rng()<0.5?-1:1), off = side*(trackW*0.6), P=[C[0]+R[0]*off, C[1]+R[1]*off, C[2]+R[2]*off];
+    const side=(rng()<0.5?-1:1), off=side*(trackW*0.6), P=[C[0]+R[0]*off, C[1]+R[1]*off, C[2]+R[2]*off];
     const h=2.8+rng()*6.2, s=0.7+rng()*1.4;
     pushBox(G, P[0],h*0.5,P[2], s,h,s, [0.8,0.9,1],[0.2,0.9,1], 0.9);
   }
@@ -415,7 +405,7 @@ function makeCarGeom(themeCol){
     -hw,-hh,hl*0.2, hw,-hh,hl*0.2, hw,-hh,-hl,
     -hw,-hh,hl*0.2, hw,-hh,-hl, -hw,-hh,-hl
   ];
-  const cols=[]; for(let i=0;i<P.length/3;i++) cols.push(color[0],color[1],color[2]);
+  const cols=[]; for(let i=0;i<P.length/3;i++) cols.push(themeCol[0],themeCol[1],themeCol[2]);
   const glow=new Float32Array(P.length/3).fill(0.0);
   return {pos:makeBuffer(new Float32Array(P),3),col:makeBuffer(new Float32Array(cols),3),glow:makeBuffer(glow,1),verts:P.length/3};
 }
@@ -445,7 +435,8 @@ btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{pa
 padL.querySelectorAll('.pbtn').forEach(bindPad); padR.querySelectorAll('.pbtn').forEach(bindPad);
 
 /* ---------- 물리/레이스 ---------- */
-const MAX_KMH=360, MAX_V=MAX_KMH/3.6;
+const MAX_KMH=450;               // ★ FIX: 25% 상향
+const MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
@@ -455,11 +446,14 @@ function makeCar(ctrl){
       const baseDec = 0.070*MAX_V;
       const brakeDec= BR? 0.30*MAX_V : 0;
       this.v = clamp(this.v + (acc - baseDec - brakeDec)*dt, 0, MAX_V);
-      const target = (L?-1:0) + (R?1:0);
+
+      // ★ FIX: 좌/우 스티어 뒤집힘 교정
+      const target = (L?1:0) + (R?-1:0);
       const aim = target * (trackW*0.46);
-      const spring = 6.0, damp=3.6;
+      const spring=6.0, damp=3.6;
       const force = (aim - this.off)*spring - this.offV*damp;
       this.offV += force*dt;
+
       if(DR){ this.offV*=1.03; this.v = Math.min(MAX_V, this.v + (0.12*MAX_V)*dt); this.drift += Math.abs(this.offV)*1.2; }
       this.off += this.offV*dt;
       const limit=trackW*0.48; if(this.off<-limit){this.off=-limit; this.offV=0;} if(this.off>limit){this.off=limit; this.offV=0;}
@@ -476,7 +470,7 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- three.js 기반 3rd-Person 추격 카메라 ---------- */
+/* ---------- three.js 3rd-Person 추격 카메라 ---------- */
 const CHASE = {
   baseFov: 68, maxFov: 92,
   back: 4.6, height: 1.6, lateral: 0.0,
@@ -505,16 +499,19 @@ class ThreeChaseCam {
     }
 
     const w = car.world();
-    // fwd (접선) + 방향 뒤집힘 방지
     tmp.v1.set(w.T[0],w.T[1],w.T[2]).normalize();
     if(this.dir.dot(tmp.v1) < 0) tmp.v1.multiplyScalar(-1);
     const kDir = 1 - Math.exp(-dt*CHASE.lag.dir);
     this.dir.lerp(tmp.v1, kDir).normalize();
 
-    // R/U 프레임
     const upWorld = tmp.v2.set(0,1,0);
-    let R = upWorld.clone().cross(this.dir).normalize();
-    let U = this.dir.clone().cross(R).normalize();
+
+    // ★ FIX: 시점 거꾸로 보정 — Right/Up을 RH 규칙에 맞게 재정의
+    // 기존: R = up × dir, U = dir × R  → 일부 상황에서 Up 뒤집힘
+    // 교정: R = dir × up (부호 반전), U = R × dir, 필요 시 (R,U) 동시 반전해 Up을 위로 유지
+    let R = this.dir.clone().cross(upWorld).normalize(); // dir × up
+    let U = R.clone().cross(this.dir).normalize();       // R × dir
+    if (U.dot(upWorld) < 0) { R.multiplyScalar(-1); U.multiplyScalar(-1); } // ★ FIX: Up 하향시 반전
 
     // 곡률 기반 뱅킹(roll)
     const i = Math.floor(car.s)|0;
@@ -523,13 +520,13 @@ class ThreeChaseCam {
     if (Math.abs(bank)>1e-6){
       tmp.q.setFromAxisAngle(this.dir, bank);
       R.applyQuaternion(tmp.q).normalize();
-      U = this.dir.clone().cross(R).normalize();
+      U = R.clone().cross(this.dir).normalize();
     }
 
     // 타깃 eye/at
     const speedRatio = THREE.MathUtils.clamp((car.v||0)/MAX_V, 0, 1);
     const eyeTarget = tmp.v3.set(w.pos[0],w.pos[1],w.pos[2])
-      .addScaledVector(this.dir, -CHASE.back)
+      .addScaledVector(this.dir, -CHASE.back)   // 뒤쪽으로
       .addScaledVector(U, CHASE.height)
       .addScaledVector(R, CHASE.lateral);
 
@@ -543,11 +540,9 @@ class ThreeChaseCam {
     this.eye.lerp(eyeTarget, kEye);
     this.at .lerp(atTarget,  kAt);
 
-    // 속도 기반 FOV
     cam.fov = THREE.MathUtils.lerp(CHASE.baseFov, CHASE.maxFov, speedRatio);
     cam.updateProjectionMatrix();
 
-    // 카메라 배치 + 롤 반영: up 벡터를 회전된 U로 넣고 lookAt
     cam.position.copy(this.eye);
     cam.up.copy(U);
     cam.lookAt(this.at);
