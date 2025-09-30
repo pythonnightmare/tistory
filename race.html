@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>벡터 레이싱 — RMF/카메라 강화판</title>
+<title>벡터 레이싱 — RMF & 3rd-Person ChaseCam</title>
 <style>
   :root{ --bg:#070a16; --bg2:#0b1230; --ink:#eaf2ff; --muted:#9aa9c6; --glass:rgba(10,14,34,.82) }
   *{box-sizing:border-box}
@@ -23,7 +23,6 @@
   .panel{pointer-events:auto;background:var(--glass);border:1px solid rgba(255,255,255,.16);border-radius:18px;padding:18px;max-width:760px;width:min(92%,760px);text-align:center;box-shadow:0 16px 70px rgba(0,0,0,.55)}
   .panel h1{margin:0 0 10px}
   .keys{margin-top:8px;font-size:12px;color:var(--muted)}
-  /* 모바일 패드 */
   .padL,.padR{position:absolute;bottom:12px;gap:12px;pointer-events:auto;display:none}
   .padL{left:12px}
   .padR{right:12px;flex-direction:column;align-items:flex-end}
@@ -36,7 +35,7 @@
 <div class="wrap">
   <div class="card">
     <div class="hud">
-      <div class="title">🏁 벡터 레이싱 (RMF/카메라 강화판)</div>
+      <div class="title">🏁 벡터 레이싱 (3rd-Person ChaseCam)</div>
       <div class="stats">
         <div class="stat" id="uiSpeed"><span class="label">SPEED</span> <b class="val">0</b></div>
         <div class="stat" id="uiLap"><span class="label">LAP</span> <b class="val">0/3</b></div>
@@ -66,7 +65,6 @@
     <div class="view" id="view">
       <canvas id="gl"></canvas>
       <div class="overlay" id="overlay"></div>
-      <!-- 모바일 패드 -->
       <div class="padL" id="padL">
         <button class="pbtn" data-act="L">◀</button>
         <button class="pbtn" data-act="R">▶</button>
@@ -98,10 +96,9 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v25_rmf_camera';
+const saveKey='vector_racing_v26_chase';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
-
-// 벡터 유틸(전역에서 재사용)
+// 벡터 유틸
 function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
 function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
@@ -140,7 +137,7 @@ uniform mat4 uVP; uniform float uTime;
 varying vec3 vCol; varying float vGlow;
 void main(){
   vCol=aCol; float g=aGlow; vec3 p=aPos;
-  if(g<0.0){ // 낙하 파티클(눈/재)
+  if(g<0.0){
     float ph = fract(abs(g));
     float t = fract(uTime*(0.08+ph*0.12) + ph);
     p.y = -12.0 + t * 220.0;
@@ -153,7 +150,7 @@ void main(){
 const FS=`
 precision mediump float;
 varying vec3 vCol; varying float vGlow;
-uniform float uPass; // 0=불투명, 1=글로우(가산)
+uniform float uPass;
 void main(){
   float a = (uPass>0.5) ? clamp(0.06 + abs(vGlow)*0.9, 0.0, 1.0) : 1.0;
   gl_FragColor = vec4(vCol, a);
@@ -187,7 +184,7 @@ let samples=5200, trackW=8, CP=[], centerline=[], trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
 
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
-  return [0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+  return [0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[2]+p3[0])*t3), // 보호용이나 아래에서 정식 계산 사용
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
           0.5*((2*p1[2])+(-p0[2]+p2[2])*t+(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2+(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)];
 }
@@ -197,22 +194,17 @@ function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
           0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
 }
 
-/* RMF(평행 운반 프레임) : 트랙 뒤집힘/깨짐 제거 */
+/* RMF (Rotation-Minimizing Frame) */
 let Frames = { T:[], R:[], B:[], curv:[], N:0 };
 const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
 
-// RMF 계산
 function computeRMF(){
   const N = samples;
   const T = new Array(N), R = new Array(N), B = new Array(N), curv = new Array(N).fill(0);
-
   const P = (i)=>getCenter(i);
-  // 접선 초기화
   T[0] = norm(sub(P(1), P(0)));
-  // 초기 R: WORLD_UP과 거의 평행이면 대체축 사용
   let R0 = cross( Math.abs(dot(T[0], WORLD_UP))>0.98 ? [1,0,0] : WORLD_UP, T[0] );
-  R0 = norm(R0);
-  R[0]=R0; B[0]=cross(T[0],R[0]);
+  R0 = norm(R0); R[0]=R0; B[0]=cross(T[0],R[0]);
 
   for(let i=1;i<N;i++){
     const tPrev = T[i-1];
@@ -222,33 +214,26 @@ function computeRMF(){
     const axis = cross(tPrev, tCur);
     const lv = Math.hypot(axis[0],axis[1],axis[2]);
     const c  = clamp(dot(tPrev, tCur), -1, 1);
-    const th = Math.atan2(lv, c); // 회전각 (0~pi)
+    const th = Math.atan2(lv, c);
 
-    // 평행 운반: R/B를 axis,th 만큼 회전
     if (lv > 1e-6){
       const ax = [axis[0]/lv, axis[1]/lv, axis[2]/lv];
       R[i] = rodrigues(R[i-1], ax, th);
     } else {
       R[i] = R[i-1].slice();
     }
-    // 직교 정규화
     R[i] = norm( sub(R[i], mul(tCur, dot(R[i], tCur))) );
     B[i] = cross(tCur, R[i]);
 
-    // 부호 있는 곡률(카메라 뱅킹/룩어헤드 보정용)
     const sgn = dot(axis, B[i-1]||B[i]) >= 0 ? 1 : -1;
-    curv[i] = sgn * th; // 샘플 간 회전각(라디안)
+    curv[i] = sgn * th;
   }
-
   Frames = { T, R, B, curv, N };
 }
-
-// RMF 기반 기준 반환
 function basisAt(i){
   const N=samples; const idx=((i%N)+N)%N;
   return { T:Frames.T[idx], R:Frames.R[idx], B:Frames.B[idx] };
 }
-
 function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9;
   for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);}
 }
@@ -315,7 +300,7 @@ const THEMES={
 };
 document.body.style.background=THEMES[cfg.theme].bg();
 
-/* ---------- 환경/오브젝트 & 트랙 빌드 ---------- */
+/* ---------- 트랙 빌드 ---------- */
 function genCP(seed,shape,yAmp,baseY){
   const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=60,R=155,ph=rand(0,Math.PI*2);
   if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
@@ -330,13 +315,10 @@ function genCP(seed,shape,yAmp,baseY){
     const y=baseY+rand(-yAmp,yAmp)*(0.6+0.4*Math.sin(2*t+ph)); arr.push([x,y,z]); }
   arr.push(arr[0],arr[1],arr[2]); return arr;
 }
-
 function buildTrack(theme){
   const T=THEMES[theme], seed2=(cfg.seed^hashStr(theme)^hashStr(cfg.shape))>>>0;
   trackW=T.trackW*2.0;
-
-  // 1) 중심선 샘플 (Catmull-Rom 균일 샘플)
-  const CPs=genCP(seed2,cfg.shape,T.yAmp,T.baseY); CP=CPs; centerline=[]; verts=0; railVerts=0;
+  const CPs=genCP(seed2,cfg.shape,T.yAmp,T.baseY); CP=CPs; centerline=[];
   const Ls=CP.length-3,maxSeg=Ls-1e-6;
   for(let i=0;i<samples;i++){
     const seg=i/(samples-1)*maxSeg,j=Math.floor(seg),t=seg-j;
@@ -344,38 +326,33 @@ function buildTrack(theme){
     centerline.push(P[0],P[1],P[2]);
   }
   computeTrackRadii();
-
-  // 2) RMF 계산 (트랙 프레임 일관화)
   computeRMF();
 
-  // 3) 트랙 리본 & 레일 버퍼 구성 (RMF 기반 좌/우)
+  // 리본 & 레일
   const p=[],c=[],g=[], rp=[],rc=[],rg=[]; verts=0; railVerts=0;
   for(let i=0;i<samples-1;i++){
-    const C=getCenter(i), Cn=getCenter(i+1);
-    const {R}=basisAt(i);
+    const C=getCenter(i); const {R}=basisAt(i);
     const Lp=[C[0]-R[0]*trackW*0.5, C[1]-R[1]*trackW*0.5, C[2]-R[2]*trackW*0.5];
     const Rp=[C[0]+R[0]*trackW*0.5, C[1]+R[1]*trackW*0.5, C[2]+R[2]*trackW*0.5];
     p.push(Lp[0],Lp[1],Lp[2], Rp[0],Rp[1],Rp[2]); c.push(...T.trackC1, ...T.trackC2); g.push(0.0,0.0); verts+=2;
-
     rp.push(Lp[0],Lp[1]+0.10,Lp[2], Rp[0],Rp[1]+0.10,Rp[2]); rc.push(...T.rail, ...T.rail); rg.push(1.2,1.2); railVerts+=2;
   }
   bufRibbon={pos:makeBuffer(new Float32Array(p),3),col:makeBuffer(new Float32Array(c),3),glow:makeBuffer(new Float32Array(g),1)};
   bufRail  ={pos:makeBuffer(new Float32Array(rp),3),col:makeBuffer(new Float32Array(rc),3),glow:makeBuffer(new Float32Array(rg),1)};
 
-  // 4) 환경/소품/센터/터널/사이드
   buildEnv(theme,seed2);
   buildCenterpiece(theme,seed2);
   buildTunnels(theme,seed2);
   buildTrackside(theme,seed2);
 }
 
+let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0;
 function buildEnv(theme,seed2){
   envBuf=propBuf=geoBuf=snowBuf=ashBuf=null; envVerts=propVerts=geoVerts=snowVerts=ashVerts=0;
   const pts=[],cols=[],glows=[], GEO=makeGeo();
   const rng=mulberry32(seed2), t=THEMES[theme], ringR=trackMaxR+trackW*2.8, groundY=0;
   const pushP=(x,y,z,c,g)=>{pts.push(x,y,z); cols.push(c[0],c[1],c[2]); glows.push(g)}
 
-  /* 지면 */
   if(t.ground){
     const rad=ringR+260, step=12;
     const baseCol=(theme==='XMAS')?[0.95,0.98,1]:(theme==='VOLCANO')?[0.25,0.08,0.06]:(theme==='CYBERPUNK')?[0.08,0.08,0.12]:[0.06,0.08,0.12];
@@ -386,7 +363,6 @@ function buildEnv(theme,seed2){
     }
   }
 
-  /* 배경/소품 */
   if(theme==='SPACE'){
     const rngS=mulberry32(seed2^0x55aa);
     const starCount= cfg.mobile?1600:3200;
@@ -408,7 +384,6 @@ function buildEnv(theme,seed2){
   if(pts.length){ envBuf={pos:makeBuffer(new Float32Array(pts),3), col:makeBuffer(new Float32Array(cols),3), glow:makeBuffer(new Float32Array(glows),1)}; envVerts=pts.length/3; }
   if(GEO.pos.length){ geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}; geoVerts=GEO.pos.length/3; }
 }
-
 function buildCenterpiece(theme,seed2){
   const G=makeGeo(); const safePad = trackW*0.8 + 16; const safeR = Math.max(18, trackMinR - safePad);
   const big = safeR*1.05; const med = safeR*0.7;
@@ -419,7 +394,6 @@ function buildCenterpiece(theme,seed2){
   else if(theme==='VOLCANO'){ addCone(G,0,big*0.9,0, big*0.95, big*1.5, 96, [0.32,0.12,0.08],0.0); }
   centerBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; centerVerts=G.pos.length/3;
 }
-
 function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
   const G=makeGeo(), L=makeGeo(); const step = 420; const len = 80; const segAround = 44; const radius = trackW*0.6;
@@ -450,7 +424,6 @@ function buildTunnels(theme,seed2){
   tunnelBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; tunnelVerts=G.pos.length/3;
   if(L.pos.length){ tunnelGlowBuf={pos:makeBuffer(new Float32Array(L.pos),3), col:makeBuffer(new Float32Array(L.col),3), glow:makeBuffer(new Float32Array(L.glow),1)}; tunnelGlowVerts=L.pos.length/3; }
 }
-
 function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
   for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
@@ -510,7 +483,6 @@ const MAX_KMH=360, MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, camDir:null,
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
       const acc = ACC? 0.38*MAX_V : 0;
@@ -538,60 +510,65 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라: 실제 레이싱용 리그 ---------- */
-const CAMCFG = {
-  baseFov: 70, maxFov: 95, fovSpeedK: 0.35,
-  forward: 1.45, height: 1.05, upBias: 0.15,
-  lookBase: 6.0, lookSpeedK: 4.0, lookCurveK: -22.0,
-  bankK: 0.65, bankLimitDeg: 12,
-  lag: { dir:14, eye:16, at:22 }
+/* ---------- 3rd-Person 추격 카메라 ---------- */
+const CHASE = {
+  baseFov: 68, maxFov: 92, fovSpeedK: 0.32,
+  back: 4.6, height: 1.6, lateral: 0.0,
+  lookBase: 7.5, lookSpeedK: 5.0, lookCurveK: -16.0,
+  bankK: 0.9, bankLimitDeg: 10,
+  lag: { dir:10, eye:12, at:18 }
 };
-class CameraRig {
+class ChaseCam {
   constructor(){ this.dir=null; this.eye=null; this.at=null; }
   vp(car, aspect, dt){
+    if(!car) return this.identityVP(aspect);
     const i = Math.floor(car.s)|0;
-    let fwdT = Frames.T[i];
-    if (this.dir && dot(this.dir, fwdT) < 0) fwdT = mul(fwdT, -1); // 뒤보기 방지
-    const kDir = 1 - Math.exp(-dt*CAMCFG.lag.dir);
-    this.dir = this.dir ? norm(mixV(this.dir, fwdT, kDir)) : fwdT;
-
-    // 뱅킹(코너 롤) — RMF 곡률 사용
-    const curv = (Frames.curv && Frames.curv[i]) || 0;
-    const bank = clamp(CAMCFG.bankK*curv, -CAMCFG.bankLimitDeg*Math.PI/180, CAMCFG.bankLimitDeg*Math.PI/180);
-
-    // 로컬 R/U
-    let R = Frames.R[i].slice();
-    let U = cross(this.dir, R);
-    if (Math.abs(bank) > 1e-5){
-      R = rodrigues(R, this.dir, bank);
-      U = cross(this.dir, R);
-    }
-
-    // 속도 비례 룩어헤드/높이
-    const speedRatio = car.v / MAX_V;
-    const look = CAMCFG.lookBase + CAMCFG.lookSpeedK*speedRatio + CAMCFG.lookCurveK*curv;
-    const idxAhead = (car.s + Math.max(0, look)) % samples;
-    const aheadP = getCenter(Math.floor(idxAhead)|0);
-
     const w = car.world();
-    const eyeTarget = add( add(w.pos, mul(this.dir, CAMCFG.forward)),
-                           mul(U, CAMCFG.height + CAMCFG.upBias*speedRatio) );
-    const atTarget  = [ aheadP[0], aheadP[1] + 1.2, aheadP[2] ];
+    let fwd = norm(w.T);
+    if (this.dir && dot(this.dir,fwd)<0) fwd = mul(fwd,-1);
+    const kDir = 1 - Math.exp(-dt*CHASE.lag.dir);
+    this.dir = this.dir ? norm(mixV(this.dir, fwd, kDir)) : fwd;
 
-    const kEye = 1 - Math.exp(-dt*CAMCFG.lag.eye);
-    const kAt  = 1 - Math.exp(-dt*CAMCFG.lag.at);
+    let R = cross(WORLD_UP, this.dir); let rl=Math.hypot(R[0],R[1],R[2]);
+    if(rl<1e-6) R=[1,0,0]; else R=[R[0]/rl,R[1]/rl,R[2]/rl];
+    let U = cross(this.dir, R);
+
+    // 코너 뱅킹
+    const curv = (Frames.curv && Frames.curv[i]) || 0;
+    const bank = clamp(CHASE.bankK*curv, -CHASE.bankLimitDeg*Math.PI/180, CHASE.bankLimitDeg*Math.PI/180);
+    if (Math.abs(bank)>1e-5){ R = rodrigues(R, this.dir, bank); U = cross(this.dir, R); }
+
+    // 카메라 목표 위치/타깃
+    const speedRatio = clamp((car.v||0)/MAX_V,0,1);
+    const eyeTarget = add( add( add(w.pos, mul(this.dir, -CHASE.back)),
+                                mul(U, CHASE.height) ),
+                           mul(R, CHASE.lateral) );
+    const look = CHASE.lookBase + CHASE.lookSpeedK*speedRatio + CHASE.lookCurveK*curv;
+    const aheadIdx = (car.s + Math.max(0,look)) % samples;
+    const ahead = getCenter(Math.floor(aheadIdx)|0);
+    const atTarget = [ahead[0], ahead[1] + 1.2, ahead[2]];
+
+    const kEye = 1 - Math.exp(-dt*CHASE.lag.eye);
+    const kAt  = 1 - Math.exp(-dt*CHASE.lag.at);
     this.eye = this.eye ? mixV(this.eye, eyeTarget, kEye) : eyeTarget;
     this.at  = this.at  ? mixV(this.at,  atTarget,  kAt)  : atTarget;
 
-    const fovDeg = clamp(CAMCFG.baseFov + (CAMCFG.maxFov-CAMCFG.baseFov)*speedRatio, CAMCFG.baseFov, CAMCFG.maxFov);
+    const fovDeg = clamp(CHASE.baseFov + (CHASE.maxFov-CHASE.baseFov)*speedRatio, CHASE.baseFov, CHASE.maxFov);
     const fov = fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
     const V = M.look(this.eye, this.at, U, true);
     const P = [ f/(aspect||1),0,0,0,  0,f,0,0,  0,0,(far+near)*nf,-1,  0,0,(2*far*near)*nf,0 ];
     return M.mul(P,V);
   }
+  identityVP(aspect){
+    const fov=70*Math.PI/180,f=1/Math.tan(fov/2),near=0.1,far=4000,nf=1/(near-far);
+    const V = M.look([0,5,15],[0,0,0],[0,1,0],true);
+    const P = [ f/(aspect||1),0,0,0,  0,f,0,0,  0,0,(far+near)*nf,-1,  0,0,(2*far*near)*nf,0 ];
+    return M.mul(P,V);
+  }
 }
-const camera = new CameraRig();
-function fpvCamVP(car, aspect, dt){ return camera.vp(car, aspect, dt); }
+const chaseCam = new ChaseCam();
+// 기존 호출부 호환
+function fpvCamVP(car, aspect, dt){ return chaseCam.vp(car, aspect, dt); }
 
 /* ---------- 드로우 ---------- */
 function drawSolid(buf,count,mode){ if(!buf||!count) return; gl.disable(gl.BLEND); gl.uniform1f(loc.uPass,0.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
@@ -627,11 +604,13 @@ function renderOnce(){
   if(!cfg.twoP){
     const VP=fpvCamVP(car1, CW/CH, dt);
     renderScene(VP,tSec);
+    // 3인칭: 플레이어도 그린다
+    if(car1) drawCar(VP,car1);
     for(const ai of aiCars) drawCar(VP,ai);
   }else{
     const half=CW>>1;
-    gl.viewport(0,0,half,CH);   const VP1=fpvCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); for(const ai of aiCars) drawCar(VP1,ai);
-    gl.viewport(half,0,CW-half,CH); const VP2=fpvCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); for(const ai of aiCars) drawCar(VP2,ai);
+    gl.viewport(0,0,half,CH);   const VP1=fpvCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); if(car1) drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+    gl.viewport(half,0,CW-half,CH); const VP2=fpvCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); if(car2) drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
     gl.viewport(0,0,CW,CH);
   }
 }
@@ -642,10 +621,6 @@ const LAPS=3, START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-  const w = c.world();
-  c.camDir = norm(w.T);
-  c.camEye = [ w.pos[0] + c.camDir[0]*CAMCFG.forward, w.pos[1] + CAMCFG.height, w.pos[2] + c.camDir[2]*CAMCFG.forward ];
-  c.camAt  = [ w.pos[0] + c.camDir[0]*(CAMCFG.lookBase+4), w.pos[1] + 1.2,       w.pos[2] + c.camDir[2]*(CAMCFG.lookBase+4) ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
@@ -669,7 +644,6 @@ function frame(){
     car1.update(dt); if(cfg.twoP) car2.update(dt);
     updateAI(dt); checkLaps();
 
-    // HUD
     const spd = Math.min(MAX_KMH, Math.round(car1.v*3.6));
     setHUD('uiSpeed', spd+'');
     const ps=positions(), posIdx=ps.findIndex(p=>p===car1)+1;
@@ -677,11 +651,11 @@ function frame(){
 
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!cfg.twoP){
-      const VP=fpvCamVP(car1, CW/CH, dt); renderScene(VP,tSec); for(const ai of aiCars) drawCar(VP,ai);
+      const VP=fpvCamVP(car1, CW/CH, dt); renderScene(VP,tSec); if(car1) drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
     }else{
       const half=CW>>1;
-      gl.viewport(0,0,half,CH); const VP1=fpvCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); for(const ai of aiCars) drawCar(VP1,ai);
-      gl.viewport(half,0,CW-half,CH); const VP2=fpvCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); for(const ai of aiCars) drawCar(VP2,ai);
+      gl.viewport(0,0,half,CH); const VP1=fpvCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); if(car1) drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+      gl.viewport(half,0,CW-half,CH); const VP2=fpvCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); if(car2) drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
       gl.viewport(0,0,CW,CH);
     }
 
@@ -703,10 +677,10 @@ function applyTheme(key){
   document.body.style.background=THEMES[key].bg();
   carGeom=makeCarGeom(THEMES[key].car);
   buildTrack(key);
-  renderOnce();
 }
 function reset(){
-  buildTrack(cfg.theme); resetCars();
+  applyTheme(cfg.theme);      // 트랙/버퍼 생성
+  resetCars();                // 반드시 렌더 전에 차량 생성
   setHUD('uiLap',`0/${LAPS}`); setHUD('uiSpeed','0');
   setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo');
   renderOnce(); showMenu();
@@ -720,7 +694,7 @@ document.getElementById('btnAI').onclick=()=>{ cfg.aiCount=(cfg.aiCount+1)%6; st
 document.getElementById('btn2P').onclick=()=>{ cfg.twoP=!cfg.twoP; store.set(cfg); document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P'; reset(); };
 document.getElementById('btnMobile').onclick=()=>{ cfg.mobile=!cfg.mobile; store.set(cfg); document.getElementById('btnMobile').textContent= cfg.mobile?'📱 Mobile: ON':'📱 Mobile: OFF'; padL.style.display=padR.style.display=cfg.mobile?'flex':'none'; };
 document.getElementById('selTheme').value=cfg.theme;
-document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; store.set(cfg); applyTheme(cfg.theme); resetCars(); };
+document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; store.set(cfg); applyTheme(cfg.theme); resetCars(); renderOnce(); };
 
 function showMenu(){
   const help=`<div class="keys">
@@ -734,9 +708,9 @@ function showMenu(){
 
 /* ---------- 시작 ---------- */
 function bootstrap(){
+  applyTheme(cfg.theme);   // 트랙 먼저
   carGeom=makeCarGeom(THEMES[cfg.theme].car);
-  applyTheme(cfg.theme); // 내부에서 buildTrack + RMF
-  resetCars();
+  resetCars();            // 그 다음 차량
   setHUD('uiLap',`0/${LAPS}`);
   setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo');
   document.getElementById('btnShape').textContent='🛣 '+cfg.shape;
