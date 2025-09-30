@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>벡터 레이싱</title>
+<title>벡터 레이싱 — RMF/카메라 강화판</title>
 <style>
   :root{ --bg:#070a16; --bg2:#0b1230; --ink:#eaf2ff; --muted:#9aa9c6; --glass:rgba(10,14,34,.82) }
   *{box-sizing:border-box}
@@ -36,7 +36,7 @@
 <div class="wrap">
   <div class="card">
     <div class="hud">
-      <div class="title">🏁 벡터 레이싱 (by soo)</div>
+      <div class="title">🏁 벡터 레이싱 (RMF/카메라 강화판)</div>
       <div class="stats">
         <div class="stat" id="uiSpeed"><span class="label">SPEED</span> <b class="val">0</b></div>
         <div class="stat" id="uiLap"><span class="label">LAP</span> <b class="val">0/3</b></div>
@@ -98,8 +98,25 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v24';
+const saveKey='vector_racing_v25_rmf_camera';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
+
+// 벡터 유틸(전역에서 재사용)
+function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
+function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
+function sub(a,b){ return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
+function mul(v,s){ return [v[0]*s,v[1]*s,v[2]*s]; }
+function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function rodrigues(v, axis, theta){
+  const u = norm(axis);
+  const c=Math.cos(theta), s=Math.sin(theta), uv = dot(u,v), ux = cross(u,v);
+  return [
+    v[0]*c + ux[0]*s + u[0]*uv*(1-c),
+    v[1]*c + ux[1]*s + u[1]*uv*(1-c),
+    v[2]*c + ux[2]*s + u[2]*uv*(1-c)
+  ];
+}
 
 /* ---------- 상태 ---------- */
 const SHAPES=['RANDOM','OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY'];
@@ -155,7 +172,7 @@ const M={
     const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
     const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]};
     const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
-    const z = norm(sub(eye, at));          // 뒤를 보는 z (표준 lookAt)
+    const z = norm(sub(eye, at));
     let x = cross(up, z);
     let lx = Math.hypot(x[0],x[1],x[2]);
     if (safe && lx < 1e-3) x = [1,0,0]; else x = [x[0]/lx, x[1]/lx, x[2]/lx];
@@ -166,9 +183,9 @@ const M={
 };
 
 /* ---------- 트랙/곡선 ---------- */
-let samples=5200, trackW=8, CP=[], centerline=[], bufRibbon=null, bufRail=null, verts=0, railVerts=0, trackMaxR=140, trackMinR=40;
+let samples=5200, trackW=8, CP=[], centerline=[], trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
-const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
+
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
   return [0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
@@ -177,36 +194,67 @@ function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
 function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
   return [0.5*((-p0[0]+p2[0])+2*(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t+3*(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t2),
           0.5*((-p0[1]+p2[1])+2*(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t+3*(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t2),
-          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[0])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)]; // z 파라미터 오타 방지
-}
-function basisAt(i){
-  const p0=getCenter(i), p1=getCenter(i+1);
-  const v=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]]; const l=Math.hypot(v[0],v[1],v[2])||1;
-  const T=[v[0]/l,v[1]/l,v[2]/l];
-  let R=[T[1]*WORLD_UP[2]-T[2]*WORLD_UP[1], T[2]*WORLD_UP[0]-T[0]*WORLD_UP[2], T[0]*WORLD_UP[1]-T[1]*WORLD_UP[0]];
-  const rl=Math.hypot(R[0],R[1],R[2])||1; R=[R[0]/rl,R[1]/rl,R[2]/rl];
-  const B=[R[1]*T[2]-R[2]*T[1], R[2]*T[0]-R[0]*T[2], R[0]*T[1]-R[1]*T[0]];
-  return {T,R,B};
-}
-function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
-function genCP(seed,shape,yAmp,baseY){
-  const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=60,R=155,ph=rand(0,Math.PI*2);
-  if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
-  for(let i=0;i<N;i++){const t=i/N*2*Math.PI; let x=0,z=0;
-    if(shape==='OVAL'){const rx=R*(1.3+0.18*Math.sin(3*t+ph)), rz=R*(0.95+0.18*Math.sin(2*t+ph)); x=rx*Math.cos(t); z=rz*Math.sin(t);}
-    else if(shape==='FIG8'){x=R*1.0*Math.sin(2*t); z=R*0.8*Math.sin(t); x+=24*Math.sin(3*t+ph);}
-    else if(shape==='CLOVER'){const rad=R*(1+0.35*Math.sin(3*t+ph)); x=rad*Math.cos(t); z=rad*Math.sin(t);}
-    else if(shape==='S_BEND'){x=R*1.2*Math.cos(t)+36*Math.sin(2*t); z=R*0.9*Math.sin(t);}
-    else if(shape==='ISLAND'){const rad2=R*(0.92+0.22*Math.sin(3*t+ph))*(0.94+rand(0,0.18)); x=rad2*Math.cos(t); z=rad2*Math.sin(t);}
-    else if(shape==='LEMNISCATE'){const a=R*0.98,s=Math.sin(t),c=Math.cos(t); x=(a*Math.sqrt(2)*c)/(1+s*s); z=(a*Math.sqrt(2)*c*s)/(1+s*s);}
-    else if(shape==='WAVY'){const rx2=R*(1+0.30*Math.sin(4*t+ph)), rz2=R*(1+0.28*Math.cos(3*t+ph)); x=rx2*Math.cos(t); z=rz2*Math.sin(t);}
-    const y=baseY+rand(-yAmp,yAmp)*(0.6+0.4*Math.sin(2*t+ph)); arr.push([x,y,z]); }
-  arr.push(arr[0],arr[1],arr[2]); return arr;
+          0.5*((-p0[2]+p2[2])+2*(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t+3*(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t2)];
 }
 
-/* ---------- 그리기 패스 ---------- */
-function drawSolid(buf,count,mode){ if(!buf||!count) return; gl.disable(gl.BLEND); gl.uniform1f(loc.uPass,0.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
-function drawGlow(buf,count,mode){ if(!buf||!count) return; gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.uniform1f(loc.uPass,1.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
+/* RMF(평행 운반 프레임) : 트랙 뒤집힘/깨짐 제거 */
+let Frames = { T:[], R:[], B:[], curv:[], N:0 };
+const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
+
+// RMF 계산
+function computeRMF(){
+  const N = samples;
+  const T = new Array(N), R = new Array(N), B = new Array(N), curv = new Array(N).fill(0);
+
+  const P = (i)=>getCenter(i);
+  // 접선 초기화
+  T[0] = norm(sub(P(1), P(0)));
+  // 초기 R: WORLD_UP과 거의 평행이면 대체축 사용
+  let R0 = cross( Math.abs(dot(T[0], WORLD_UP))>0.98 ? [1,0,0] : WORLD_UP, T[0] );
+  R0 = norm(R0);
+  R[0]=R0; B[0]=cross(T[0],R[0]);
+
+  for(let i=1;i<N;i++){
+    const tPrev = T[i-1];
+    const tCur  = norm(sub(P(i+1), P(i)));
+    T[i] = tCur;
+
+    const axis = cross(tPrev, tCur);
+    const lv = Math.hypot(axis[0],axis[1],axis[2]);
+    const c  = clamp(dot(tPrev, tCur), -1, 1);
+    const th = Math.atan2(lv, c); // 회전각 (0~pi)
+
+    // 평행 운반: R/B를 axis,th 만큼 회전
+    if (lv > 1e-6){
+      const ax = [axis[0]/lv, axis[1]/lv, axis[2]/lv];
+      R[i] = rodrigues(R[i-1], ax, th);
+    } else {
+      R[i] = R[i-1].slice();
+    }
+    // 직교 정규화
+    R[i] = norm( sub(R[i], mul(tCur, dot(R[i], tCur))) );
+    B[i] = cross(tCur, R[i]);
+
+    // 부호 있는 곡률(카메라 뱅킹/룩어헤드 보정용)
+    const sgn = dot(axis, B[i-1]||B[i]) >= 0 ? 1 : -1;
+    curv[i] = sgn * th; // 샘플 간 회전각(라디안)
+  }
+
+  Frames = { T, R, B, curv, N };
+}
+
+// RMF 기반 기준 반환
+function basisAt(i){
+  const N=samples; const idx=((i%N)+N)%N;
+  return { T:Frames.T[idx], R:Frames.R[idx], B:Frames.B[idx] };
+}
+
+function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9;
+  for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);}
+}
+
+/* ---------- 버퍼 핸들 ---------- */
+let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0,bufRibbon=null,bufRail=null,verts=0,railVerts=0;
 
 /* ---------- 지오 빌더 ---------- */
 const makeGeo=()=>({pos:[],col:[],glow:[]});
@@ -234,7 +282,7 @@ function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0)
   for(let i=0;i<seg;i++){
     const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;
     const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0);
-    const x1=cx+r*Math.cos(a1), z1=cz + r*Math.sin(a1); /* ★ FIX */
+    const x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1);
     pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);
   }
 }
@@ -243,7 +291,7 @@ function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){
   for(let i=0;i<seg;i++){
     const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;
     const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0);
-    const x1=cx+r*Math.cos(a1), z1=cz + r*Math.sin(a1); /* ★ FIX */
+    const x1=cx+r*Math.cos(a1), z1=cz+r*Math.sin(a1);
     pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);
   }
 }
@@ -267,33 +315,58 @@ const THEMES={
 };
 document.body.style.background=THEMES[cfg.theme].bg();
 
-/* ---------- 버퍼 핸들 ---------- */
-let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0;
+/* ---------- 환경/오브젝트 & 트랙 빌드 ---------- */
+function genCP(seed,shape,yAmp,baseY){
+  const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=60,R=155,ph=rand(0,Math.PI*2);
+  if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
+  for(let i=0;i<N;i++){const t=i/N*2*Math.PI; let x=0,z=0;
+    if(shape==='OVAL'){const rx=R*(1.3+0.18*Math.sin(3*t+ph)), rz=R*(0.95+0.18*Math.sin(2*t+ph)); x=rx*Math.cos(t); z=rz*Math.sin(t);}
+    else if(shape==='FIG8'){x=R*1.0*Math.sin(2*t); z=R*0.8*Math.sin(t); x+=24*Math.sin(3*t+ph);}
+    else if(shape==='CLOVER'){const rad=R*(1+0.35*Math.sin(3*t+ph)); x=rad*Math.cos(t); z=rad*Math.sin(t);}
+    else if(shape==='S_BEND'){x=R*1.2*Math.cos(t)+36*Math.sin(2*t); z=R*0.9*Math.sin(t);}
+    else if(shape==='ISLAND'){const rad2=R*(0.92+0.22*Math.sin(3*t+ph))*(0.94+rand(0,0.18)); x=rad2*Math.cos(t); z=rad2*Math.sin(t);}
+    else if(shape==='LEMNISCATE'){const a=R*0.98,s=Math.sin(t),c=Math.cos(t); x=(a*Math.sqrt(2)*c)/(1+s*s); z=(a*Math.sqrt(2)*c*s)/(1+s*s);}
+    else if(shape==='WAVY'){const rx2=R*(1+0.30*Math.sin(4*t+ph)), rz2=R*(1+0.28*Math.cos(3*t+ph)); x=rx2*Math.cos(t); z=rz2*Math.sin(t);}
+    const y=baseY+rand(-yAmp,yAmp)*(0.6+0.4*Math.sin(2*t+ph)); arr.push([x,y,z]); }
+  arr.push(arr[0],arr[1],arr[2]); return arr;
+}
 
-/* ---------- 환경/오브젝트 ---------- */
 function buildTrack(theme){
   const T=THEMES[theme], seed2=(cfg.seed^hashStr(theme)^hashStr(cfg.shape))>>>0;
   trackW=T.trackW*2.0;
+
+  // 1) 중심선 샘플 (Catmull-Rom 균일 샘플)
   const CPs=genCP(seed2,cfg.shape,T.yAmp,T.baseY); CP=CPs; centerline=[]; verts=0; railVerts=0;
-  const p=[],c=[],g=[], rp=[],rc=[],rg=[]; const Ls=CP.length-3,maxSeg=Ls-1e-6;
+  const Ls=CP.length-3,maxSeg=Ls-1e-6;
   for(let i=0;i<samples;i++){
     const seg=i/(samples-1)*maxSeg,j=Math.floor(seg),t=seg-j;
-    const P=catmull(CP[j],CP[j+1],CP[j+2],CP[j+3],t), d=catmullTangent(CP[j],CP[j+1],CP[j+2],CP[j+3],t);
-    let Rv=[d[1]*WORLD_UP[2]-d[2]*WORLD_UP[1], d[2]*WORLD_UP[0]-d[0]*WORLD_UP[2], d[0]*WORLD_UP[1]-d[1]*WORLD_UP[0]];
-    const rl=Math.hypot(Rv[0],Rv[1],Rv[2])||1; Rv=[Rv[0]/rl,Rv[1]/rl,Rv[2]/rl];
+    const P=catmull(CP[j],CP[j+1],CP[j+2],CP[j+3],t);
     centerline.push(P[0],P[1],P[2]);
-    if(i<samples-1){
-      const L= [P[0]-Rv[0]*trackW*0.5, P[1]-Rv[1]*trackW*0.5, P[2]-Rv[2]*trackW*0.5];
-      const R= [P[0]+Rv[0]*trackW*0.5, P[1]+Rv[1]*trackW*0.5, P[2]+Rv[2]*trackW*0.5];
-      p.push(L[0],L[1],L[2], R[0],R[1],R[2]); c.push(...T.trackC1, ...T.trackC2); g.push(0.0,0.0); verts+=2;
-      rp.push(L[0],L[1]+0.10,L[2], R[0],R[1]+0.10,R[2]); rc.push(...T.rail, ...T.rail); rg.push(1.2,1.2); railVerts+=2;
-    }
   }
-  gl.clearColor(T.fog[0],T.fog[1],T.fog[2],1);
+  computeTrackRadii();
+
+  // 2) RMF 계산 (트랙 프레임 일관화)
+  computeRMF();
+
+  // 3) 트랙 리본 & 레일 버퍼 구성 (RMF 기반 좌/우)
+  const p=[],c=[],g=[], rp=[],rc=[],rg=[]; verts=0; railVerts=0;
+  for(let i=0;i<samples-1;i++){
+    const C=getCenter(i), Cn=getCenter(i+1);
+    const {R}=basisAt(i);
+    const Lp=[C[0]-R[0]*trackW*0.5, C[1]-R[1]*trackW*0.5, C[2]-R[2]*trackW*0.5];
+    const Rp=[C[0]+R[0]*trackW*0.5, C[1]+R[1]*trackW*0.5, C[2]+R[2]*trackW*0.5];
+    p.push(Lp[0],Lp[1],Lp[2], Rp[0],Rp[1],Rp[2]); c.push(...T.trackC1, ...T.trackC2); g.push(0.0,0.0); verts+=2;
+
+    rp.push(Lp[0],Lp[1]+0.10,Lp[2], Rp[0],Rp[1]+0.10,Rp[2]); rc.push(...T.rail, ...T.rail); rg.push(1.2,1.2); railVerts+=2;
+  }
   bufRibbon={pos:makeBuffer(new Float32Array(p),3),col:makeBuffer(new Float32Array(c),3),glow:makeBuffer(new Float32Array(g),1)};
   bufRail  ={pos:makeBuffer(new Float32Array(rp),3),col:makeBuffer(new Float32Array(rc),3),glow:makeBuffer(new Float32Array(rg),1)};
-  computeTrackRadii();
-  buildEnv(theme,seed2); buildCenterpiece(theme,seed2); buildTunnels(theme,seed2); buildTrackside(theme,seed2);
+
+  // 4) 환경/소품/센터/터널/사이드
+  buildEnv(theme,seed2);
+  buildCenterpiece(theme,seed2);
+  buildTunnels(theme,seed2);
+  buildTrackside(theme,seed2);
 }
 
 function buildEnv(theme,seed2){
@@ -336,7 +409,6 @@ function buildEnv(theme,seed2){
   if(GEO.pos.length){ geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}; geoVerts=GEO.pos.length/3; }
 }
 
-/* ---------- 중앙 오브젝트/터널/사이드(생략 없이 동일) ---------- */
 function buildCenterpiece(theme,seed2){
   const G=makeGeo(); const safePad = trackW*0.8 + 16; const safeR = Math.max(18, trackMinR - safePad);
   const big = safeR*1.05; const med = safeR*0.7;
@@ -347,6 +419,7 @@ function buildCenterpiece(theme,seed2){
   else if(theme==='VOLCANO'){ addCone(G,0,big*0.9,0, big*0.95, big*1.5, 96, [0.32,0.12,0.08],0.0); }
   centerBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; centerVerts=G.pos.length/3;
 }
+
 function buildTunnels(theme,seed2){
   tunnelBuf=tunnelGlowBuf=null; tunnelVerts=tunnelGlowVerts=0;
   const G=makeGeo(), L=makeGeo(); const step = 420; const len = 80; const segAround = 44; const radius = trackW*0.6;
@@ -377,6 +450,7 @@ function buildTunnels(theme,seed2){
   tunnelBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; tunnelVerts=G.pos.length/3;
   if(L.pos.length){ tunnelGlowBuf={pos:makeBuffer(new Float32Array(L.pos),3), col:makeBuffer(new Float32Array(L.col),3), glow:makeBuffer(new Float32Array(L.glow),1)}; tunnelGlowVerts=L.pos.length/3; }
 }
+
 function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
   for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
@@ -405,7 +479,7 @@ function makeCarGeom(themeCol){
   const glow=new Float32Array(P.length/3).fill(0.0);
   return {pos:makeBuffer(new Float32Array(P),3),col:makeBuffer(new Float32Array(cols),3),glow:makeBuffer(glow,1),verts:P.length/3};
 }
-let carGeom=makeCarGeom(THEMES[cfg.theme].car);
+let carGeom=null;
 
 /* ---------- 입력 ---------- */
 const input1={L:false,R:false,ACC:false,BR:false,DR:false};
@@ -425,7 +499,7 @@ function setKeys(down,e){
 }
 addEventListener('keydown',e=>{ if(e.repeat) return; const block=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space','Slash','KeyA','KeyD','KeyW','KeyS']; if(block.includes(e.code)) e.preventDefault(); setKeys(true,e); });
 addEventListener('keyup',e=>setKeys(false,e));
-/* 모바일 버튼 */
+// 모바일 버튼
 const padL=document.getElementById('padL'), padR=document.getElementById('padR');
 function bindPad(btn){ const act=btn.dataset.act; btn.addEventListener('pointerdown',e=>{e.preventDefault(); input1[act]=true;},{passive:false});
 btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{passive:false}); }
@@ -436,7 +510,7 @@ const MAX_KMH=360, MAX_V=MAX_KMH/3.6;
 function makeCar(ctrl){
   return {
     s:0, prevS:0, v:0, off:0, offV:0, drift:0, lap:0, finished:false, name:'P', lastLapTs:0,
-    camEye:null, camAt:null, camDir:null, // ★ FPV 상태
+    camEye:null, camAt:null, camDir:null,
     update(dt){
       const ACC=ctrl?.ACC, BR=ctrl?.BR, L=ctrl?.L, R=ctrl?.R, DR=ctrl?.DR;
       const acc = ACC? 0.38*MAX_V : 0;
@@ -464,53 +538,67 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 1인칭(FPV) 카메라: 접선 연속 스무딩 + 뒤집힘 방지 + 롤 제거 ---------- */
-const FPV = { forward: 1.35, height: 1.05, lookAhead: 8.0, eyeSmooth:16.0, atSmooth:22.0, dirSmooth:14.0, fovDeg:72 };
-function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
-function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
-function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
-function sub(a,b){ return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
-function mul(v,s){ return [v[0]*s,v[1]*s,v[2]*s]; }
-function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+/* ---------- 카메라: 실제 레이싱용 리그 ---------- */
+const CAMCFG = {
+  baseFov: 70, maxFov: 95, fovSpeedK: 0.35,
+  forward: 1.45, height: 1.05, upBias: 0.15,
+  lookBase: 6.0, lookSpeedK: 4.0, lookCurveK: -22.0,
+  bankK: 0.65, bankLimitDeg: 12,
+  lag: { dir:14, eye:16, at:22 }
+};
+class CameraRig {
+  constructor(){ this.dir=null; this.eye=null; this.at=null; }
+  vp(car, aspect, dt){
+    const i = Math.floor(car.s)|0;
+    let fwdT = Frames.T[i];
+    if (this.dir && dot(this.dir, fwdT) < 0) fwdT = mul(fwdT, -1); // 뒤보기 방지
+    const kDir = 1 - Math.exp(-dt*CAMCFG.lag.dir);
+    this.dir = this.dir ? norm(mixV(this.dir, fwdT, kDir)) : fwdT;
 
-function fpvCamVP(car, aspect, dt){
-  const w = car.world();
+    // 뱅킹(코너 롤) — RMF 곡률 사용
+    const curv = (Frames.curv && Frames.curv[i]) || 0;
+    const bank = clamp(CAMCFG.bankK*curv, -CAMCFG.bankLimitDeg*Math.PI/180, CAMCFG.bankLimitDeg*Math.PI/180);
 
-  // 목표 전방 = 트랙 접선
-  let fwdT = norm(w.T);
-  // 이전 전방과 반대면 뒤집기 (뒤로 보지 않기)
-  if (car.camDir && dot(car.camDir, fwdT) < 0) fwdT = mul(fwdT, -1);
+    // 로컬 R/U
+    let R = Frames.R[i].slice();
+    let U = cross(this.dir, R);
+    if (Math.abs(bank) > 1e-5){
+      R = rodrigues(R, this.dir, bank);
+      U = cross(this.dir, R);
+    }
 
-  // 전방 벡터 연속 스무딩
-  const kDir = 1 - Math.exp(-dt*FPV.dirSmooth);
-  car.camDir = car.camDir ? norm(mixV(car.camDir, fwdT, kDir)) : fwdT;
+    // 속도 비례 룩어헤드/높이
+    const speedRatio = car.v / MAX_V;
+    const look = CAMCFG.lookBase + CAMCFG.lookSpeedK*speedRatio + CAMCFG.lookCurveK*curv;
+    const idxAhead = (car.s + Math.max(0, look)) % samples;
+    const aheadP = getCenter(Math.floor(idxAhead)|0);
 
-  // 롤 제거용 월드업으로 보정된 업/라이트
-  let R = cross(WORLD_UP, car.camDir); const rl=Math.hypot(R[0],R[1],R[2]);
-  if (rl < 1e-5) R = [1,0,0]; else R = [R[0]/rl,R[1]/rl,R[2]/rl];
-  const U = cross(car.camDir, R);
+    const w = car.world();
+    const eyeTarget = add( add(w.pos, mul(this.dir, CAMCFG.forward)),
+                           mul(U, CAMCFG.height + CAMCFG.upBias*speedRatio) );
+    const atTarget  = [ aheadP[0], aheadP[1] + 1.2, aheadP[2] ];
 
-  // 아이/앳 타깃
-  const eyeTarget = add( add(w.pos, mul(car.camDir, FPV.forward)), mul(U, FPV.height) );
-  const atTarget  = add( add(w.pos, mul(car.camDir, FPV.lookAhead)), mul(U, 1.2) );
+    const kEye = 1 - Math.exp(-dt*CAMCFG.lag.eye);
+    const kAt  = 1 - Math.exp(-dt*CAMCFG.lag.at);
+    this.eye = this.eye ? mixV(this.eye, eyeTarget, kEye) : eyeTarget;
+    this.at  = this.at  ? mixV(this.at,  atTarget,  kAt)  : atTarget;
 
-  // 위치/타깃 스무딩
-  const kEye = 1 - Math.exp(-dt*FPV.eyeSmooth);
-  const kAt  = 1 - Math.exp(-dt*FPV.atSmooth);
-  car.camEye = car.camEye ? mixV(car.camEye, eyeTarget, kEye) : eyeTarget;
-  car.camAt  = car.camAt  ? mixV(car.camAt,  atTarget,  kAt)  : atTarget;
-
-  // 뷰/프로젝션
-  const V = M.look(car.camEye, car.camAt, WORLD_UP, /*safe*/true);
-  const fov = FPV.fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
-  const P=[ f/(aspect||1),0,0,0,  0,f,0,0,  0,0,(far+near)*nf,-1,  0,0,(2*far*near)*nf,0 ];
-  return M.mul(P,V);
+    const fovDeg = clamp(CAMCFG.baseFov + (CAMCFG.maxFov-CAMCFG.baseFov)*speedRatio, CAMCFG.baseFov, CAMCFG.maxFov);
+    const fov = fovDeg*Math.PI/180, f=1/Math.tan(fov/2), near=0.1, far=4000, nf=1/(near-far);
+    const V = M.look(this.eye, this.at, U, true);
+    const P = [ f/(aspect||1),0,0,0,  0,f,0,0,  0,0,(far+near)*nf,-1,  0,0,(2*far*near)*nf,0 ];
+    return M.mul(P,V);
+  }
 }
+const camera = new CameraRig();
+function fpvCamVP(car, aspect, dt){ return camera.vp(car, aspect, dt); }
 
 /* ---------- 드로우 ---------- */
+function drawSolid(buf,count,mode){ if(!buf||!count) return; gl.disable(gl.BLEND); gl.uniform1f(loc.uPass,0.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
+function drawGlow(buf,count,mode){ if(!buf||!count) return; gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.uniform1f(loc.uPass,1.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
+
 function drawCar(VP,car){
   const w=car.world();
-  // AI/2P용 올바른 방향 모델 변환 (R,B,T 프레임)
   const model = M.F(w.R, w.B, w.T, [w.pos[0], w.pos[1]+0.60, w.pos[2]]);
   const VPc = M.mul(VP, model);
   gl.uniformMatrix4fv(loc.uVP,false,new Float32Array(VPc));
@@ -539,7 +627,6 @@ function renderOnce(){
   if(!cfg.twoP){
     const VP=fpvCamVP(car1, CW/CH, dt);
     renderScene(VP,tSec);
-    // 1인칭: 플레이어 차체는 그리지 않고 AI만 렌더
     for(const ai of aiCars) drawCar(VP,ai);
   }else{
     const half=CW>>1;
@@ -550,17 +637,15 @@ function renderOnce(){
 }
 
 /* ---------- 레이스 ---------- */
-let car1=makeCar(input1), car2=makeCar(input2), aiCars=[];
+let car1=null, car2=null, aiCars=[];
 const LAPS=3, START_OFFSET_FRAC=0.25;
 function placeAtStart(c, lane=0){
   c.s = (samples*START_OFFSET_FRAC)|0;
   c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0;
-
-  // 시작 시점부터 정면/안정화
   const w = c.world();
-  c.camDir = norm(w.T); // 첫 프레임 전방
-  c.camEye = [ w.pos[0] + c.camDir[0]*FPV.forward, w.pos[1] + FPV.height, w.pos[2] + c.camDir[2]*FPV.forward ];
-  c.camAt  = [ w.pos[0] + c.camDir[0]*FPV.lookAhead, w.pos[1] + 1.2,       w.pos[2] + c.camDir[2]*FPV.lookAhead ];
+  c.camDir = norm(w.T);
+  c.camEye = [ w.pos[0] + c.camDir[0]*CAMCFG.forward, w.pos[1] + CAMCFG.height, w.pos[2] + c.camDir[2]*CAMCFG.forward ];
+  c.camAt  = [ w.pos[0] + c.camDir[0]*(CAMCFG.lookBase+4), w.pos[1] + 1.2,       w.pos[2] + c.camDir[2]*(CAMCFG.lookBase+4) ];
 }
 function resetCars(){
   car1=makeCar(input1); car1.name='P1'; placeAtStart(car1, 0);
@@ -626,7 +711,6 @@ function reset(){
   setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo');
   renderOnce(); showMenu();
 }
-
 document.getElementById('btnPlay').onclick=()=>{ if(state!==S.PLAY){ clearPanel(); state=S.PLAY; last=performance.now(); frame(); }};
 document.getElementById('btnPause').onclick=()=>{ if(state===S.PLAY){ state=S.PAUSE; panel(`<h1>⏸ 일시정지</h1><div><button class="btn" id="btnResume">▶ 계속</button><button class="btn" id="btnMenu">메뉴</button></div>`); document.getElementById('btnResume').onclick=()=>{clearPanel(); state=S.PLAY; last=performance.now(); frame();}; document.getElementById('btnMenu').onclick=()=>{state=S.MENU; showMenu();}; } };
 document.getElementById('btnReset').onclick=reset;
@@ -638,7 +722,6 @@ document.getElementById('btnMobile').onclick=()=>{ cfg.mobile=!cfg.mobile; store
 document.getElementById('selTheme').value=cfg.theme;
 document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; store.set(cfg); applyTheme(cfg.theme); resetCars(); };
 
-/* ---------- 도움말/메뉴 ---------- */
 function showMenu(){
   const help=`<div class="keys">
   <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ / Space 드리프트<br/>
@@ -651,7 +734,9 @@ function showMenu(){
 
 /* ---------- 시작 ---------- */
 function bootstrap(){
-  applyTheme(cfg.theme); resetCars();
+  carGeom=makeCarGeom(THEMES[cfg.theme].car);
+  applyTheme(cfg.theme); // 내부에서 buildTrack + RMF
+  resetCars();
   setHUD('uiLap',`0/${LAPS}`);
   setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo');
   document.getElementById('btnShape').textContent='🛣 '+cfg.shape;
