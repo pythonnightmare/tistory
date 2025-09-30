@@ -847,7 +847,6 @@ function showMenu(){
   const help=`<div class="keys">
   <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ / Space 드리프트<br/>
   <b>2P</b>: ↑ 가속 / ↓ 브레이크 / ←◀ →▶ / / 드리프트<br/>
-  커브에서는 스티어/드리프트로 원심을 잡아줘야 함
   </div>`;
   panel(`<h1>🏎 시작할 준비!</h1>${help}<div style="margin-top:10px"><button class="btn" id="start">▶ 시작</button></div>`);
   document.getElementById('start').onclick=()=>{ clearPanel(); state=S.PLAY; last=performance.now(); frame(); };
