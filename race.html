@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>벡터 레이싱 — RMF & 3rd-Person ChaseCam</title>
+<title>벡터 레이싱 — 3rd-Person ChaseCam (v27)</title>
 <style>
   :root{ --bg:#070a16; --bg2:#0b1230; --ink:#eaf2ff; --muted:#9aa9c6; --glass:rgba(10,14,34,.82) }
   *{box-sizing:border-box}
@@ -35,7 +35,7 @@
 <div class="wrap">
   <div class="card">
     <div class="hud">
-      <div class="title">🏁 벡터 레이싱 (3rd-Person ChaseCam)</div>
+      <div class="title">🏁 벡터 레이싱 (ChaseCam)</div>
       <div class="stats">
         <div class="stat" id="uiSpeed"><span class="label">SPEED</span> <b class="val">0</b></div>
         <div class="stat" id="uiLap"><span class="label">LAP</span> <b class="val">0/3</b></div>
@@ -65,6 +65,7 @@
     <div class="view" id="view">
       <canvas id="gl"></canvas>
       <div class="overlay" id="overlay"></div>
+      <!-- 모바일 패드 -->
       <div class="padL" id="padL">
         <button class="pbtn" data-act="L">◀</button>
         <button class="pbtn" data-act="R">▶</button>
@@ -96,9 +97,8 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v26_chase';
+const saveKey='vector_racing_v27';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
-// 벡터 유틸
 function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
 function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
@@ -106,13 +106,10 @@ function sub(a,b){ return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
 function mul(v,s){ return [v[0]*s,v[1]*s,v[2]*s]; }
 function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
 function rodrigues(v, axis, theta){
-  const u = norm(axis);
-  const c=Math.cos(theta), s=Math.sin(theta), uv = dot(u,v), ux = cross(u,v);
-  return [
-    v[0]*c + ux[0]*s + u[0]*uv*(1-c),
-    v[1]*c + ux[1]*s + u[1]*uv*(1-c),
-    v[2]*c + ux[2]*s + u[2]*uv*(1-c)
-  ];
+  const u = norm(axis), c=Math.cos(theta), s=Math.sin(theta), uv = dot(u,v), ux = cross(u,v);
+  return [ v[0]*c + ux[0]*s + u[0]*uv*(1-c),
+           v[1]*c + ux[1]*s + u[1]*uv*(1-c),
+           v[2]*c + ux[2]*s + u[2]*uv*(1-c) ];
 }
 
 /* ---------- 상태 ---------- */
@@ -122,7 +119,7 @@ const cfg=Object.assign({seed:(Math.random()*1e9)|0,theme:'SPACE',shape:'RANDOM'
 /* ---------- WebGL ---------- */
 const view=document.getElementById('view'), canvas=document.getElementById('gl');
 const gl=canvas.getContext('webgl',{antialias:false,preserveDrawingBuffer:false});
-if(!gl){ panel('<h1>⚠ WebGL 미지원</h1>'); return; }
+if(!gl){ panel('<h1>⚠ WebGL 미지원</h1>'); throw new Error('WebGL not supported'); }
 let CW=2,CH=2;
 function applyViewport(){const r=view.getBoundingClientRect(); CW=(r.width*DPR)|0; CH=(r.height*DPR)|0; canvas.width=CW; canvas.height=CH; gl.viewport(0,0,CW,CH);}
 applyViewport(); new ResizeObserver(applyViewport).observe(view);
@@ -182,9 +179,8 @@ const M={
 /* ---------- 트랙/곡선 ---------- */
 let samples=5200, trackW=8, CP=[], centerline=[], trackMaxR=140, trackMinR=40;
 const WORLD_UP=[0,1,0];
-
 function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
-  return [0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[2]+p3[0])*t3), // 보호용이나 아래에서 정식 계산 사용
+  return [0.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
           0.5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
           0.5*((2*p1[2])+(-p0[2]+p2[2])*t+(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2+(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)];
 }
@@ -197,46 +193,24 @@ function catmullTangent(p0,p1,p2,p3,t){const t2=t*t;
 /* RMF (Rotation-Minimizing Frame) */
 let Frames = { T:[], R:[], B:[], curv:[], N:0 };
 const getCenter=i=>{const N=samples; const idx=((i%N)+N)%N; return [centerline[idx*3],centerline[idx*3+1],centerline[idx*3+2]]};
-
 function computeRMF(){
-  const N = samples;
-  const T = new Array(N), R = new Array(N), B = new Array(N), curv = new Array(N).fill(0);
+  const N = samples, T = new Array(N), R = new Array(N), B = new Array(N), curv = new Array(N).fill(0);
   const P = (i)=>getCenter(i);
   T[0] = norm(sub(P(1), P(0)));
   let R0 = cross( Math.abs(dot(T[0], WORLD_UP))>0.98 ? [1,0,0] : WORLD_UP, T[0] );
   R0 = norm(R0); R[0]=R0; B[0]=cross(T[0],R[0]);
-
   for(let i=1;i<N;i++){
-    const tPrev = T[i-1];
-    const tCur  = norm(sub(P(i+1), P(i)));
-    T[i] = tCur;
-
-    const axis = cross(tPrev, tCur);
-    const lv = Math.hypot(axis[0],axis[1],axis[2]);
-    const c  = clamp(dot(tPrev, tCur), -1, 1);
-    const th = Math.atan2(lv, c);
-
-    if (lv > 1e-6){
-      const ax = [axis[0]/lv, axis[1]/lv, axis[2]/lv];
-      R[i] = rodrigues(R[i-1], ax, th);
-    } else {
-      R[i] = R[i-1].slice();
-    }
-    R[i] = norm( sub(R[i], mul(tCur, dot(R[i], tCur))) );
-    B[i] = cross(tCur, R[i]);
-
-    const sgn = dot(axis, B[i-1]||B[i]) >= 0 ? 1 : -1;
-    curv[i] = sgn * th;
+    const tPrev=T[i-1], tCur=norm(sub(P(i+1),P(i)));
+    T[i]=tCur;
+    const axis=cross(tPrev,tCur), lv=Math.hypot(axis[0],axis[1],axis[2]), c=clamp(dot(tPrev,tCur),-1,1), th=Math.atan2(lv,c);
+    if(lv>1e-6){ const ax=[axis[0]/lv,axis[1]/lv,axis[2]/lv]; R[i]=rodrigues(R[i-1],ax,th);} else { R[i]=R[i-1].slice(); }
+    R[i]=norm( sub(R[i], mul(tCur, dot(R[i],tCur))) ); B[i]=cross(tCur,R[i]);
+    const sgn = dot(axis, B[i-1]||B[i]) >= 0 ? 1 : -1; curv[i]=sgn*th;
   }
-  Frames = { T, R, B, curv, N };
+  Frames={T,R,B,curv,N};
 }
-function basisAt(i){
-  const N=samples; const idx=((i%N)+N)%N;
-  return { T:Frames.T[idx], R:Frames.R[idx], B:Frames.B[idx] };
-}
-function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9;
-  for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);}
-}
+function basisAt(i){ const N=samples; const idx=((i%N)+N)%N; return { T:Frames.T[idx], R:Frames.R[idx], B:Frames.B[idx] }; }
+function computeTrackRadii(){ trackMaxR=0; trackMinR=1e9; for(let i=0;i<centerline.length;i+=3){const r=Math.hypot(centerline[i],centerline[i+2]); trackMaxR=Math.max(trackMaxR,r); trackMinR=Math.min(trackMinR,r);} }
 
 /* ---------- 버퍼 핸들 ---------- */
 let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0,bufRibbon=null,bufRail=null,verts=0,railVerts=0;
@@ -346,7 +320,7 @@ function buildTrack(theme){
   buildTrackside(theme,seed2);
 }
 
-let envBuf=null,envVerts=0,propBuf=null,propVerts=0,geoBuf=null,geoVerts=0,centerBuf=null,centerVerts=0,tunnelBuf=null,tunnelVerts=0,tunnelGlowBuf=null,tunnelGlowVerts=0,tracksideBuf=null,tracksideVerts=0,snowBuf=null,snowVerts=0,ashBuf=null,ashVerts=0;
+/* ---------- 환경/오브젝트 ---------- */
 function buildEnv(theme,seed2){
   envBuf=propBuf=geoBuf=snowBuf=ashBuf=null; envVerts=propVerts=geoVerts=snowVerts=ashVerts=0;
   const pts=[],cols=[],glows=[], GEO=makeGeo();
@@ -472,7 +446,6 @@ function setKeys(down,e){
 }
 addEventListener('keydown',e=>{ if(e.repeat) return; const block=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space','Slash','KeyA','KeyD','KeyW','KeyS']; if(block.includes(e.code)) e.preventDefault(); setKeys(true,e); });
 addEventListener('keyup',e=>setKeys(false,e));
-// 모바일 버튼
 const padL=document.getElementById('padL'), padR=document.getElementById('padR');
 function bindPad(btn){ const act=btn.dataset.act; btn.addEventListener('pointerdown',e=>{e.preventDefault(); input1[act]=true;},{passive:false});
 btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{passive:false}); }
@@ -512,7 +485,7 @@ function makeCar(ctrl){
 
 /* ---------- 3rd-Person 추격 카메라 ---------- */
 const CHASE = {
-  baseFov: 68, maxFov: 92, fovSpeedK: 0.32,
+  baseFov: 68, maxFov: 92,
   back: 4.6, height: 1.6, lateral: 0.0,
   lookBase: 7.5, lookSpeedK: 5.0, lookCurveK: -16.0,
   bankK: 0.9, bankLimitDeg: 10,
@@ -533,12 +506,10 @@ class ChaseCam {
     if(rl<1e-6) R=[1,0,0]; else R=[R[0]/rl,R[1]/rl,R[2]/rl];
     let U = cross(this.dir, R);
 
-    // 코너 뱅킹
     const curv = (Frames.curv && Frames.curv[i]) || 0;
     const bank = clamp(CHASE.bankK*curv, -CHASE.bankLimitDeg*Math.PI/180, CHASE.bankLimitDeg*Math.PI/180);
     if (Math.abs(bank)>1e-5){ R = rodrigues(R, this.dir, bank); U = cross(this.dir, R); }
 
-    // 카메라 목표 위치/타깃
     const speedRatio = clamp((car.v||0)/MAX_V,0,1);
     const eyeTarget = add( add( add(w.pos, mul(this.dir, -CHASE.back)),
                                 mul(U, CHASE.height) ),
@@ -567,13 +538,11 @@ class ChaseCam {
   }
 }
 const chaseCam = new ChaseCam();
-// 기존 호출부 호환
-function fpvCamVP(car, aspect, dt){ return chaseCam.vp(car, aspect, dt); }
+function camVP(car, aspect, dt){ return chaseCam.vp(car, aspect, dt); }
 
 /* ---------- 드로우 ---------- */
 function drawSolid(buf,count,mode){ if(!buf||!count) return; gl.disable(gl.BLEND); gl.uniform1f(loc.uPass,0.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
 function drawGlow(buf,count,mode){ if(!buf||!count) return; gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.uniform1f(loc.uPass,1.0); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
-
 function drawCar(VP,car){
   const w=car.world();
   const model = M.F(w.R, w.B, w.T, [w.pos[0], w.pos[1]+0.60, w.pos[2]]);
@@ -586,7 +555,6 @@ function renderScene(VP, tSec){
   gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1,1);
   drawSolid(bufRibbon, verts, gl.TRIANGLE_STRIP);
   gl.disable(gl.POLYGON_OFFSET_FILL);
-
   drawSolid(tunnelBuf, tunnelVerts, gl.TRIANGLES);
   drawSolid(geoBuf, geoVerts, gl.TRIANGLES);
   drawSolid(centerBuf, centerVerts, gl.TRIANGLES);
@@ -602,15 +570,14 @@ function renderOnce(){
   const tSec=performance.now()/1000; gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const dt=1/60;
   if(!cfg.twoP){
-    const VP=fpvCamVP(car1, CW/CH, dt);
+    const VP=camVP(car1, CW/CH, dt);
     renderScene(VP,tSec);
-    // 3인칭: 플레이어도 그린다
     if(car1) drawCar(VP,car1);
     for(const ai of aiCars) drawCar(VP,ai);
   }else{
     const half=CW>>1;
-    gl.viewport(0,0,half,CH);   const VP1=fpvCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); if(car1) drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-    gl.viewport(half,0,CW-half,CH); const VP2=fpvCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); if(car2) drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+    gl.viewport(0,0,half,CH);   const VP1=camVP(car1,(half)/CH,dt); renderScene(VP1,tSec); if(car1) drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+    gl.viewport(half,0,CW-half,CH); const VP2=camVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); if(car2) drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
     gl.viewport(0,0,CW,CH);
   }
 }
@@ -651,11 +618,11 @@ function frame(){
 
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!cfg.twoP){
-      const VP=fpvCamVP(car1, CW/CH, dt); renderScene(VP,tSec); if(car1) drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
+      const VP=camVP(car1, CW/CH, dt); renderScene(VP,tSec); if(car1) drawCar(VP,car1); for(const ai of aiCars) drawCar(VP,ai);
     }else{
       const half=CW>>1;
-      gl.viewport(0,0,half,CH); const VP1=fpvCamVP(car1,(half)/CH,dt); renderScene(VP1,tSec); if(car1) drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
-      gl.viewport(half,0,CW-half,CH); const VP2=fpvCamVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); if(car2) drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
+      gl.viewport(0,0,half,CH); const VP1=camVP(car1,(half)/CH,dt); renderScene(VP1,tSec); if(car1) drawCar(VP1,car1); for(const ai of aiCars) drawCar(VP1,ai);
+      gl.viewport(half,0,CW-half,CH); const VP2=camVP(car2,(CW-half)/CH,dt); renderScene(VP2,tSec); if(car2) drawCar(VP2,car2); for(const ai of aiCars) drawCar(VP2,ai);
       gl.viewport(0,0,CW,CH);
     }
 
@@ -708,9 +675,9 @@ function showMenu(){
 
 /* ---------- 시작 ---------- */
 function bootstrap(){
-  applyTheme(cfg.theme);   // 트랙 먼저
+  applyTheme(cfg.theme);     // 트랙 먼저
   carGeom=makeCarGeom(THEMES[cfg.theme].car);
-  resetCars();            // 그 다음 차량
+  resetCars();               // 그 다음 차량
   setHUD('uiLap',`0/${LAPS}`);
   setHUD('uiPos', cfg.aiCount>0?`1/${1+cfg.aiCount+(cfg.twoP?1:0)}`:'Solo');
   document.getElementById('btnShape').textContent='🛣 '+cfg.shape;
