@@ -154,13 +154,10 @@ const M={
     const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
     const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]};
     const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
-    const z = norm(sub(eye, at));          // 뒤를 보는 z
-    let x = cross(up, z);
-    let lx = Math.hypot(x[0],x[1],x[2]);
-    if (safe && lx < 1e-3) x = [1,0,0];    // 특이값 보호
-    else x = [x[0]/lx, x[1]/lx, x[2]/lx];
+    const z = norm(sub(eye, at));
+    let x = cross(up, z); let lx = Math.hypot(x[0],x[1],x[2]);
+    if (safe && lx < 1e-3) x = [1,0,0]; else x = [x[0]/lx, x[1]/lx, x[2]/lx];
     const y = cross(z, x);
-
     const RT=[x[0],x[1],x[2],0, y[0],y[1],y[2],0, z[0],z[1],z[2],0, 0,0,0,1];
     return M.mul(RT, M.T(-eye[0],-eye[1],-eye[2]));
   }
@@ -222,8 +219,24 @@ const pushBox=(o,cx,cy,cz,sx,sy,sz,ct,cs,g=0.0)=>{const x=sx/2,y=sy/2,z=sz/2;
   pushQuad(o,cx+x,cy-y,cz-z,cx+x,cy+y,cz-z,cx-x,cy+y,cz-z,cx-x,cy-y,cz-z,cs,g);
 };
 function addSphere(G,cx,cy,cz,R,lat=28,lon=42,col=[1,1,1],glw=0){for(let a=0;a<lat;a++){const v0=a/lat*Math.PI, v1=(a+1)/lat*Math.PI; for(let b=0;b<lon;b++){const u0=b/lon*2*Math.PI,u1=(b+1)/lon*2*Math.PI; const p=(v,u)=>[cx+R*Math.sin(v)*Math.cos(u), cy+R*Math.cos(v), cz+R*Math.sin(v)*Math.sin(u)]; const A=p(v0,u0),B=p(v0,u1),C=p(v1,u1),D=p(v1,u0); pushQuad(G,A[0],A[1],A[2],B[0],B[1],B[2],C[0],C[1],C[2],D[0],D[1],D[2],col,glw); }}}
-function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0){const y0=cy-h/2,y1=cy+h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0), z0=cz+r*Math.sin(a0), x1=cx+r*Math.cos(a1), z1=cz*r*Math.sin(a1); pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);} }
-function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){const tip=[cx,cy+h/2,cz], y0=cy-h/2; for(let i=0;i<seg;i++){const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI; const x0=cx+r*Math.cos(a0),z0=cz*r*Math.sin(a0),x1=cx*r*Math.cos(a1),z1=cz*r*Math.sin(a1); pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);} }
+function addCylinder(G,cx,cy,cz,r,h,seg=48,colTop=[1,1,1],colSide=[1,1,1],glw=0){
+  const y0=cy-h/2,y1=cy+h/2;
+  for(let i=0;i<seg;i++){
+    const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;
+    const x0=cx + r*Math.cos(a0), z0=cz + r*Math.sin(a0);
+    const x1=cx + r*Math.cos(a1), z1=cz + r*Math.sin(a1);
+    pushQuad(G,x0,y0,z0,x1,y0,z1,x1,y1,z1,x0,y1,z0,colSide,glw);
+  }
+}
+function addCone(G,cx,cy,cz,r,h,seg=48,col=[1,1,1],glw=0){
+  const tip=[cx,cy+h/2,cz], y0=cy-h/2;
+  for(let i=0;i<seg;i++){
+    const a0=i/seg*2*Math.PI,a1=(i+1)/seg*2*Math.PI;
+    const x0=cx + r*Math.cos(a0), z0=cz + r*Math.sin(a0);
+    const x1=cx + r*Math.cos(a1), z1=cz + r*Math.sin(a1);
+    pushTri(G, tip[0],tip[1],tip[2], x0,y0,z0, x1,y0,z1, col,glw);
+  }
+}
 function addTorus(G,cx,cy,cz,R,r,segR=48,segr=24,col=[1,1,1],glw=0.6){for(let i=0;i<segR;i++){const u0=i/segR*2*Math.PI,u1=(i+1)/segR*2*Math.PI; for(let j=0;j<segr;j++){const v0=j/segr*2*Math.PI,v1=(j+1)/segr*2*Math.PI; const p=(u,v)=>[cx+(R+r*Math.cos(v))*Math.cos(u), cy+r*Math.sin(v), cz+(R+r*Math.cos(v))*Math.sin(u)]; const A=p(u0,v0),B=p(u1,v0),C=p(u1,v1),D=p(u0,v1); pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], col, glw);} }}
 
 /* ---------- 테마 ---------- */
@@ -321,7 +334,6 @@ function buildEnv(theme,seed2){
 
   } else if(theme==='XMAS'){
     const SCALE = 3.0;
-    // 눈 파티클
     const sPos=[],sCol=[],sGlow=[]; const snowCount= cfg.mobile?2400:5200;
     for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*340, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*300; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
@@ -528,8 +540,11 @@ addEventListener('keydown',e=>{ if(e.repeat) return; const block=['ArrowLeft','A
 addEventListener('keyup',e=>setKeys(false,e));
 /* 모바일 버튼 */
 const padL=document.getElementById('padL'), padR=document.getElementById('padR');
-function bindPad(btn){ const act=btn.dataset.act; btn.addEventListener('pointerdown',e=>{e.preventDefault(); input1[act]=true;},{passive:false});
-btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{passive:false}); }
+function bindPad(btn){
+  const act=btn.dataset.act;
+  btn.addEventListener('pointerdown',e=>{e.preventDefault(); input1[act]=true;},{passive:false});
+  btn.addEventListener('pointerup',e=>{e.preventDefault(); input1[act]=false;},{passive:false});
+}
 padL.querySelectorAll('.pbtn').forEach(bindPad); padR.querySelectorAll('.pbtn').forEach(bindPad);
 
 /* ---------- 물리/레이스 ---------- */
@@ -565,7 +580,7 @@ function makeCar(ctrl){
   };
 }
 
-/* ---------- 카메라: 이동벡터 기반 요 + 연속성 확보 (시점만 적용) ---------- */
+/* ---------- 카메라(시점만 적용) ---------- */
 function yawFromTangent(s){
   const {T} = basisAt(Math.floor(s)|0);
   return Math.atan2(T[2], T[0]);
@@ -757,7 +772,6 @@ document.getElementById('btnShape').textContent='🛣 '+cfg.shape;
 document.getElementById('btnAI').textContent='🤖 AI: '+cfg.aiCount;
 document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P';
 document.getElementById('btnMobile').textContent= cfg.mobile?'📱 Mobile: ON':'📱 Mobile: OFF';
-const padL=document.getElementById('padL'), padR=document.getElementById('padR');
 padL.style.display=padR.style.display=cfg.mobile?'flex':'none';
 showMenu(); renderOnce();
 
