@@ -734,7 +734,13 @@ function bootstrap(){
   document.getElementById('padL').style.display=document.getElementById('padR').style.display=cfg.mobile?'flex':'none';
   showMenu(); renderOnce();
 }
-bootstrap();
+<script>
+// three.js 준비 확인 후 부트스트랩
+(function waitThree(){
+  if (window.THREE) { bootstrap(); return; }
+  setTimeout(waitThree, 50);
+})();
+</script>
 
 })();</script>
 </body>
