@@ -725,7 +725,7 @@ function makeCar(ctrl, tint){
     yaw:0, yawV:0,
     lap:0, finished:false, name:'P', lastLapTs:0,
     tint: tint||[1,1,1],
-    driftGauge:0, boostActive:false, boostTimer=0, driftWas:false,
+    driftGauge:0, boostActive:false, boostTimer:0, driftWas:false,
 
     tryBoost(){
       if(this.boostActive) return;
