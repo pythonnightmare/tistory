@@ -28,8 +28,8 @@
   .keys{margin-top:8px;font-size:12px;color:var(--muted)}
   /* 모바일 패드 */
   .padL,.padR{position:absolute;bottom:12px;gap:12px;pointer-events:auto;display:none;transform-origin:bottom; transform:scale(var(--padScale));}
-  .padL{left:12px;display:none}
-  .padR{right:12px;flex-direction:column;align-items:flex-end;display:none}
+  .padL{left:12px}
+  .padR{right:12px;flex-direction:column;align-items:flex-end}
   .pbtn{min-width:92px;min-height:92px;border-radius:20px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.10);color:#fff;font-weight:900;font-size:18px}
   .pbtn.small{min-width:88px;min-height:66px}
   .row{display:flex;gap:12px}
@@ -146,7 +146,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const mixV=(a,b,t)=>[lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
 const mulberry32=a=>()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
 const hashStr=s=>{let h=2166136261>>>0; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0;};
-const saveKey='vector_racing_v6_skill_boost_tunnel';
+const saveKey='vector_racing_v7_xmas_stars_buildings_boost700';
 const store={get(){try{return JSON.parse(localStorage.getItem(saveKey)||'{}')}catch(e){return{}}},set(v){localStorage.setItem(saveKey,JSON.stringify(v))}};
 function norm(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 
@@ -172,15 +172,17 @@ uniform mat4 uVP; uniform float uTime;
 varying vec3 vCol; varying float vGlow;
 void main(){
   vCol=aCol; float g=aGlow; vec3 p=aPos;
-  if(g<0.0){ // "falling" 스타일 입자 (눈/재 등)
-    float ph = fract(abs(g));
-    float t = fract(uTime*(0.08+ph*0.12) + ph);
-    p.y = -12.0 + t * 220.0;
-    g = 0.65 + ph*0.2;
+  // g < 0.0 : "falling" 파티클 (눈/재). 음수의 절대값으로 크기 제어
+  if(g<0.0){
+    float s  = clamp(-g, 0.05, 0.9);         // 크기 인코딩
+    float ph = fract(s * 97.0);
+    float t  = fract(uTime*(0.06 + ph*0.10) + ph);
+    p.y = -16.0 + t * 260.0;                 // 더 높은 하늘에서 떨어지게
+    g = mix(0.12, 0.45, s);                  // size/alpha 함께 작게
   }
   vGlow=g;
   gl_Position = uVP * vec4(p,1.0);
-  gl_PointSize = 2.0 + 10.0*abs(vGlow);
+  gl_PointSize = 1.5 + 8.0*abs(vGlow);      // 이전보다 플랫: 스노우를 작게 표현
 }`;
 const FS=`
 precision mediump float;
@@ -188,7 +190,7 @@ varying vec3 vCol; varying float vGlow;
 uniform float uPass;
 uniform vec3  uTint;
 void main(){
-  float a = (uPass>0.5) ? clamp(0.06 + abs(vGlow)*0.9, 0.0, 1.0) : 1.0;
+  float a = (uPass>0.5) ? clamp(0.05 + abs(vGlow)*0.9, 0.0, 1.0) : 1.0;
   vec3 col = vCol * uTint;
   gl_FragColor = vec4(col, a);
 }`;
@@ -219,19 +221,14 @@ function catmull(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;
           0.5*((2*p1[2])+(-p0[2]+p2[2])*t+(2*p0[2]-5*p1[2]+4*p2[2]-p3[2])*t2+(-p0[2]+3*p1[2]-3*p2[2]+p3[2])*t3)];
 }
 function repelCP(cp, minD){
-  // 간단한 반발: 너무 가까운 점을 서로 밀어낸다(2~3회 반복)
   for(let iter=0; iter<3; iter++){
     for(let i=0;i<cp.length;i++){
-      let xi=cp[i][0], yi=cp[i][1], zi=cp[i][2], fx=0, fz=0;
+      let xi=cp[i][0], zi=cp[i][2], fx=0, fz=0;
       for(let j=0;j<cp.length;j++){
-        if(Math.abs(i-j)<2) continue; // 이웃은 무시
+        if(Math.abs(i-j)<2) continue;
         const dx=xi-cp[j][0], dz=zi-cp[j][2];
-        const d2=dx*dx+dz*dz, d=Math.sqrt(d2);
-        if(d<minD){
-          const s=(minD-d)/minD;
-          fx += (dx/(d+1e-4))*s*2.0;
-          fz += (dz/(d+1e-4))*s*2.0;
-        }
+        const d=Math.hypot(dx,dz);
+        if(d<minD){ const s=(minD-d)/minD; fx += (dx/(d+1e-4))*s*2.0; fz += (dz/(d+1e-4))*s*2.0; }
       }
       cp[i][0]+=fx; cp[i][2]+=fz;
     }
@@ -306,6 +303,11 @@ const THEMES={
 document.body.style.background=THEMES[cfg.theme].bg();
 
 /* ---------- 트랙 빌드 ---------- */
+let envBuf=null, envVerts=0, geoBuf=null, geoVerts=0, centerBuf=null, centerVerts=0;
+let tunnelBuf=null, tunnelVerts=0, tunnelGlowBuf=null, tunnelGlowVerts=0, megaTunnelBuf=null, megaTunnelVerts=0, megaGlowBuf=null, megaGlowVerts=0;
+let snowBuf=null, snowVerts=0, ashBuf=null, ashVerts=0, bufRibbon=null, bufRail=null, verts=0, railVerts=0, tracksideBuf=null, tracksideVerts=0;
+let gateGlowBuf=null, gateGlowVerts=0; // 라이트 게이트
+
 function genCP(seed,shape,yAmp,baseY){
   const rng=mulberry32(seed|0),rand=(a,b)=>a+(b-a)*rng(); let arr=[],N=60,R=155,ph=rand(0,Math.PI*2);
   if(shape==='RANDOM'){const list=['OVAL','FIG8','CLOVER','S_BEND','ISLAND','LEMNISCATE','WAVY']; shape=list[(rng()*list.length)|0];}
@@ -318,13 +320,9 @@ function genCP(seed,shape,yAmp,baseY){
     else if(shape==='LEMNISCATE'){const a=R*0.98,s=Math.sin(t),c=Math.cos(t); x=(a*Math.sqrt(2)*c)/(1+s*s); z=(a*Math.sqrt(2)*c*s)/(1+s*s);}
     else if(shape==='WAVY'){const rx2=R*(1+0.30*Math.sin(4*t+ph)), rz2=R*(1+0.28*Math.cos(3*t+ph)); x=rx2*Math.cos(t); z=rz2*Math.sin(t);}
     const y=baseY+rand(-yAmp,yAmp)*(0.6+0.4*Math.sin(2*t+ph)); arr.push([x,y,z]); }
-  repelCP(arr, 42);                 // ★ 겹침 완화(반발)
-  arr.push(arr[0],arr[1],arr[2]);   // 루프 닫기
-  return arr;
+  repelCP(arr, 42); // 겹침 완화
+  arr.push(arr[0],arr[1],arr[2]); return arr;
 }
-let envBuf=null, envVerts=0, geoBuf=null, geoVerts=0, centerBuf=null, centerVerts=0;
-let tunnelBuf=null, tunnelVerts=0, tunnelGlowBuf=null, tunnelGlowVerts=0, megaTunnelBuf=null, megaTunnelVerts=0, megaGlowBuf=null, megaGlowVerts=0;
-let snowBuf=null, snowVerts=0, ashBuf=null, ashVerts=0, bufRibbon=null, bufRail=null, verts=0, railVerts=0, tracksideBuf=null, tracksideVerts=0;
 
 function buildTrack(theme){
   const T=THEMES[theme], seed2=(cfg.seed^hashStr(theme)^hashStr(cfg.shape))>>>0;
@@ -353,8 +351,9 @@ function buildTrack(theme){
   buildEnv(theme,seed2);
   buildCenterpiece(theme,seed2);
   buildTunnels(theme,seed2);
-  buildMegaTunnels(theme,seed2);  // ★ 메가터널(아치형)
+  buildMegaTunnels(theme,seed2);
   buildTrackside(theme,seed2);
+  buildGates(theme,seed2); // 라이트 게이트
 }
 
 /* ---------- 환경/오브젝트 ---------- */
@@ -365,44 +364,69 @@ function buildEnv(theme,seed2){
   const pushP=(x,y,z,c,g)=>{pts.push(x,y,z); cols.push(c[0],c[1],c[2]); glows.push(g)}
 
   if(t.ground){
-    const rad=ringR+260, step=12;
+    const rad=ringR+320, step=12;
     const baseCol=(theme==='XMAS')?[0.95,0.98,1]:(theme==='VOLCANO')?[0.25,0.08,0.06]:(theme==='CYBERPUNK')?[0.08,0.08,0.12]:[0.06,0.08,0.12];
     for(let x=-rad;x<rad;x+=step) for(let z=-rad;z<rad;z+=step){
-      if(Math.hypot(x,z)<ringR-14) continue;
+      if(Math.hypot(x,z)<ringR-18) continue;
       const c0=[baseCol[0]*(0.94+0.12*rng()), baseCol[1]*(0.94+0.12*rng()), baseCol[2]*(0.94+0.12*rng())];
       pushQuad(GEO,x,groundY,z, x+step,groundY,z, x+step,groundY,z+step, x,groundY,z+step, c0,0.0);
     }
   }
 
-  // Sky / ambient per theme + 캐릭터 오브젝트
   if(theme==='SPACE'){
     const rngS=mulberry32(seed2^0x55aa);
-    const starCount= cfg.mobile?1600:4200;
-    for(let i=0;i<starCount;i++){const rr=ringR+20+rngS()*540,a=rngS()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=(rngS()*2-1)*360+140; pushP(rx,ry,rz,[0.82+rngS()*0.18,0.88+rngS()*0.12,1],0.08);}
-    // 우주고래/위성(상징 조형)
-    addSphere(GEO,0,ringR*0.38,0, 18, 22,34,[0.55,0.8,1.0],0.0);
-    pushBox(GEO, ringR*0.45, 160, 0, 22,4,2, [0.2,0.4,0.7], [0.6,0.9,1], 0.9);
+    const starCount= cfg.mobile?1800:5200;
+    for(let i=0;i<starCount;i++){const rr=ringR+120+rngS()*620,a=rngS()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=(rngS()*2-1)*420+160; pushP(rx,ry,rz,[0.82+rngS()*0.18,0.88+rngS()*0.12,1],0.10);}
+    // 먼 행성들(트랙 침범 없음: 중앙 섬 반경 안전)
+    const safePad=trackW*1.2+26, safeR=Math.max(24,trackMinR-safePad);
+    addSphere(GEO, Math.cos(0.8)*(safeR*2.4), 130, Math.sin(0.6)*(safeR*2.4), 18, 24,38,[0.55,0.8,1.0],0.0);
+    addSphere(GEO, -safeR*2.9, 180, safeR*1.1, 12, 20,28,[0.9,0.9,1.0],0.0);
   } else if(theme==='CYBERPUNK'){
-    const n= cfg.mobile?1200:2800;
-    for(let i=0;i<n;i++){const rr=trackMaxR+260+Math.random()*420,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=140+Math.random()*320; pushP(rx,ry,rz,[1,0.3+Math.random()*0.2,0.9],0.16);}
-    // 네온 간판/광고판
-    for(let i=0;i<18;i++){const rx=(Math.random()-.5)*ringR*1.2, rz=(Math.random()-.5)*ringR*1.2, ry=120+Math.random()*240; pushBox(GEO,rx,ry,rz, 14,7,1.4,[0.14,0.10,0.2],[1.0,0.2,0.9],0.9);}
+    const glowN= cfg.mobile?1500:3400;
+    for(let i=0;i<glowN;i++){const rr=trackMaxR+260+Math.random()*420,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=160+Math.random()*360; pushP(rx,ry,rz,[1,0.35+Math.random()*0.25,0.9],0.16);}
+    // 창문 있는 빌딩들
+    const bCount = 28;
+    for(let b=0;b<bCount;b++){
+      const r=ringR+120+Math.random()*240, ang=Math.random()*Math.PI*2;
+      const bx=Math.cos(ang)*r, bz=Math.sin(ang)*r, by=0;
+      const bw=12+Math.random()*18, bd=12+Math.random()*18, bh=80+Math.random()*180;
+      pushBox(GEO,bx,by+bh*0.5,bz, bw,bh,bd, [0.10,0.10,0.14],[0.12,0.12,0.2], 0.0);
+      // 창문 포인트(전면 한쪽): 격자로 추가
+      const rows=Math.floor(bh/6), colsW=Math.floor(bw/2);
+      for(let r0=2;r0<rows-2;r0++){
+        for(let c0= -colsW+1; c0<colsW; c0++){
+          const wx=bx + c0*1.8;
+          const wy=by + r0*3.0 + 6;
+          const wz=bz + (bd/2)+0.2;
+          pushP(wx,wy,wz,[1.0,0.7+Math.random()*0.25,0.95],0.9);
+        }
+      }
+    }
   } else if(theme==='XMAS'){
-    const sPos=[],sCol=[],sGlow=[]; const snowCount= cfg.mobile?2600:6400;
-    for(let i=0;i<snowCount;i++){const rr=trackMaxR+trackW*2.6+40+Math.random()*340, aa=Math.random()*Math.PI*2, rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=140+Math.random()*320; sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.4+Math.random()*0.6));}
+    // 매우 작은 눈송이(음수 크기 인코딩 사용: -0.08~-0.18 => 작은 점)
+    const sPos=[],sCol=[],sGlow=[]; const snowCount= cfg.mobile?2600:6800;
+    for(let i=0;i<snowCount;i++){
+      const rr=trackMaxR+trackW*2.6+40+Math.random()*420;
+      const aa=Math.random()*Math.PI*2;
+      const rx=Math.cos(aa)*rr, rz=Math.sin(aa)*rr, ry=200+Math.random()*380;
+      sPos.push(rx,ry,rz); sCol.push(1,1,1); sGlow.push(-(0.08+Math.random()*0.10)); // ★ 작아짐
+    }
     snowBuf={pos:makeBuffer(new Float32Array(sPos),3), col:makeBuffer(new Float32Array(sCol),3), glow:makeBuffer(new Float32Array(sGlow),1)}; snowVerts=sPos.length/3;
-    // 눈사람(캐릭터)
-    addSphere(GEO, -ringR*0.45, 18, 0, 6, 18,28,[1,1,1],0.0);
-    addSphere(GEO, -ringR*0.45, 24, 0, 3.8, 18,28,[1,1,1],0.0);
+
+    // 별 + 달
+    const stars = cfg.mobile?1400:3600;
+    for(let i=0;i<stars;i++){const rr=ringR+160+Math.random()*520,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=260+Math.random()*420; pushP(rx,ry,rz,[0.9,0.95,1.0],0.12);}
+    addSphere(GEO, ringR*0.6, 260, -ringR*0.3, 8, 20,28,[0.95,0.95,1.0],0.0);
+    addSphere(GEO, -ringR*0.8, 320, ringR*0.2, 5.5, 16,22,[0.92,0.92,0.98],0.0);
   } else if(theme==='NEON'){
-    const glowN= cfg.mobile?1200:3200;
+    const glowN= cfg.mobile?1400:3200;
     for(let i=0;i<glowN;i++){const rr=ringR+60+Math.random()*360,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=120+Math.random()*300; pushP(rx,ry,rz,[0.2,1.0,1.0],0.16);}
     for(let i=0;i<8;i++){ addTorus(GEO,(Math.random()-.5)*ringR*0.8, 100+Math.random()*180, (Math.random()-.5)*ringR*0.8, 22+Math.random()*20, 1.4, 64,22,[0.2,1.0,1.0],0.9); }
   } else if(theme==='VOLCANO'){
     const aPos=[],aCol=[],aGlow=[]; const ashCount= cfg.mobile?2600:6400;
-    for(let i=0;i<ashCount;i++){const rr=ringR+40+Math.random()*360,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=160+Math.random()*260; aPos.push(rx,ry,rz); aCol.push(0.6,0.35,0.25); aGlow.push(-(0.2+Math.random()*0.4)); }
+    for(let i=0;i<ashCount;i++){const rr=ringR+40+Math.random()*360,a=Math.random()*Math.PI*2,rx=Math.cos(a)*rr,rz=Math.sin(a)*rr,ry=160+Math.random()*260; aPos.push(rx,ry,rz); aCol.push(0.6,0.35,0.25); aGlow.push(-(0.12+Math.random()*0.16)); }
     ashBuf={pos:makeBuffer(new Float32Array(aPos),3), col:makeBuffer(new Float32Array(aCol),3), glow:makeBuffer(new Float32Array(aGlow),1)}; ashVerts=aPos.length/3;
-    // 마그마 골렘(캐릭터 느낌)
+    // 마그마 조형
     addSphere(GEO, ringR*0.38, 22, 0, 7, 20,28,[0.8,0.35,0.12],0.4);
     addSphere(GEO, ringR*0.38, 28, 0, 4.6, 20,28,[0.8,0.35,0.12],0.6);
   }
@@ -411,9 +435,9 @@ function buildEnv(theme,seed2){
   if(GEO.pos.length){ geoBuf={pos:makeBuffer(new Float32Array(GEO.pos),3), col:makeBuffer(new Float32Array(GEO.col),3), glow:makeBuffer(new Float32Array(GEO.glow),1)}; geoVerts=GEO.pos.length/3; }
 }
 
-/* ---------- 중앙/터널/사이드 ---------- */
+/* ---------- 중앙/터널/사이드/게이트 ---------- */
 function buildCenterpiece(theme,seed2){
-  const G=makeGeo(); const safePad=trackW*0.8+16; const safeR=Math.max(18,trackMinR-safePad);
+  const G=makeGeo(); const safePad=trackW*1.1+20; const safeR=Math.max(22,trackMinR-safePad);
   const big=safeR*1.05; const med=safeR*0.7;
   if(theme==='SPACE'){ addSphere(G,0,med*0.6,0, med*0.55, 36,56, [0.55,0.8,1],0.0); addTorus(G,0,med*0.6,0, med*1.0, med*0.08, 96,32, [0.6,0.9,1],0.0); }
   else if(theme==='CYBERPUNK'){ addCylinder(G,0,big*0.65,0, big*0.34, big*1.4, 84, [0.08,0.1,0.14],[0.12,0.12,0.16],0.0); addTorus(G,0,big*1.32,0, big*0.6, big*0.07, 88,30, [1.0,0.2,0.9],0.0); }
@@ -432,6 +456,8 @@ function buildTunnels(theme,seed2){
       const c0=getCenter(i0), c1=getCenter(i1); const b0=basisAt(i0), b1=basisAt(i1);
       for(let s=0;s<segAround;s++){
         const a0=s/segAround*2*Math.PI, a1=(s+1)/segAround*2*Math.PI;
+        // 상단/측벽만(바닥 오픈)
+        if(a0<-0.2*Math.PI || a1>1.2*Math.PI) continue;
         const p=(c,b,a)=>[ c[0]+b.R[0]*Math.cos(a)*radius + b.B[0]*Math.sin(a)*radius,
                            c[1]+b.R[1]*Math.cos(a)*radius + b.B[1]*Math.sin(a)*radius,
                            c[2]+b.R[2]*Math.cos(a)*radius + b.B[2]*Math.sin(a)*radius ];
@@ -453,8 +479,6 @@ function buildTunnels(theme,seed2){
   tunnelBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; tunnelVerts=G.pos.length/3;
   if(L.pos.length){ tunnelGlowBuf={pos:makeBuffer(new Float32Array(L.pos),3), col:makeBuffer(new Float32Array(L.col),3), glow:makeBuffer(new Float32Array(L.glow),1)}; tunnelGlowVerts=L.pos.length/3; }
 }
-
-/* === 메가 터널(아치형, 내부 리브/라이트) === */
 function buildMegaTunnels(theme,seed2){
   megaTunnelBuf=megaGlowBuf=null; megaTunnelVerts=megaGlowVerts=0;
   const G=makeGeo(), L=makeGeo();
@@ -469,8 +493,7 @@ function buildMegaTunnels(theme,seed2){
       const i0=base+k, i1=base+k+1;
       const c0=getCenter(i0), c1=getCenter(i1); const b0=basisAt(i0), b1=basisAt(i1);
       for(let s=0;s<segAround;s++){
-        // 바닥은 열고(터널 느낌), 상단 220도만 구성
-        const a0=(-0.1 + s/(segAround-1)*1.2)*Math.PI;   // 약 -18deg ~ +198deg
+        const a0=(-0.1 + s/(segAround-1)*1.2)*Math.PI;
         const a1=(-0.1 + (s+1)/(segAround-1)*1.2)*Math.PI;
         const p=(c,b,a)=>[ c[0] + (b.R[0]*Math.cos(a) + b.B[0]*Math.sin(a))*radius,
                            c[1] + (b.R[1]*Math.cos(a) + b.B[1]*Math.sin(a))*radius,
@@ -479,18 +502,15 @@ function buildMegaTunnels(theme,seed2){
         pushQuad(G, A[0],A[1],A[2], B[0],B[1],B[2], C[0],C[1],C[2], D[0],D[1],D[2], wall, 0.0);
       }
     }
-    // 내부 리브(보) + 루프라이트
     for(let k=0;k<len;k+=8){
       const i=base+k; const c=getCenter(i); const b=basisAt(i);
       for(let s=0;s<segAround;s+=6){
-        const a=s/segAround*2*Math.PI * 0.9; // 상단부에만
+        const a=s/segAround*2*Math.PI * 0.9;
         const rr = radius - 0.4;
         const P=[ c[0]+b.R[0]*Math.cos(a)*rr + b.B[0]*Math.sin(a)*rr,
                   c[1]+b.R[1]*Math.cos(a)*rr + b.B[1]*Math.sin(a)*rr,
                   c[2]+b.R[2]*Math.cos(a)*rr + b.B[2]*Math.sin(a)*rr ];
-        // 라이트 포인트
         L.pos.push(P[0],P[1],P[2]); L.col.push(light[0],light[1],light[2]); L.glow.push(1.0);
-        // 리브(보) 조각
         pushBox(G, P[0], P[1], P[2], 0.6, 0.6, 0.6, wall, wall, 0.0);
       }
     }
@@ -500,19 +520,38 @@ function buildMegaTunnels(theme,seed2){
 }
 function buildTrackside(theme,seed2){
   tracksideBuf=null; tracksideVerts=0; const G=makeGeo(); const rng=mulberry32(seed2^0x777);
-  for(let i=40;i<samples;i+=Math.floor(22+rng()*26)){
+  // XMAS는 더 넓게 비켜 세움 (트랙 침범 방지)
+  const baseClear = (theme==='XMAS') ? (trackW*1.8 + 6.0) : (trackW*1.35 + 4.0);
+  for(let i=40;i<samples;i+=Math.floor(26+rng()*28)){
     const {R}=basisAt(i); const C=getCenter(i);
-    const side=(rng()<0.5?-1:1), clearance = trackW*1.0 + 3.2 + rng()*1.8;
+    const side=(rng()<0.5?-1:1), clearance = baseClear + rng()*2.0;
     const off=side*clearance, P=[C[0]+R[0]*off, C[1]+R[1]*off, C[2]+R[2]*off];
     const h=2.8+rng()*6.2, s=0.7+rng()*1.4;
-    // 테마 색상 틴트
     const cSide = THEMES[cfg.theme].trackC2, cTop = THEMES[cfg.theme].trackC1;
     pushBox(G, P[0],h*0.5,P[2], s,h,s, cTop, cSide, 0.9);
   }
   tracksideBuf={pos:makeBuffer(new Float32Array(G.pos),3), col:makeBuffer(new Float32Array(G.col),3), glow:makeBuffer(new Float32Array(G.glow),1)}; tracksideVerts=G.pos.length/3;
 }
+function buildGates(theme,seed2){
+  // 트랙 위를 가로지르는 광 아치(포인트 라이트)
+  const pts=[],cols=[],glows=[];
+  const push=(x,y,z,c,g)=>{pts.push(x,y,z); cols.push(c[0],c[1],c[2]); glows.push(g)};
+  const col = THEMES[theme].tunnel.light;
+  const step=360, seg=36, rad=trackW*0.55;
+  for(let i=180;i<samples;i+=step){
+    const c=getCenter(i), b=basisAt(i);
+    for(let k=0;k<=seg;k++){
+      const a = Math.PI*(k/seg); // 반원
+      const P=[ c[0] + (b.R[0]*Math.cos(a)+b.B[0]*Math.sin(a))*rad,
+                c[1] + (b.R[1]*Math.cos(a)+b.B[1]*Math.sin(a))*rad + 0.8,
+                c[2] + (b.R[2]*Math.cos(a)+b.B[2]*Math.sin(a))*rad ];
+      push(P[0],P[1],P[2], col, 1.1);
+    }
+  }
+  gateGlowBuf={pos:makeBuffer(new Float32Array(pts),3), col:makeBuffer(new Float32Array(cols),3), glow:makeBuffer(new Float32Array(glows),1)}; gateGlowVerts=pts.length/3;
+}
 
-/* ---------- 차량 ---------- */
+/* ---------- 차량/입력/물리 ---------- */
 function makeCarGeom(themeCol){
   const hw=0.8, hh=0.28, hl=1.36, nose=0.55;
   const P=[
@@ -531,18 +570,15 @@ function makeCarGeom(themeCol){
 }
 let carGeom=null;
 
-/* ---------- 입력 ---------- */
 const input1={L:false,R:false,ACC:false,BR:false,BOOST:false};
 const input2={L:false,R:false,ACC:false,BR:false,BOOST:false};
 function setKeys(down,e){
   const code=e.code;
-  // P1
   if(code==='KeyA') input1.L=down;
   if(code==='KeyD') input1.R=down;
   if(code==='KeyW') input1.ACC=down;
   if(code==='KeyS') input1.BR=down;
   if(code==='Space') input1.BOOST=down;
-  // P2
   if(code==='ArrowLeft') input2.L=down;
   if(code==='ArrowRight') input2.R=down;
   if(code==='ArrowUp') input2.ACC=down;
@@ -558,9 +594,9 @@ function bindPad(btn){ const act=btn.dataset.act;
 }
 padL.querySelectorAll('.pbtn').forEach(bindPad); padR.querySelectorAll('.pbtn').forEach(bindPad);
 
-/* ---------- 물리/레이스 (+ 라인그립/드리프트/부스트) ---------- */
-const MAX_KMH=550;
-const MAX_V=MAX_KMH/3.6;
+/* 물리 파라미터 */
+const BASE_MAX_KMH=520;      // 기본 최고속도
+const MAX_V=BASE_MAX_KMH/3.6;
 
 function makeCar(ctrl, tint){
   return {
@@ -569,15 +605,13 @@ function makeCar(ctrl, tint){
     yaw:0, yawV:0,
     lap:0, finished:false, name:'P', lastLapTs:0,
     tint: tint||[1,1,1],
-    driftGauge:0, boostActive:false, boostTimer:0, speedFactor:1.0,
-    driftWas:false,
+    driftGauge:0, boostActive:false, boostTimer:0, driftWas:false,
 
     tryBoost(){
       if(this.boostActive) return;
       if(this.driftGauge>=100){
         this.driftGauge=0;
-        this.boostActive=true; this.boostTimer=2.0; // ★ 2초
-        this.speedFactor=1.5;  // ★ +50%
+        this.boostActive=true; this.boostTimer=2.0;
         triggerBoostFX(this, true);
       }
     },
@@ -586,30 +620,30 @@ function makeCar(ctrl, tint){
       const ACC=(ctrl?.ACC)&&controlsEnabled, BR=(ctrl?.BR)&&controlsEnabled, L=(ctrl?.L)&&controlsEnabled, R=(ctrl?.R)&&controlsEnabled, BOOST=(ctrl?.BOOST)&&controlsEnabled;
       if(BOOST) this.tryBoost();
 
-      // 부스트 업데이트 + FX 꼬리
       if(this.boostActive){
         this.boostTimer -= dt;
-        if(this.boostTimer<=0){ this.boostActive=false; this.speedFactor=1.0; }
-        triggerBoostFX(this, false); // 진행 중 스피드라인
+        if(this.boostTimer<=0){ this.boostActive=false; }
+        triggerBoostFX(this, false);
       }
 
-      // 라인 이탈 그립 저하 (센터에서 멀수록 가속↓ 감속↑)
+      // 라인 이탈 그립 저하
       const offRatio = clamp(Math.abs(this.off)/(trackW*0.5), 0, 1);
-      const accLoss  = 1 - 0.35*offRatio;       // 최대 35% 가속 손실
-      const decGain  = 1 + 0.50*offRatio;       // 최대 50% 감속 증가
+      const accLoss  = 1 - 0.35*offRatio;
+      const decGain  = 1 + 0.50*offRatio;
 
-      // 가감속
+      // 가감속 + 부스트 추력
       const baseAcc = ACC? 0.40*MAX_V : 0;
-      const accEff  = baseAcc * accLoss;
+      const boostThrust = this.boostActive ? 0.35*MAX_V : 0;  // ★ 부스트 때 가속추력 추가
+      const accEff  = baseAcc * accLoss + boostThrust;
       const baseDec = 0.072*MAX_V * decGain;
       const brakeDec= BR? 0.31*MAX_V : 0;
 
-      // 좌/우/드리프트 판정
+      // 좌/우와 드리프트
       const targetLR = (L?1:0) + (R?-1:0);
       const aim = targetLR * (trackW*0.46);
       const i = Math.floor(this.s)|0;
       const curv = smoothCurv(i);
-      const outward = curv * (this.v/MAX_V) * 18.0;
+      const outward = curv * (this.v/(BASE_MAX_KMH/3.6)) * 18.0;
       this.offV += outward * dt;
 
       const spring = 6.2, dampBase=3.6, dampDrift=1.8;
@@ -618,20 +652,13 @@ function makeCar(ctrl, tint){
       const force = (aim - this.off)*spring - this.offV*damp;
       this.offV += force*dt;
 
-      // ★ 드리프트 시작 순간 15% 즉시 감속 + 드리프트 중 최고속 15% 낮춤
-      if (drifting && !this.driftWas) this.v *= 0.85;
-      const maxCap = MAX_V * this.speedFactor * (drifting ? 0.85 : 1.0);
+      if (drifting && !this.driftWas) this.v *= 0.85; // 드리프트 시작 즉시 15% 감속
+      const driftDec = drifting ? 0.15*(BASE_MAX_KMH/3.6) : 0;
 
-      // 드리프트 게이지
-      if (drifting){
-        const slip = Math.min(18, Math.abs(this.offV));
-        this.driftGauge = clamp(this.driftGauge + (10 + slip*3.2)*dt, 0, 100);
-      } else {
-        this.driftGauge = clamp(this.driftGauge + 2*dt, 0, 100);
-      }
-
-      // 드리프트 감속(가시화): 추가 항으로 분명하게 보이게
-      const driftDec = drifting ? 0.15*MAX_V : 0;
+      // 최고속 캡: 드리프트 중 ↓, 부스트 시 700km/h 캡
+      const baseCap = (BASE_MAX_KMH/3.6) * (drifting ? 0.85 : 1.0);
+      let maxCap = baseCap;
+      if(this.boostActive) maxCap = Math.max(maxCap, 700/3.6); // ★ 700 km/h
 
       this.v = clamp(this.v + (accEff - baseDec - brakeDec - driftDec)*dt, 0, maxCap);
 
@@ -641,7 +668,7 @@ function makeCar(ctrl, tint){
       if(this.off<-limit){this.off=-limit; this.offV=0;}
       if(this.off> limit){this.off= limit; this.offV=0;}
 
-      // 요 동역학
+      // 요
       const kYawFromLatVel = drifting ? 0.60 : 0.35;
       const yawMax = drifting ? 0.62 : 0.38;
       const yawTarget = clamp(this.offV * kYawFromLatVel * 0.04, -yawMax, yawMax);
@@ -654,6 +681,14 @@ function makeCar(ctrl, tint){
       this.prevS = this.s;
       this.s = (this.s + this.v*dt) % samples;
 
+      // 게이지
+      if (drifting){
+        const slip = Math.min(18, Math.abs(this.offV));
+        this.driftGauge = clamp(this.driftGauge + (10 + slip*3.2)*dt, 0, 100);
+      } else {
+        this.driftGauge = clamp(this.driftGauge + 2*dt, 0, 100);
+      }
+
       this.driftWas = drifting;
     },
 
@@ -665,18 +700,13 @@ function makeCar(ctrl, tint){
       const cy=Math.cos(this.yaw), sy=Math.sin(this.yaw);
       const Tv=[ T[0]*cy + R[0]*sy, T[1]*cy + R[1]*sy, T[2]*cy + R[2]*sy ];
       const Rv=[ R[0]*cy - T[0]*sy, R[1]*cy - T[1]*sy, R[2]*cy - T[2]*sy ];
-      return {
-        pos:[pos[0]+R[0]*this.off,pos[1]+R[1]*this.off,pos[2]+R[2]*this.off],
-        T:Tv, R:Rv, B
-      };
+      return { pos:[pos[0]+R[0]*this.off,pos[1]+R[1]*this.off,pos[2]+R[2]*this.off], T:Tv, R:Rv, B };
     }
   };
 }
 
-/* ---------- 추격 카메라 ---------- */
-const CHASE = { baseFov:70, maxFov:94, back:5.0, height:2.35, lateral:0.0,
-  lookBase:8.0, lookSpeedK:5.5, lookCurveK:-10.0, bankK:0.7, bankLimitDeg:6,
-  lag:{dir:12,eye:15,at:22}, atBlend:0.65, sideFollowK:0.35 };
+/* ---------- 카메라/FX/렌더 ---------- */
+const CHASE = { baseFov:70, maxFov:94, back:5.0, height:2.35, lateral:0.0, lookBase:8.0, lookSpeedK:5.5, lookCurveK:-10.0, bankK:0.7, bankLimitDeg:6, lag:{dir:12,eye:15,at:22}, atBlend:0.65, sideFollowK:0.35 };
 class ThreeChaseCam {
   constructor(){ this.camera=new THREE.PerspectiveCamera(CHASE.baseFov,16/9,0.1,4000);
     this.dir=new THREE.Vector3(0,0,1); this.eye=new THREE.Vector3(); this.at=new THREE.Vector3();
@@ -708,7 +738,7 @@ class ThreeChaseCam {
     const i=Math.floor(car.s)|0, curv=smoothCurv(i);
     let bank=THREE.MathUtils.clamp(CHASE.bankK*curv + 0.5*car.yaw, -CHASE.bankLimitDeg*Math.PI/180, CHASE.bankLimitDeg*Math.PI/180);
     if(Math.abs(bank)>1e-6){ tmp.q.setFromAxisAngle(this.dir,bank); R.applyQuaternion(tmp.q).normalize(); U=this.dir.clone().cross(R).normalize(); }
-    const speedRatio=THREE.MathUtils.clamp((car.v||0)/MAX_V,0,1);
+    const speedRatio=THREE.MathUtils.clamp((car.v||0)/(700/3.6),0,1); // 부스트 기준으로 와이드
     const sideFollow=THREE.MathUtils.clamp(car.offV*CHASE.sideFollowK*0.06,-1.0,1.0);
     const eyeTarget=tmp.v3.set(w.pos[0],w.pos[1],w.pos[2]).addScaledVector(this.dir,-CHASE.back).addScaledVector(U,CHASE.height).addScaledVector(R,CHASE.lateral+sideFollow);
     const look=CHASE.lookBase+CHASE.lookSpeedK*speedRatio+CHASE.lookCurveK*curv;
@@ -717,7 +747,7 @@ class ThreeChaseCam {
     const atTarget=[ lerp(atDir[0],aheadPos[0],CHASE.atBlend), lerp(atDir[1],aheadPos[1]+1.2,CHASE.atBlend), lerp(atDir[2],aheadPos[2],CHASE.atBlend) ];
     const kEye=1-Math.exp(-dt*CHASE.lag.eye), kAt=1-Math.exp(-dt*CHASE.lag.at);
     this.eye.lerp(eyeTarget,kEye); this.at.lerp(new THREE.Vector3(atTarget[0],atTarget[1],atTarget[2]),kAt);
-    const fovBoost=car.boostActive?0.30:0.0; // ★ 부스트시 FOV 더 와이드
+    const fovBoost=car.boostActive?0.30:0.0;
     cam.fov=THREE.MathUtils.lerp(CHASE.baseFov, CHASE.maxFov*(1+fovBoost), speedRatio);
     cam.updateProjectionMatrix(); cam.position.copy(this.eye); cam.up.copy(U); cam.lookAt(this.at); cam.updateMatrixWorld(true);
     const PV=tmp.m.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse); return PV.elements;
@@ -726,8 +756,8 @@ class ThreeChaseCam {
 let chaseCam1=null, chaseCam2=null;
 function camVP(car, aspect, dt, which=1){ return (which===1?chaseCam1:chaseCam2).vp(car, aspect, dt); }
 
-/* ---------- FX ---------- */
-const FX_MAX=3600;
+/* FX */
+const FX_MAX=4200;
 const fx={pos:new Float32Array(FX_MAX*3), col:new Float32Array(FX_MAX*3), glow:new Float32Array(FX_MAX), head:0, count:0,
   buf:{pos:makeDynamicBuffer(3),col:makeDynamicBuffer(3),glow:makeDynamicBuffer(1)}};
 function fxAdd(x,y,z,r,g,b,gl){ const i=fx.head%FX_MAX; fx.pos[i*3]=x; fx.pos[i*3+1]=y; fx.pos[i*3+2]=z; fx.col[i*3]=r; fx.col[i*3+1]=g; fx.col[i*3+2]=b; fx.glow[i]=gl; fx.head=(fx.head+1)|0; fx.count=Math.min(FX_MAX, fx.count+1); }
@@ -741,7 +771,8 @@ function fxDriftFromCar(car){
   const tLeft=[ P[0]-R[0]*tireOff - T[0]*back, P[1]-R[1]*tireOff - T[1]*back + up, P[2]-R[2]*tireOff - T[2]*back ];
   const tRight=[ P[0]+R[0]*tireOff - T[0]*back, P[1]+R[1]*tireOff - T[1]*back + up, P[2]+R[2]*tireOff - T[2]*back ];
   const heat = Math.min(1,(slip-3.0)/8.0);
-  const col = [[1.0,0.7,0.2],[1.0,0.4,0.8],[0.3,0.8,1.0]][(Math.random()*3)|0]; // 오렌지/마젠타/시안 섞기
+  const palette = [[1.0,0.7,0.2],[1.0,0.4,0.8],[0.3,0.8,1.0]];
+  const col = palette[(Math.random()*palette.length)|0];
   const g1=0.7+0.8*heat;
   fxAdd(tLeft[0],tLeft[1],tLeft[2], col[0],col[1],col[2], g1);
   fxAdd(tRight[0],tRight[1],tRight[2], col[0],col[1],col[2], g1);
@@ -749,17 +780,15 @@ function fxDriftFromCar(car){
 function triggerBoostFX(car, burst){
   const w=car.world(); const Rw=w.R, Bw=w.B; const center=w.pos;
   const palette = [[0.15,0.9,1.0],[1.0,0.3,0.9],[1.0,0.83,0.35],[1,1,1]];
-  // 링 샥웨이브
-  const ringN = burst?72:36;
+  const ringN = burst?96:48;
   for(let a=0;a<ringN;a++){
     const ang=a/ringN*2*Math.PI, c=Math.cos(ang), s=Math.sin(ang);
     const rx=Rw[0]*c+Bw[0]*s, ry=Rw[1]*c+Bw[1]*s, rz=Rw[2]*c+Bw[2]*s;
-    const p=[center[0]+rx*1.6, center[1]+0.2+ry*0.2, center[2]+rz*1.6];
+    const p=[center[0]+rx*1.8, center[1]+0.2+ry*0.2, center[2]+rz*1.8];
     const col = palette[a%palette.length];
-    fxAdd(p[0],p[1],p[2], col[0],col[1],col[2], 1.35);
+    fxAdd(p[0],p[1],p[2], col[0],col[1],col[2], 1.45);
   }
-  // 스피드 라인
-  const lines = burst?28:10;
+  const lines = burst?36:14;
   for(let i=0;i<lines;i++){
     const t=i*0.10;
     const col = palette[i%palette.length];
@@ -768,7 +797,6 @@ function triggerBoostFX(car, burst){
   }
 }
 
-/* ---------- 드로우 ---------- */
 function drawSolid(buf,count,mode){ if(!buf||!count) return; gl.disable(gl.BLEND); gl.uniform1f(loc.uPass,0.0); gl.uniform3f(loc.uTint,1,1,1); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
 function drawGlow(buf,count,mode){ if(!buf||!count) return; gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.uniform1f(loc.uPass,1.0); gl.uniform3f(loc.uTint,1,1,1); bind(buf.pos,loc.aPos); bind(buf.col,loc.aCol); bind(buf.glow,loc.aGlow); gl.drawArrays(mode,0,count); }
 
@@ -799,6 +827,7 @@ function renderScene(VP, tSec){
   drawGlow(megaGlowBuf, megaGlowVerts, gl.POINTS);
   drawGlow(tracksideBuf, tracksideVerts, gl.TRIANGLES);
   drawGlow(tunnelGlowBuf, tunnelGlowVerts, gl.POINTS);
+  drawGlow(gateGlowBuf, gateGlowVerts, gl.POINTS);     // 광 아치
   drawGlow(envBuf, envVerts, gl.POINTS);
   drawGlow(bufRail, railVerts, gl.POINTS);
   if(snowBuf) drawGlow(snowBuf, snowVerts, gl.POINTS);
@@ -840,13 +869,13 @@ function drawFX(VP){
   gl.drawArrays(gl.POINTS, 0, fx.count);
 }
 
-/* ---------- 레이스 ---------- */
+/* ---------- 레이스/루프 ---------- */
 let car1=null, car2=null, aiCars=[];
 const LAPS=3, START_OFFSET_FRAC=0.25;
 let controlsEnabled=false;
 
 function gridLanes(n){ const laneW = trackW*0.22; const base = [0, -laneW, laneW, -laneW*2, laneW*2, -laneW*3, laneW*3]; return base.slice(0,n); }
-function placeAtStart(c, lane=0, sStart){ c.s = (sStart!=null)? (sStart|0) : (samples*START_OFFSET_FRAC)|0; c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0; c.driftGauge=0; c.boostActive=false; c.boostTimer=0; c.speedFactor=1.0; c.driftWas=false; }
+function placeAtStart(c, lane=0, sStart){ c.s = (sStart!=null)? (sStart|0) : (samples*START_OFFSET_FRAC)|0; c.prevS = c.s; c.off = lane; c.offV=0; c.v=0; c.lap=0; c.finished=false; c.lastLapTs=0; c.driftGauge=0; c.boostActive=false; c.boostTimer=0; c.driftWas=false; }
 function resetCars(){
   car1=makeCar(input1, [0.3,0.95,1.0]); car1.name='P1';
   car2=makeCar(input2, [1.0,0.5,0.2]); car2.name='P2';
@@ -863,7 +892,7 @@ function resetCars(){
   if(chaseCam1) chaseCam1.snapToCar(car1);
   if(cfg.twoP && chaseCam2) chaseCam2.snapToCar(car2);
 }
-function updateAI(dt){ for(const ai of aiCars){ const targetV=0.78*MAX_V; ai.v=clamp(ai.v + (targetV - 0.06*MAX_V)*dt, 0, MAX_V*0.92); ai.s = (ai.s + ai.v*dt) % samples; } }
+function updateAI(dt){ for(const ai of aiCars){ const targetV=0.78*(BASE_MAX_KMH/3.6); ai.v=clamp(ai.v + (targetV - 0.06*(BASE_MAX_KMH/3.6))*dt, 0, (BASE_MAX_KMH/3.6)*0.92); ai.s = (ai.s + ai.v*dt) % samples; } }
 function positions(){ const all=[car1, ...(cfg.twoP?[car2]:[]), ...aiCars]; const arr=all.map(c=>({c,progress:c.lap*samples + c.s})).sort((a,b)=>b.progress-a.progress); return arr.map(x=>x.c); }
 function checkLaps(){
   const now=performance.now(); const racers=[car1, ...(cfg.twoP?[car2]:[]), ...aiCars];
@@ -877,7 +906,7 @@ function checkLaps(){
   }
 }
 
-/* ---------- 루프/카운트다운 ---------- */
+/* 상태머신 + 카운트다운 */
 const S={MENU:0,COUNTDOWN:1,PLAY:2,PAUSE:3,RESULT:4}; let state=S.MENU; let last=performance.now();
 
 function frame(){
@@ -890,9 +919,9 @@ function frame(){
     if(cfg.twoP) fxDriftFromCar(car2);
     for(const ai of aiCars) fxDriftFromCar(ai);
 
-    const spd1 = Math.min(MAX_KMH, Math.round(car1.v*3.6));
+    const spd1 = Math.round(car1.v*3.6);
     setHUD('uiSpeed', spd1+''); setBoostGauge(1, car1.driftGauge);
-    if(cfg.twoP){ const spd2 = Math.min(MAX_KMH, Math.round(car2.v*3.6)); setHUD('uiSpeed2', spd2+''); setBoostGauge(2, car2.driftGauge); }
+    if(cfg.twoP){ const spd2 = Math.round(car2.v*3.6); setHUD('uiSpeed2', spd2+''); setBoostGauge(2, car2.driftGauge); }
 
     const ps=positions(), posIdx=ps.findIndex(p=>p===car1)+1;
     setHUD('uiPos', (cfg.aiCount + (cfg.twoP?1:0) + 1)>1 ? `${posIdx}/${ps.length}` : 'Solo');
@@ -964,7 +993,6 @@ function setMobileLayout(){
   const isMobile=cfg.mobile;
   document.getElementById('padL').style.display=isMobile?'flex':'none';
   document.getElementById('padR').style.display=isMobile?'flex':'none';
-  // 모바일일 때 게임 화면 높이 확대
   view.style.height = isMobile ? 'min(80vw, 820px)' : 'min(56.25vw,700px)';
 }
 function reset(){
@@ -978,7 +1006,7 @@ function reset(){
   renderOnce(); showMenu();
 }
 
-/* 카운트다운: 디자인 업그레이드 */
+/* 카운트다운 */
 function startCountdown(){
   state=S.COUNTDOWN; controlsEnabled=false;
   let cnt=3;
@@ -1001,7 +1029,7 @@ document.getElementById('btnReset').onclick=reset;
 document.getElementById('btnReroll').onclick=()=>{ cfg.seed=(Math.random()*1e9)|0; store.set(cfg); reset(); };
 document.getElementById('btnShape').onclick=()=>{ const idx=(SHAPES.indexOf(cfg.shape)+1)%SHAPES.length; cfg.shape=SHAPES[idx]; store.set(cfg); document.getElementById('btnShape').textContent='🛣 '+cfg.shape; reset(); };
 document.getElementById('btnAI').onclick=()=>{ cfg.aiCount=(cfg.aiCount+1)%6; store.set(cfg); document.getElementById('btnAI').textContent='🤖 AI: '+cfg.aiCount; reset(); };
-document.getElementById('btn2P').onclick=()=>{ cfg.twoP=!cfg.twoP; store.set(cfg); document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P'; reset(); };
+document.getElementById('btn2P').onclick=()=>{ cfg.twoP=!cfg.twoP; store.set(cfg); document.getElementById('btn2P').textContent= cfg.twoP?'👥 2P':'👥 1P'; updateHUDVisibility(); reset(); };
 document.getElementById('btnMobile').onclick=()=>{ cfg.mobile=!cfg.mobile; store.set(cfg); document.getElementById('btnMobile').textContent= cfg.mobile?'📱 Mobile: ON':'📱 Mobile: OFF'; setMobileLayout(); };
 document.getElementById('selTheme').value=cfg.theme;
 document.getElementById('selTheme').onchange=(e)=>{ cfg.theme=e.target.value; store.set(cfg); applyTheme(cfg.theme); resetCars(); renderOnce(); };
@@ -1010,7 +1038,7 @@ function showMenu(){
   const help=`<div class="keys">
   <b>1P</b>: W 가속 / S 브레이크 / A◀ D▶ <b>드리프트</b> / <b>Space 부스트</b><br/>
   <b>2P</b>: ↑ 가속 / ↓ 브레이크 / ←◀ →▶ <b>드리프트</b> / <b>/ 부스트</b><br/>
-  드리프트로 게이지 100% 모이면 부스트 가능 (속도 +50%, 2초)
+  드리프트로 게이지 100% 모이면 부스트 가능 (최대 700km/h, 2초)
   </div>`;
   panel(`<h1>🏎 시작할 준비!</h1>${help}<div style="margin-top:10px"><button class="btn" id="start">▶ 카운트다운</button></div>`);
   document.getElementById('start').onclick=()=>{ startCountdown(); };
