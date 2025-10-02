@@ -641,6 +641,18 @@ function updateSanta(tSec){
   gl.bindBuffer(gl.ARRAY_BUFFER,santaBuf.buf.col.b); gl.bufferData(gl.ARRAY_BUFFER,santaBuf.col,gl.DYNAMIC_DRAW);
   gl.bindBuffer(gl.ARRAY_BUFFER,santaBuf.buf.glow.b); gl.bufferData(gl.ARRAY_BUFFER,santaBuf.glow,gl.DYNAMIC_DRAW);
 }
+/* >>>>>>>>>> 산타 렌더러 (누락되었던 함수 추가) <<<<<<<<<< */
+function drawSanta(VP){
+  if(!santaBuf || !santaBuf.buf) return;
+  gl.uniformMatrix4fv(loc.uVP,false, VP instanceof Float32Array ? VP : new Float32Array(VP));
+  gl.uniform1f(loc.uPass,1.0);
+  gl.uniform3f(loc.uTint,1,1,1);
+  bind(santaBuf.buf.pos, loc.aPos);
+  bind(santaBuf.buf.col, loc.aCol);
+  bind(santaBuf.buf.glow, loc.aGlow);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  gl.drawArrays(gl.POINTS, 0, santaVerts);
+}
 
 /* ---------- CYBERPUNK 스포트라이트 빔 ---------- */
 function buildBeams(seed2){
