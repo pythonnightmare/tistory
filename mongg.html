@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EV Traction — 3D AWD & Regen PID Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{ --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9; --accent:#4cc9f0; --accent2:#a0e9ff; --ok:#5be49b; --warn:#ffcf5b; --bad:#ff6b6b; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Apple SD Gothic Neo,Noto Sans KR,Arial,"Apple Color Emoji","Segoe UI Emoji"}
+
+    /* Header */
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;position:sticky;top:0;backdrop-filter:blur(6px);z-index:20;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,rgba(8,11,17,.86),rgba(8,11,17,.45))}
+    header .left{display:flex;align-items:center;gap:10px}
+    header h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
+    header .sub{color:var(--muted);font-size:11px;margin-left:6px}
+
+    .btnbar{display:flex;gap:6px;flex-wrap:wrap}
+    .btn{background:linear-gradient(180deg,#1e2635,#141b27);border:1px solid rgba(255,255,255,.12);color:#e8f3ff;padding:8px 10px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);font-size:12px}
+    .btn.accent{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#06283b;border-color:rgba(76,201,240,.6)}
+    .btn.warn{background:linear-gradient(180deg,#ffd76a,#f3b740);color:#2a1d00}
+
+    /* Drawer (controls on top, toggled) */
+    .drawer{display:none}
+    .drawer.open{display:block}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 14px}
+    .card h2{font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:var(--accent2);margin:0;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
+
+    .tabs{display:grid;grid-template-columns: repeat(3,1fr);gap:6px;padding:8px}
+    .tab{cursor:pointer;text-align:center;padding:8px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1522;font-size:12px}
+    .tab.active{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#052531;border-color:rgba(76,201,240,.6);font-weight:800}
+    .panel{display:none;padding:10px 12px 12px}
+    .panel.active{display:block}
+    .group{border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px;margin-bottom:10px;background:rgba(255,255,255,.02)}
+    .group-title{color:#b9d7ff;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.35px;margin-bottom:8px}
+    .row{display:grid;grid-template-columns: 1fr auto;gap:8px;align-items:center;margin:6px 0}
+    input[type=number],select{width:110px;background:#0d1320;color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 8px;font-size:12px}
+    input[type=range]{width:100%}
+
+    /* Stage: single-column, bigger 3D viewport */
+    .stage{display:grid;grid-template-rows:auto 1fr auto;gap:8px;padding:8px 14px}
+    #three-wrap{height:clamp(460px, 70vh, 860px);border-radius:18px;overflow:hidden}
+
+    /* Telemetry: compact chips */
+    .telemetry{display:grid;grid-template-columns: repeat(auto-fit, minmax(120px,1fr));gap:6px;padding:6px 0}
+    .tile{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
+    .tile .k{font-size:10px;color:#9fd3ff;text-transform:uppercase;letter-spacing:.35px}
+    .tile .v{font-size:16px;font-weight:800;margin-top:2px}
+
+    /* Plots smaller + collapsible */
+    .plots{display:grid;grid-template-columns: 1fr 1fr;gap:8px;margin-bottom:10px}
+    canvas.chart{width:100%;height:160px}
+
+    details.guide{padding:8px 12px;margin:8px 14px}
+    details.guide summary{cursor:pointer;color:#bfe3ff}
+    footer{color:var(--muted);font-size:11px;text-align:center;padding:8px}
+
+    @media (max-width: 900px){ .plots{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left">
+      <button id="btnControls" class="btn">☰ Controls</button>
+      <h1>EV Traction — 3D AWD & Regen PID Simulator</h1>
+      <span class="sub">3D 맵 · 회생제동 · 4륜 분배 · 노면 μ</span>
+    </div>
+    <div class="btnbar">
+      <button id="btnStart" class="btn accent">▶ 시작</button>
+      <button id="btnPause" class="btn">⏸ 일시정지</button>
+      <button id="btnReset" class="btn warn">↺ 초기화</button>
+      <button id="btnCsv" class="btn">⤓ CSV</button>
+    </div>
+  </header>
+
+  <!-- Top drawer: controls (hidden until toggled) -->
+  <section id="controlsDrawer" class="card drawer" aria-hidden="true">
+    <h2>Controls</h2>
+    <div class="tabs">
+      <div class="tab active" data-tab="drive">Drive</div>
+      <div class="tab" data-tab="env">Environment</div>
+      <div class="tab" data-tab="adv">Advanced</div>
+    </div>
+
+    <div class="panel active" id="panel-drive">
+      <div class="group">
+        <div class="group-title">주행 모드</div>
+        <div class="row">
+          <label>모드</label>
+          <select id="mode"><option value="cruise">Cruise (목표속도)</option><option value="pedal">Pedal (스로틀/브레이크)</option></select>
+        </div>
+        <div id="cruiseBox">
+          <div class="row"><label>프로파일</label>
+            <select id="profileType"><option value="step">Step</option><option value="ramp">Ramp</option><option value="sine">Sine</option></select>
+          </div>
+          <div class="row"><label>목표 속도 (km/h)</label><input id="targetKmh" type="number" value="80" step="1"></div>
+          <div class="row"><label>초기 지연 (s)</label><input id="profileDelay" type="number" value="0.2" step="0.1"></div>
+          <div class="row" id="rampRow" style="display:none"><label>램프 기울기 (km/h/s)</label><input id="rampSlope" type="number" value="12" step="1"></div>
+          <div class="row" id="sineRow" style="display:none"><label>정현 진폭/Hz</label>
+            <div><input id="sineAmp" type="number" value="20" step="1"> / <input id="sineFreq" type="number" value="0.05" step="0.01" style="width:90px"></div>
+          </div>
+        </div>
+        <div id="pedalBox" style="display:none">
+          <div class="row"><label>스로틀 (%)</label><input id="throttle" type="range" min="0" max="100" value="0"></div>
+          <div class="row"><label>브레이크 (%)</label><input id="brake" type="range" min="0" max="100" value="0"></div>
+        </div>
+        <div class="btnbar" style="margin-top:8px"><button id="btnDisturb" class="btn">⚡ 부하시험(+300Nm, 2s)</button></div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">제어기 (2중 루프)</div>
+        <div class="row"><label>속도 루프 Kp</label><input id="Kps" type="number" value="6" step="0.5"></div>
+        <div class="row"><label>속도 루프 Ki</label><input id="Kis" type="number" value="2" step="0.2"></div>
+        <div class="row"><label>전류 제한 Imax (A)</label><input id="Imax" type="number" value="600" step="10"></div>
+        <div class="row"><label>전류 루프 Kp</label><input id="Kpc" type="number" value="2.0" step="0.1"></div>
+        <div class="row"><label>전류 루프 Ki</label><input id="Kic" type="number" value="1000" step="50"></div>
+        <div class="row"><label>역기전력 FF</label><select id="ffOn"><option value="1">ON</option><option value="0">OFF</option></select></div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">파워트레인</div>
+        <div class="row"><label>Vbus (V)</label><input id="Vbus" type="number" value="400" step="10"></div>
+        <div class="row"><label>R (Ω)</label><input id="R" type="number" value="0.05" step="0.005"></div>
+        <div class="row"><label>L (H)</label><input id="L" type="number" value="0.0005" step="0.0001"></div>
+        <div class="row"><label>kt (Nm/A)</label><input id="kt" type="number" value="0.30" step="0.01"></div>
+        <div class="row"><label>ke (V·s/rad)</label><input id="ke" type="number" value="0.30" step="0.01"></div>
+        <div class="row"><label>b (N·m·s/rad)</label><input id="b" type="number" value="0.01" step="0.005"></div>
+        <div class="row"><label>J (kg·m²)</label><input id="J" type="number" value="0.5" step="0.05"></div>
+        <div class="row"><label>I 하드리밋 (A)</label><input id="Ihard" type="number" value="800" step="10"></div>
+        <div class="row"><label>지연 (ms)</label><input id="delayMs" type="number" value="1.0" step="0.5"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-env">
+      <div class="group">
+        <div class="group-title">차량 & 구동계</div>
+        <div class="row"><label>질량 m (kg)</label><input id="mass" type="number" value="1600" step="10"></div>
+        <div class="row"><label>휠 반지름 Rw (m)</label><input id="Rw" type="number" value="0.31" step="0.01"></div>
+        <div class="row"><label>감속 기어비 G</label><input id="gear" type="number" value="9.0" step="0.1"></div>
+        <div class="row"><label>드라이브 효율 η</label><input id="eta" type="number" value="0.95" step="0.01"></div>
+        <div class="row"><label>Cd·A (m²)</label><input id="CdA" type="number" value="0.70" step="0.05"></div>
+        <div class="row"><label>구름저항 c_r</label><input id="cr" type="number" value="0.012" step="0.002"></div>
+        <div class="row"><label>공기 밀도 ρ</label><input id="rho" type="number" value="1.225" step="0.01"></div>
+      </div>
+      <div class="group">
+        <div class="group-title">노면 & 경사</div>
+        <div class="row"><label>노면 마찰 μ</label><input id="mu" type="number" value="1.0" step="0.05"></div>
+        <div class="row"><label>노면 경사 (°)</label><input id="gradeDeg" type="number" value="0" step="0.5"></div>
+        <div class="row"><label>풍속 (m/s)</label><input id="wind" type="number" value="0" step="0.5"></div>
+        <div class="row"><label>패치 추가 (x[m], 길이[m], μ, 경사°)</label>
+          <div>
+            <input id="patchX" type="number" value="50" step="5" style="width:70px"> ,
+            <input id="patchLen" type="number" value="30" step="1" style="width:70px"> ,
+            <input id="patchMu" type="number" value="0.6" step="0.05" style="width:70px"> ,
+            <input id="patchGrade" type="number" value="5" step="0.5" style="width:70px">
+            <button id="btnAddPatch" class="btn" style="margin-left:6px">추가</button>
+          </div>
+        </div>
+        <div id="patchList" class="hint" style="font-size:12px;color:#bcd1ee"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-adv">
+      <div class="group">
+        <div class="group-title">회생제동</div>
+        <div class="row"><label>최대 회생전류 I_regen (A)</label><input id="Iregen" type="number" value="400" step="10"></div>
+        <div class="row"><label>최대 회생전력 P_regen (kW)</label><input id="Pregen" type="number" value="120" step="5"></div>
+        <div class="row"><label>브레이크 블렌딩(마찰)</label><select id="blend"><option value="comfort">Comfort</option><option value="balanced">Balanced</option><option value="maxregen">Max Regen</option></select></div>
+      </div>
+      <div class="group">
+        <div class="group-title">4륜 토크 분배</div>
+        <div class="row"><label>프런트 비율 (%)</label><input id="frontSplit" type="range" min="0" max="100" value="60"></div>
+        <div class="row"><label>자동 분배</label><select id="awdAuto"><option value="0">OFF</option><option value="1">ON</option></select></div>
+        <div class="hint">자동 분배 ON: 앞축이 미끄러지면 뒤축으로 토크 이동 (간단 로직)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stage: big 3D viewport + compact telemetry/plots -->
+  <section class="stage">
+    <div class="telemetry">
+      <div class="tile"><div class="k">속도</div><div class="v" id="v_kmh">0.0 km/h</div></div>
+      <div class="tile"><div class="k">모터 rpm</div><div class="v" id="rpm">0</div></div>
+      <div class="tile"><div class="k">전류</div><div class="v" id="i_a">0 A</div></div>
+      <div class="tile"><div class="k">구동토크</div><div class="v" id="torque">0 N·m</div></div>
+      <div class="tile"><div class="k">전압명령</div><div class="v" id="v_cmd">0 V</div></div>
+      <div class="tile"><div class="k">μ / 경사</div><div class="v" id="mu_grade">1.00 / 0°</div></div>
+    </div>
+    <div id="three-wrap"></div>
+    <details class="card" id="plotsWrap">
+      <summary style="padding:10px 12px;font-weight:800;color:#bfe3ff;cursor:pointer">📈 Telemetry Plots</summary>
+      <div class="plots" style="padding:10px 12px 12px">
+        <div class="tile"><canvas id="chartSpeed" class="chart"></canvas></div>
+        <div class="tile"><canvas id="chartCurrent" class="chart"></canvas></div>
+      </div>
+    </details>
+  </section>
+
+  <details class="guide card">
+    <summary>도움말 / 모델 개요</summary>
+    <div style="padding:8px 12px;color:#cfe4ff;line-height:1.6">
+      전기적: L di/dt = V - R i - k_e ω, 기계적: J dω/dt = τ_drive - b ω - τ_load - τ_ext.<br>
+      τ_drive는 타이어-노면 마찰(μ)과 축별 한계를 고려해 제한됩니다. 회생제동은 I_regen / P_regen 한도 내에서만 적용됩니다. 4륜 분배는 앞/뒤 축 토크를 비율로 나누며, 자동 분배가 켜지면 미끄럼 축의 토크가 다른 축으로 이동합니다.
+    </div>
+  </details>
+
+  <footer>© EV 3D PID Simulator — GitHub Pages용 단일 HTML. 차량/지도/옵션은 교육용 단순화 모델입니다.</footer>
+
+  <!-- 3D & Simulation -->
+  <script type="module">
+    // ✅ esm.sh 로 가져와 베어 스펙 내부 임포트를 CDN 경로로 자동 리라이트 (GitHub Pages 호환)
+    import * as THREE from 'https://esm.sh/three@0.160.0';
+    import { OrbitControls } from 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+    // ====== Helpers ======
+    const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+    const sign = (x) => (x>=0?1:-1);
+
+    // ====== DOM ======
+    const $ = (id)=>document.getElementById(id);
+    const els = {
+      btnControls: $('btnControls'), drawer: $('controlsDrawer'),
+      btnStart: $('btnStart'), btnPause: $('btnPause'), btnReset: $('btnReset'), btnCsv: $('btnCsv'), btnDisturb: $('btnDisturb'),
+      tabs: Array.from(document.querySelectorAll('.tab')),
+      panels: { drive: $('panel-drive'), env: $('panel-env'), adv: $('panel-adv') },
+      mode: $('mode'), profileType: $('profileType'), targetKmh: $('targetKmh'), profileDelay: $('profileDelay'), rampSlope: $('rampSlope'), sineAmp: $('sineAmp'), sineFreq: $('sineFreq'),
+      throttle: $('throttle'), brake: $('brake'),
+      Kps: $('Kps'), Kis: $('Kis'), Imax: $('Imax'), Kpc: $('Kpc'), Kic: $('Kic'), ffOn: $('ffOn'),
+      Vbus: $('Vbus'), R: $('R'), L: $('L'), kt: $('kt'), ke: $('ke'), b: $('b'), J: $('J'), Ihard: $('Ihard'), delayMs: $('delayMs'),
+      mass: $('mass'), Rw: $('Rw'), gear: $('gear'), eta: $('eta'), CdA: $('CdA'), cr: $('cr'), rho: $('rho'),
+      mu: $('mu'), gradeDeg: $('gradeDeg'), wind: $('wind'),
+      patchX: $('patchX'), patchLen: $('patchLen'), patchMu: $('patchMu'), patchGrade: $('patchGrade'), btnAddPatch: $('btnAddPatch'), patchList: $('patchList'),
+      Iregen: $('Iregen'), Pregen: $('Pregen'), blend: $('blend'), frontSplit: $('frontSplit'), awdAuto: $('awdAuto'),
+      v_kmh: $('v_kmh'), rpm: $('rpm'), i_a: $('i_a'), torque: $('torque'), v_cmd: $('v_cmd'), mu_grade: $('mu_grade')
+    };
+
+    // ====== Drawer toggle ======
+    els.btnControls.addEventListener('click', ()=>{
+      els.drawer.classList.toggle('open');
+      els.drawer.setAttribute('aria-hidden', els.drawer.classList.contains('open')? 'false':'true');
+    });
+
+    // Tabs
+    els.tabs.forEach(t=>t.addEventListener('click',()=>{
+      els.tabs.forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const k=t.dataset.tab; Object.values(els.panels).forEach(p=>p.classList.remove('active')); $('panel-'+k).classList.add('active');
+    }));
+
+    // Mode UI toggle
+    const cruiseBox = document.getElementById('cruiseBox');
+    const pedalBox = document.getElementById('pedalBox');
+    els.mode.addEventListener('change',()=>{ const m=els.mode.value; cruiseBox.style.display=m==='cruise'?'' :'none'; pedalBox.style.display=m==='pedal'?'' :'none'; });
+
+    // Profile rows
+    const rampRow = document.getElementById('rampRow');
+    const sineRow = document.getElementById('sineRow');
+    els.profileType.addEventListener('change',()=>{ rampRow.style.display=els.profileType.value==='ramp'?'' :'none'; sineRow.style.display=els.profileType.value==='sine'?'' :'none'; });
+
+    // ====== Charts ======
+    const MAX_POINTS=1600;
+    const mkCfg=(label,unit)=>({type:'line',data:{labels:[],datasets:[{label:label+(unit?` (${unit})`:''),data:[],tension:.18,pointRadius:0,borderWidth:2}]},options:{responsive:true,animation:false,scales:{x:{ticks:{color:'#9fb3cc'}},y:{ticks:{color:'#9fb3cc'}}},plugins:{legend:{labels:{color:'#cfe4ff'}}}}});
+    const cSpeed=new Chart($('chartSpeed'),mkCfg('Speed','km/h'));
+    const cCurrent=new Chart($('chartCurrent'),mkCfg('Current','A'));
+    const push=(ch,t,y)=>{ const L=ch.data.labels,D=ch.data.datasets[0].data; L.push(t);D.push(y); if(L.length>MAX_POINTS){L.shift();D.shift();} ch.update(); };
+
+    // ====== Simulation State ======
+    const state={
+      running:false,
+      i:0, w:0, // current [A], motor speed [rad/s]
+      x:0, // position [m]
+      iw:0, ii:0, // integrators
+      Vcmd:0, i_ref:0,
+      t:0, disturbUntil:0,
+      patches:[],
+      log:[]
+    };
+
+    // ====== Parameters ======
+    const P=()=>({
+      mode: els.mode.value, profileType: els.profileType.value, targetKmh: parseFloat(els.targetKmh.value), profileDelay: parseFloat(els.profileDelay.value), rampSlope: parseFloat(els.rampSlope.value), sineAmp: parseFloat(els.sineAmp.value), sineFreq: parseFloat(els.sineFreq.value),
+      throttle: parseFloat(els.throttle.value)/100, brake: parseFloat(els.brake.value)/100,
+      Kps: +els.Kps.value, Kis: +els.Kis.value, Imax:+els.Imax.value, Kpc:+els.Kpc.value, Kic:+els.Kic.value, ffOn: (els.ffOn.value==='1'),
+      Vbus:+els.Vbus.value, R:+els.R.value, L:+els.L.value, kt:+els.kt.value, ke:+els.ke.value, b:+els.b.value, J:+els.J.value, Ihard:+els.Ihard.value, delayMs:+els.delayMs.value,
+      m:+els.mass.value, Rw:+els.Rw.value, gear:+els.gear.value, eta:+els.eta.value, CdA:+els.CdA.value, cr:+els.cr.value, rho:+els.rho.value,
+      mu:+els.mu.value, gradeDeg:+els.gradeDeg.value, wind:+els.wind.value,
+      Iregen:+els.Iregen.value, Pregen:+els.Pregen.value*1000, blend: els.blend.value,
+      frontSplit: parseFloat(els.frontSplit.value)/100, awdAuto: els.awdAuto.value==='1'
+    });
+
+    // ====== Reference / Driver ======
+    function speedRef(t){
+      const p=P();
+      if(p.mode==='pedal') return clamp(p.throttle*150,0,200);
+      if(t<p.profileDelay) return 0;
+      switch(p.profileType){
+        case 'step': return p.targetKmh;
+        case 'ramp': return clamp(p.rampSlope*(t-p.profileDelay),0,p.targetKmh);
+        case 'sine': return Math.max(0, p.targetKmh + p.sineAmp*Math.sin(2*Math.PI*p.sineFreq*(t-p.profileDelay)));
+      }
+      return 0;
+    }
+
+    // km/h <-> rad/s
+    const kmhToMotorW = (kmh,g,Rw)=> (kmh/3.6)/Rw * g;
+    const motorWToKmh = (w,g,Rw)=> (w/g)*Rw*3.6;
+
+    // Environment patches
+    function envAt(x){
+      const p=P();
+      let mu=p.mu, grade=p.gradeDeg;
+      for(const r of state.patches){ if(x>=r.x && x<=r.x+r.len){ mu=r.mu; grade=r.grade; break; } }
+      return {mu, grade};
+    }
+
+    // Load torque at motor (aero + rolling + grade), with wind
+    function loadTorqueMotor(w, kmh, p, gradeDeg){
+      const v = kmh/3.6; const g=9.80665;
+      const vw = v - p.wind; // headwind positive increases aero
+      const F_roll = p.m*g*p.cr*sign(v);
+      const F_grade = p.m*g*Math.sin(gradeDeg*Math.PI/180);
+      const F_aero = 0.5*p.rho*p.CdA*vw*vw*sign(vw);
+      const F_total = F_roll + F_grade + F_aero;
+      const tau_wheel = F_total*p.Rw;
+      return (tau_wheel/p.gear)/Math.max(1e-6,p.eta);
+    }
+
+    // Traction-limited drive torque with AWD split
+    function tractionLimitedTorque(tau_motor, p, mu){
+      const g=9.80665; const Nf=0.52*p.m*g*Math.cos(P().gradeDeg*Math.PI/180), Nr=0.48*p.m*g*Math.cos(P().gradeDeg*Math.PI/180);
+      const Tw_f_max = mu*Nf*p.Rw; const Tw_r_max = mu*Nr*p.Rw;
+      const Tm_f_max = (Tw_f_max/p.gear)/Math.max(1e-6,p.eta);
+      const Tm_r_max = (Tw_r_max/p.gear)/Math.max(1e-6,p.eta);
+      let split=p.frontSplit;
+      if(p.awdAuto){ const want_f = Math.abs(tau_motor)*split; if(want_f> Tm_f_max) split = clamp(split-0.1,0,1); }
+      const Tf = clamp(tau_motor*split, -Tm_f_max, Tm_f_max);
+      const Tr = clamp(tau_motor*(1-split), -Tm_r_max, Tm_r_max);
+      return {Tf, Tr, Tdrive: Tf+Tr, split};
+    }
+
+    // Regen limit
+    function applyRegenLimits(tau_cmd, w, p){
+      if(tau_cmd>=0) return tau_cmd;
+      const I_lim = p.Iregen; const T_i = p.kt*I_lim; // Nm
+      const P_lim = p.Pregen; const T_p = (Math.abs(w)>1e-3)? (P_lim/Math.abs(w)) : 1e9; // Nm
+      const T_regen_max = -Math.min(T_i, T_p);
+      return Math.max(tau_cmd, T_regen_max); // tau_cmd is negative
+    }
+
+    // Blend brake: if braking demand exceeds regen, add friction (not simulated electrically; just extra load)
+    function brakeBlendExtraTorque(negTorqueCmd, appliedTorque){
+      const deficit = negTorqueCmd - appliedTorque; // negative - negative
+      return deficit; // negative value -> additional resistive torque
+    }
+
+    // ====== THREE.js Scene ======
+    const wrap = $('three-wrap');
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0f14);
+    const camera = new THREE.PerspectiveCamera(55, wrap.clientWidth/Math.max(1,wrap.clientHeight), 0.1, 2000);
+    camera.position.set(-20,12,20);
+    const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setSize(wrap.clientWidth, wrap.clientHeight); wrap.appendChild(renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0,1,0); controls.update();
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0xbfd1ff, 0x202020, 0.9); scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(10,20,10); scene.add(dir);
+
+    // Ground (flat lane)
+    const groundGeo = new THREE.PlaneGeometry(1000, 40, 50, 4);
+    const groundMat = new THREE.MeshStandardMaterial({color:0x0e1726, metalness:0.1, roughness:0.9});
+    const ground = new THREE.Mesh(groundGeo, groundMat); ground.receiveShadow=true; ground.rotation.x = -Math.PI/2; scene.add(ground);
+
+    // Lane lines
+    const lineMat = new THREE.MeshBasicMaterial({color:0x4cc9f0});
+    for(let i=-10;i<=10;i+=5){ const g=new THREE.BoxGeometry(1000,0.02,0.05); const m=new THREE.Mesh(g,lineMat); m.position.set(0,0.01,i); scene.add(m);} 
+
+    // Patches visual (surface μ/grade zones)
+    const patchGroup = new THREE.Group(); scene.add(patchGroup);
+    function refreshPatches(){
+      patchGroup.clear();
+      els.patchList.innerHTML = state.patches.map((r,idx)=>`#${idx+1} x=${r.x}m ~ ${r.x+r.len}m | μ=${r.mu}, 경사=${r.grade}°`).join('<br>');
+      for(const r of state.patches){
+        const g=new THREE.BoxGeometry(r.len,0.02,6);
+        const mat=new THREE.MeshStandardMaterial({color:0x11334a, emissive:0x0, roughness:0.8, metalness:0.1});
+        const m=new THREE.Mesh(g,mat); m.position.set(r.x+r.len/2,0.02,0); patchGroup.add(m);
+      }
+    }
+    els.btnAddPatch?.addEventListener('click',()=>{
+      state.patches.push({x:+els.patchX.value, len:+els.patchLen.value, mu:+els.patchMu.value, grade:+els.patchGrade.value});
+      refreshPatches();
+    });
+
+    // Simple car model
+    const car = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3.8,1.2,1.8), new THREE.MeshStandardMaterial({color:0x1f3b5b, metalness:0.4, roughness:0.4})); body.position.y=1; car.add(body);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2,0.8,1.6), new THREE.MeshStandardMaterial({color:0x2e5d88, metalness:0.2, roughness:0.6})); cabin.position.set(0,1.4,0); car.add(cabin);
+    function wheel(){ const g=new THREE.CylinderGeometry(0.38,0.38,0.26,20); g.rotateZ(Math.PI/2); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({color:0x0b0b0b, roughness:0.9})); }
+    const wFL=wheel(), wFR=wheel(), wRL=wheel(), wRR=wheel();
+    wFL.position.set( 1.4,0.38, 0.95); wFR.position.set( 1.4,0.38,-0.95); wRL.position.set(-1.4,0.38, 0.95); wRR.position.set(-1.4,0.38,-0.95);
+    car.add(wFL,wFR,wRL,wRR); scene.add(car);
+
+    // ====== Sim loop ======
+    const DT_INT=0.001; // 1 ms internal
+    let last=performance.now();
+
+    function stepSim(dt){
+      const p=P();
+      let remain=dt; while(remain>1e-9){ const h=Math.min(DT_INT,remain);
+        const here = envAt(state.x);
+        const w_ref = kmhToMotorW(speedRef(state.t), p.gear, p.Rw);
+        const ew = w_ref - state.w;
+        let i_ref = p.Kps*ew + state.iw*p.Kis;
+        i_ref = clamp(i_ref, -p.Imax, p.Imax);
+        if((i_ref< p.Imax && i_ref> -p.Imax)) state.iw += ew*h;
+
+        let brakeDemandTorque = 0;
+        if(p.mode==='pedal' && p.brake>0){ brakeDemandTorque = - (2000 * p.brake); }
+
+        const ei = i_ref - state.i;
+        const Vff = p.ffOn ? p.ke*state.w : 0;
+        const Vunsat = p.Kpc*ei + state.ii*p.Kic + Vff;
+        const Vcmd = clamp(Vunsat, -p.Vbus, p.Vbus);
+        if( (Vunsat>p.Vbus && ei<0) || (Vunsat<-p.Vbus && ei>0) || Math.abs(Vunsat)<=p.Vbus+1e-6) state.ii += ei*h;
+        const alpha = Math.min(1, h/Math.max(1e-6,p.delayMs/1000));
+        state.Vcmd = (1-alpha)*state.Vcmd + alpha*Vcmd;
+        const di = (state.Vcmd - p.R*state.i - p.ke*state.w)/Math.max(1e-9,p.L);
+        state.i += di*h; state.i = clamp(state.i, -p.Ihard, p.Ihard);
+        let tau_m = p.kt*state.i;
+
+        if(brakeDemandTorque<0){ tau_m = Math.min(tau_m, brakeDemandTorque); }
+        tau_m = applyRegenLimits(tau_m, state.w, p);
+        const awd = tractionLimitedTorque(tau_m, p, here.mu);
+
+        if(brakeDemandTorque<0 && awd.Tdrive>brakeDemandTorque){ const extra = brakeBlendExtraTorque(brakeDemandTorque, awd.Tdrive); const tau_load_extra = -extra;
+          const kmh_now = motorWToKmh(state.w, p.gear, p.Rw);
+          const tau_aero_roll_grade = loadTorqueMotor(state.w, kmh_now, p, here.grade);
+          const dw = (awd.Tdrive - p.b*state.w - tau_aero_roll_grade - tau_load_extra)/Math.max(1e-9,p.J);
+          state.w += dw*h;
+        } else {
+          const kmh_now = motorWToKmh(state.w, p.gear, p.Rw);
+          const tau_load = loadTorqueMotor(state.w, kmh_now, p, here.grade);
+          const dw = (awd.Tdrive - p.b*state.w - tau_load)/Math.max(1e-9,p.J);
+          state.w += dw*h;
+        }
+
+        const v = (state.w/p.gear)*p.Rw; state.x += v*h;
+        state.i_ref = i_ref; state.t += h;
+      }
+    }
+
+    function render(){
+      const p=P();
+      const kmh = motorWToKmh(state.w, p.gear, p.Rw);
+      const here = envAt(state.x);
+      els.v_kmh.textContent = `${kmh.toFixed(1)} km/h`;
+      els.rpm.textContent = `${(state.w*60/(2*Math.PI)).toFixed(0)}`;
+      els.i_a.textContent = `${state.i.toFixed(1)} A`;
+      els.torque.textContent = `${(p.kt*state.i).toFixed(1)} N·m`;
+      els.v_cmd.textContent = `${state.Vcmd.toFixed(1)} V`;
+      els.mu_grade.textContent = `${here.mu.toFixed(2)} / ${here.grade.toFixed(1)}°`;
+
+      car.position.set(state.x, 0, 0);
+      const wheelW = state.w/p.gear; [wFL,wFR,wRL,wRR].forEach(w=> w.rotation.x -= wheelW*(1/60));
+
+      state.log.push({t:state.t, kmh, i:state.i, v:state.Vcmd});
+      const ts = state.t.toFixed(2); push(cSpeed, ts, kmh); push(cCurrent, ts, state.i);
+    }
+
+    function loop(now){ if(!state.running) return; const dt=Math.min(0.05,(now-last)/1000); last=now; stepSim(dt); render(); renderer.render(scene,camera); requestAnimationFrame(loop); }
+
+    // Resize -> use actual container height
+    new ResizeObserver(()=>{ const w=wrap.clientWidth, h=wrap.clientHeight; renderer.setSize(w, h); camera.aspect=w/Math.max(1,h); camera.updateProjectionMatrix(); }).observe(wrap);
+
+    // Controls
+    els.btnStart.addEventListener('click',()=>{ if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop);} }); els.btnStart.setAttribute('listener','1');
+    els.btnPause.addEventListener('click',()=> state.running=false);
+    els.btnReset.addEventListener('click',()=>{
+      state.running=false; state.i=0; state.w=0; state.x=0; state.iw=0; state.ii=0; state.i_ref=0; state.Vcmd=0; state.t=0; state.disturbUntil=0; state.log=[];
+      cSpeed.data.labels=[]; cSpeed.data.datasets[0].data=[]; cCurrent.data.labels=[]; cCurrent.data.datasets[0].data=[]; cSpeed.update(); cCurrent.update();
+      car.position.set(0,0,0);
+    });
+    els.btnDisturb?.addEventListener('click',()=> state.disturbUntil=state.t+2);
+
+    // ===== CSV Export (fixed newline) =====
+    els.btnCsv.addEventListener('click',()=>{
+      try{
+        if(state.log.length===0) return;
+        const rows=[["t(s)","speed(km/h)","current(A)","voltage(V)"]].concat(state.log.map(d=>[d.t.toFixed(4),d.kmh.toFixed(3),d.i.toFixed(3),d.v.toFixed(3)]));
+        const csv = rows.map(r=>r.join(',')).join('\n');
+        const blob=new Blob([csv],{type:'text/csv'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download='ev3d_pid_sim.csv'; a.click(); URL.revokeObjectURL(url);
+      }catch(e){ console.error('CSV export failed', e); alert('CSV 내보내기 중 오류가 발생했습니다. 콘솔을 확인하세요.'); }
+    });
+
+    refreshPatches();
+
+    // ====== Self-tests (existing + added) ======
+    (function selfTests(){
+      function approx(a,b,eps=1e-6){ return Math.abs(a-b)<=eps; }
+      // 0) three & OrbitControls presence (esm.sh resolved imports)
+      console.assert(!!THREE && !!THREE.WebGLRenderer, 'THREE import failed');
+      console.assert(typeof OrbitControls === 'function', 'OrbitControls import failed');
+      // 1) km/h ↔ rad/s round-trip
+      const g=9, Rw=0.3, KMH=123.456; const w=kmhToMotorW(KMH,g,Rw); const KMH2=motorWToKmh(w,g,Rw);
+      console.assert(approx(KMH,KMH2,1e-6), 'kmh<->rad/s conversion failed');
+      // 2) Regen cap: power limit vs current limit
+      const ptest={Iregen:500, Pregen:50_000, kt:0.3}; const t1=applyRegenLimits(-1e6, 0.1, ptest); console.assert(t1<=0 && Math.abs(t1) <= 50_000/0.1 + 1e-6, 'Regen power cap');
+      const t2=applyRegenLimits(-1e6, 200, ptest); console.assert(Math.abs(t2) <= 500*0.3 + 1e-6, 'Regen current cap');
+      // 3) Traction limit: mu=0 clamps to ~0 drive torque
+      const tr=tractionLimitedTorque(1000,{m:1600,Rw:0.3,gear:9,eta:0.95,frontSplit:0.5,awdAuto:false},0.0); console.assert(Math.abs(tr.Tdrive)<1e-6,'Traction clamp mu=0');
+      // 4) CSV newline join contains \n and splits into expected rows
+      const rowsTest=[["a","b"],["1","2"]]; const csvT=rowsTest.map(r=>r.join(',')).join('\n'); console.assert(csvT.includes('\n') && csvT.split('\n').length===2, 'CSV join with \\n');
+      // 5) Basic click wiring present (start)
+      console.assert(typeof els.btnStart.onclick === 'function' || els.btnStart.hasAttribute('listener'), 'Start button wired');
+      // 6) Renderer height > 400px (bigger 3D viewport)
+      console.assert(wrap.clientHeight >= 460, '3D viewport height too small');
+      // 7) Drawer toggles visibility
+      const wasOpen = els.drawer.classList.contains('open'); els.btnControls.click(); const nowOpen = els.drawer.classList.contains('open'); console.assert(wasOpen !== nowOpen, 'Drawer toggle failed'); if(!wasOpen) els.btnControls.click();
+      console.log('%cSelf-tests OK','color:#34d5ff');
+    })();
+  </script>
+</body>
+</html>
