@@ -257,7 +257,7 @@ function MinimalOrbitControls(cam,dom){
 const controls = (THREE.OrbitControls)? new THREE.OrbitControls(camera, renderer.domElement)
                                        : new MinimalOrbitControls(camera, renderer.domElement);
 if(controls.target) controls.target.set(0,0,0);
-controls.maxPolarAngle = Math.PI*0.495;
+if('maxPolarAngle' in controls) controls.maxPolarAngle = Math.PI*0.495;
 
 const hemi=new THREE.HemisphereLight(0xb0c7ff,0x334455,0.7); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffd9b0,0.9); sun.position.set(10,20,5);
@@ -435,11 +435,11 @@ const QuestDefs=[
   {id:'q3',title:'광장에 벤치',desc:'여우벤치 1개 배치',test:s=>s._placed.bench>=1,reward:()=>{State.repScore+=10;addXP(12);}},
   {id:'q4',title:'밤길을 비춰요',desc:'등롱 1개 배치',test:s=>s._placed.lantern>=1,reward:()=>{State.pine+=15;addXP(12);}},
   {id:'q5',title:'정원 가꾸기',desc:'화단 1개 배치',test:s=>s._placed.flowerbed>=1,reward:()=>{State.repScore+=8;addXP(10);}},
-  {id:'q6',title:'장식가',desc:'장식 점수 60 달성',test:s=>State.repScore>=60,reward:()=>{addXP(18);}},
+  {id:'q6',title:'장식 점수 60 달성',desc:'장식 점수(평판 점수) 60 달성',test:s=>State.repScore>=60,reward:()=>{addXP(18);}},
   {id:'q7',title:'제작가',desc:'제작 10회 수행',test:s=>s._craftCount>=10,reward:()=>{State.pine+=25;addXP(18);}},
   {id:'q8',title:'사진가',desc:'포토 모드에서 스샷 1회(키: P)',test:s=>s._photoTaken,reward:()=>{State.repScore+=6;addXP(10);}},
   {id:'q9',title:'근면한 여우',desc:'스태미나를 3회 이상 소모하는 행동 수행',test:s=>s._staminaSpend>=3,reward:()=>{State.pine+=20;addXP(12);}},
-  {id:'q10',title:'평판 올리기',desc:'평판 C 달성',test:s=>repLetter(State.repScore)>='C',reward:()=>{addXP(20);}},
+  {id:'q10',title:'평판 올리기',desc:'평판 C 달성',test:s=>State.repScore>=60,reward:()=>{addXP(20);}},
   {id:'q11',title:'상인과 대화',desc:'너구리 상인과 대화하기 (E)',test:s=>State.flags.metMerchant,reward:()=>{State.pine+=12;addXP(10);}},
   {id:'q12',title:'마을장과 대화',desc:'마을장에게 인사하기 (E)',test:s=>State.flags.talkedElder,reward:()=>{State.repScore+=10;addXP(14);}},
   {id:'q13',title:'울타리 설치',desc:'울타리 3개 배치',test:s=>(QuestState._placed.fence||0)>=3,reward:()=>{State.pine+=10;addXP(10);}},
@@ -469,7 +469,17 @@ function addXP(x){ State.xp+=x; while(State.xp>=20){ State.xp-=20; State.level++
 
 /********************** Input *******************************/
 const move={f:0,b:0,l:0,r:0}; let sprint=false;
-window.addEventListener('keydown',e=>{ if(e.repeat) return; if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1; if(e.code==='ShiftLeft') sprint=true; if(e.code==='KeyB'){ State.mode=(State.mode==='build'?'explore':'build'); toggleDock(State.mode==='build'?'modeBuild':'modeExplore'); $('#panelBuild').hidden=(State.mode!=='build'); if(State.mode!=='build') cancelBuild(); } if(e.code==='KeyM'){ toggleShop(); } if(e.code==='KeyE'){ const n=nearestNPC(1.9); if(n){ talk(n); return; } const it=nearestInteractable(2.0); if(it){ harvest(it); QuestState._harvestCount++; } } if(e.code==='KeyC'){ togglePanel('panelCraft'); } if(e.code==='KeyI'){ togglePanel('panelBag'); } if(e.code==='KeyP'){ QuestState._photoTaken=true; checkQuests(); toast('찰칵! (가상의 스샷)'); } if(e.code==='KeyR'){ buildRot=(buildRot+Math.PI/2)%(Math.PI*2); } if(e.code==='Escape'){ cancelBuild(); State.mode='explore'; toggleDock('modeExplore'); hidePanels(); closeShop(); hideDialog(); } });
+window.addEventListener('keydown',e=>{ if(e.repeat) return;
+  if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1; if(e.code==='ShiftLeft') sprint=true;
+  if(e.code==='KeyB'){ State.mode=(State.mode==='build'?'explore':'build'); toggleDock(State.mode==='build'?'modeBuild':'modeExplore'); $('#panelBuild').hidden=(State.mode!=='build'); if(State.mode!=='build') cancelBuild(); }
+  if(e.code==='KeyM'){ toggleShop(); }
+  if(e.code==='KeyE'){ const n=nearestNPC(1.9); if(n){ talk(n); return; } const it=nearestInteractable(2.0); if(it){ harvest(it); QuestState._harvestCount++; } }
+  if(e.code==='KeyC'){ togglePanel('panelCraft'); }
+  if(e.code==='KeyI'){ togglePanel('panelBag'); }
+  if(e.code==='KeyP'){ QuestState._photoTaken=true; checkQuests(); toast('찰칵! (가상의 스샷)'); }
+  if(e.code==='KeyR'){ buildRot=(buildRot+Math.PI/2)%(Math.PI*2); }
+  if(e.code==='Escape'){ cancelBuild(); State.mode='explore'; toggleDock('modeExplore'); hidePanels(); closeShop(); hideDialog(); }
+});
 window.addEventListener('keyup',e=>{ if(e.code==='KeyW') move.f=0; if(e.code==='KeyS') move.b=0; if(e.code==='KeyA') move.l=0; if(e.code==='KeyD') move.r=0; if(e.code==='ShiftLeft') sprint=false; });
 function togglePanel(id){ const el=document.getElementById(id); el.hidden=!el.hidden; }
 function hidePanels(){ $('#panelCraft').hidden=true; $('#panelBag').hidden=true; $('#panelBuild').hidden=true; }
@@ -535,8 +545,6 @@ function refreshTopBarFast(){ elStBar.style.width=`${(State.stamina/State.maxSta
 
 /********************** Boot ******************************/
 function restorePlaced(){ for(const p of State.placed){ if(!BuildPrefabs[p.type]) continue; const o=BuildPrefabs[p.type](); o.position.set(p.x,p.y,p.z); o.rotation.y=p.rot||0; o.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }}); scene.add(o); placables.push({mesh:o,type:p.type,score:(BuildDefs[p.type]?.score)||0}); } }
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({State,QuestState})); }
-function load(){ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return; try{ const obj=JSON.parse(raw); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); }catch(e){} }
 load(); refreshUI(); refreshQuests(); restorePlaced(); makeRain(); if(State.weather==='rain') rainParticles.visible=true; Weather.timerMin=(State.weather==='rain')?randi(40,120):randi(120,360); requestAnimationFrame(tick);
 
 /********************** Toast & Resize **********************/
@@ -546,7 +554,19 @@ window.addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; cam
 setTimeout(()=>toast('WASD 이동, E 상호작용/대화, B 건설, C 제작, I 가방, M 상점'),500);
 
 /********************** Self Tests ***************************/
-(function selfTest(){ const tests=[]; const ok=(n,c)=>tests.push({n,pass:!!c}); try{ ok('THREE 전역', typeof THREE==='object'&&!!THREE.WebGLRenderer); ok('컨트롤러 존재', !!THREE.OrbitControls || typeof MinimalOrbitControls==='function'); ok('repLetter', repLetter(0)==='D'&&repLetter(60)==='C'&&repLetter(250)==='A'&&repLetter(500)==='S'); ok('Prefab bench', (function(){const o=BuildPrefabs.bench();return o&&o.isObject3D;})()); ok('Recipe plank cost', Recipes.plank.cost.wood===2); (function(){ const bak=State.bag.wood; State.bag.wood=2; ok('canPay wood2', canPay({wood:2})===true); pay({wood:2}); ok('pay->0', State.bag.wood===0); State.bag.wood=bak; })(); ok('QuestDefs len', Array.isArray(QuestDefs)&&QuestDefs.length>=10); ok('BuildDefs 필수', !!BuildDefs.fence&&!!BuildDefs.stall&&!!BuildDefs.bridge); Weather.force('rain'); ok('Weather rain', State.weather==='rain'); Weather.force('clear'); ok('Weather clear', State.weather==='clear'); ok('Minimap DOM', !!document.getElementById('minimap')); }catch(e){ console.warn('SelfTest error',e); } const pass=tests.filter(t=>t.pass).length,total=tests.length; if(pass!==total){ console.warn('SelfTests',tests); toast(`테스트 실패 ${pass}/${total} — 콘솔 확인`); } else { console.log('SelfTests OK',tests); toast(`Self-test OK ${pass}/${total}`); } })();
+(function selfTest(){ const tests=[]; const ok=(n,c)=>tests.push({n,pass:!!c}); try{
+  ok('THREE 전역', typeof THREE==='object'&&!!THREE.WebGLRenderer);
+  ok('컨트롤러 존재', !!THREE.OrbitControls || typeof MinimalOrbitControls==='function');
+  ok('repLetter', repLetter(0)==='D'&&repLetter(60)==='C'&&repLetter(250)==='A'&&repLetter(500)==='S');
+  ok('Prefab bench', (function(){const o=BuildPrefabs.bench();return o&&o.isObject3D;})());
+  ok('Recipe plank cost', Recipes.plank.cost.wood===2);
+  (function(){ const bak=State.bag.wood; State.bag.wood=2; ok('canPay wood2', canPay({wood:2})===true); pay({wood:2}); ok('pay->0', State.bag.wood===0); State.bag.wood=bak; })();
+  ok('QuestDefs len', Array.isArray(QuestDefs)&&QuestDefs.length>=10);
+  ok('BuildDefs 필수', !!BuildDefs.fence&&!!BuildDefs.stall&&!!BuildDefs.bridge);
+  Weather.force('rain'); ok('Weather rain', State.weather==='rain'); Weather.force('clear'); ok('Weather clear', State.weather==='clear');
+  ok('Minimap DOM', !!document.getElementById('minimap'));
+}catch(e){ console.warn('SelfTest error',e); }
+const pass=tests.filter(t=>t.pass).length,total=tests.length; if(pass!==total){ console.warn('SelfTests',tests); toast(`테스트 실패 ${pass}/${total} — 콘솔 확인`); } else { console.log('SelfTests OK',tests); toast(`Self-test OK ${pass}/${total}`); } })();
 
 } // initGame
   </script>
