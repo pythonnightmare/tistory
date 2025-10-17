@@ -9,7 +9,8 @@
     :root{ --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9; --accent:#4cc9f0; --accent2:#a0e9ff; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,Arial}
+    body{margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Apple SD Gothic Neo,Noto Sans KR,Arial}
+    /* header */
     header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;position:sticky;top:0;backdrop-filter:blur(6px);z-index:50;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,rgba(8,11,17,.86),rgba(8,11,17,.45))}
     header .left{display:flex;align-items:center;gap:10px}
     header h1{font-size:16px;margin:0;font-weight:800}
@@ -18,20 +19,22 @@
     .btn{background:linear-gradient(180deg,#1e2635,#141b27);border:1px solid rgba(255,255,255,.12);color:#e8f3ff;padding:8px 10px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);font-size:12px}
     .btn.accent{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#06283b;border-color:rgba(76,201,240,.6)}
     .btn.warn{background:linear-gradient(180deg,#ffd76a,#f3b740);color:#2a1d00}
-    /* controls drawer */
-    .drawer{display:none} .drawer.open{display:block}
+    /* drawer (Controls 메뉴 유지) */
+    .drawer{display:none}
+    .drawer.open{display:block}
     .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 14px}
     .card h2{font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:var(--accent2);margin:0;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
     .tabs{display:grid;grid-template-columns: repeat(4,1fr);gap:6px;padding:8px}
     .tab{cursor:pointer;text-align:center;padding:8px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1522;font-size:12px}
     .tab.active{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#052531;border-color:rgba(76,201,240,.6);font-weight:800}
-    .panel{display:none;padding:10px 12px 12px} .panel.active{display:block}
+    .panel{display:none;padding:10px 12px 12px}
+    .panel.active{display:block}
     .group{border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px;margin-bottom:10px;background:rgba(255,255,255,.02)}
     .group-title{color:#b9d7ff;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.35px;margin-bottom:8px}
     .row{display:grid;grid-template-columns: 1fr auto;gap:8px;align-items:center;margin:6px 0}
     input[type=number],select{width:120px;background:#0d1320;color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 8px;font-size:12px}
     input[type=range]{width:100%}
-    /* layout: left(telemetry+3D) | right(charts) */
+    /* layout: left(3D+타일) | right(그래프) */
     .app{display:grid;grid-template-columns: 1fr 420px;gap:10px;padding:8px 14px}
     #three-wrap{height:clamp(560px, 75vh, 920px);border-radius:18px;overflow:hidden;outline:none}
     .telemetry{display:grid;grid-template-columns: repeat(auto-fit, minmax(120px,1fr));gap:6px;padding:6px 0}
@@ -44,7 +47,7 @@
     footer{color:#7d8aa3;font-size:11px;text-align:center;padding:8px}
   </style>
 
-  <!-- ✅ import map: use CDN modules correctly -->
+  <!-- ✅ Import Map: fix bare module specifier for three -->
   <script type="importmap">
   {
     "imports": {
@@ -58,8 +61,8 @@
   <header>
     <div class="left">
       <button id="btnControls" class="btn">☰ Controls</button>
-      <h1>몽자큐트</h1>
-      <span class="sub">W/↑ 가속 · S/↓ 브레이크 · ←(우회전) →(좌회전) · Space 재생/일시정지</span>
+      <h1>EV Free Drive — 3D & Regen PID</h1>
+      <span class="sub">W/↑ 가속 · S/↓ 브레이크 · ←(우회전) →(좌회전) · Space 일시정지/재개</span>
     </div>
     <div class="btnbar">
       <button id="btnStart" class="btn accent">▶ 시작</button>
@@ -70,7 +73,7 @@
     </div>
   </header>
 
-  <!-- Controls drawer (유지) -->
+  <!-- Controls 메뉴(유지) -->
   <section id="controlsDrawer" class="card drawer" aria-hidden="true">
     <h2>Controls</h2>
     <div class="tabs">
@@ -82,12 +85,10 @@
 
     <div class="panel active" id="panel-drive">
       <div class="group">
-        <div class="group-title">주행</div>
-        <div class="row"><label>모드</label>
-          <select id="mode">
-            <option value="pedal" selected>Pedal (스로틀/브레이크)</option>
-            <option value="cruise">Cruise (목표속도)</option>
-          </select>
+        <div class="group-title">주행 모드</div>
+        <div class="row">
+          <label>모드</label>
+          <select id="mode"><option value="pedal" selected>Pedal (스로틀/브레이크)</option><option value="cruise">Cruise (목표속도)</option></select>
         </div>
         <div id="cruiseBox" style="display:none">
           <div class="row"><label>목표 속도 (km/h)</label><input id="targetKmh" type="number" value="80" step="1"></div>
@@ -100,11 +101,11 @@
           <div class="row"><label>브레이크 (%)</label><input id="brake" type="range" min="0" max="100" value="0"></div>
           <div class="row"><label>조향 (°)</label><input id="steer" type="range" min="-30" max="30" value="0"></div>
           <div class="row"><label>키 반응(%/s)</label>
-            <select id="keyRate"><option value="60">느림</option><option value="120" selected>보통</option><option value="200">빠름</option></select>
+            <select id="keyRate"><option value="50">느림</option><option value="100" selected>보통</option><option value="180">빠름</option></select>
           </div>
         </div>
+        <div class="btnbar" style="margin-top:8px"><button id="btnDisturb" class="btn">⚡ 부하시험(+300Nm, 2s)</button></div>
       </div>
-
       <div class="group">
         <div class="group-title">인버터/모터</div>
         <div class="row"><label>Imax (A)</label><input id="Imax" type="number" value="600" step="10"></div>
@@ -124,7 +125,6 @@
           <span><input id="Iregen" type="number" value="400" step="10" style="width:80px"> / <input id="Pregen" type="number" value="120" step="5" style="width:80px"></span>
         </div>
       </div>
-
       <div class="group">
         <div class="group-title">차량/환경</div>
         <div class="row"><label>m (kg)</label><input id="mass" type="number" value="1600" step="10"></div>
@@ -136,6 +136,7 @@
         </div>
         <div class="row"><label>ρ (kg/m³)</label><input id="rho" type="number" value="1.225" step="0.01"></div>
         <div class="row"><label>마찰 μ</label><input id="mu" type="number" value="1.0" step="0.05"></div>
+        <div class="row"><label>등판(°)</label><input id="gradeDeg" type="number" value="0" step="0.5"></div>
         <div class="row"><label>표시 스무딩 τ(ms)</label><input id="smoothMs" type="number" value="250" step="25"></div>
         <div class="row"><label>차트 주기/창</label>
           <span><input id="chartMs" type="number" value="120" step="10" style="width:80px"> / <input id="chartWindow" type="number" value="60" step="10" style="width:80px"> s</span>
@@ -143,11 +144,30 @@
       </div>
     </div>
 
-    <div class="panel" id="panel-env"><div class="group"><div class="group-title">도움</div>자유 주행(트랙 종속 없음). 직진 유지되도록 조향 자동 복원/데드존 적용.</div></div>
-    <div class="panel" id="panel-adv"><div class="group"><div class="group-title">메모</div>CSV, Follow 카메라, 자가 테스트 포함.</div></div>
-    <div class="panel" id="panel-help"><div class="group"><div class="group-title">키</div>W/↑ 가속 · S/↓ 브레이크 · ←(우) →(좌) · Space 토글</div></div>
+    <div class="panel" id="panel-env">
+      <div class="group">
+        <div class="group-title">도움</div>
+        <div>이제 트랙 종속이 아니라 XY 평면에서 자유 주행합니다.</div>
+        <div><b>방향키는 반대</b>: ←(우회전), →(좌회전). A/D는 일반(좌/우)입니다.</div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-adv">
+      <div class="group">
+        <div class="group-title">메모</div>
+        <div>CSV 내보내기, 카메라 Follow 토글, 부하시험 버튼 유지.</div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-help">
+      <div class="group">
+        <div class="group-title">키보드</div>
+        <div>W/↑ 가속 · S/↓ 브레이크 · ←(우회전) →(좌회전) · Space 재생/일시정지</div>
+      </div>
+    </div>
   </section>
 
+  <!-- Stage + 오른쪽 사이드 그래프 -->
   <main class="app">
     <section class="card" style="padding:8px">
       <div class="telemetry">
@@ -178,9 +198,10 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-    // ===== Helpers =====
+    // ---------- Helpers ----------
     const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-    const sign0=(x)=>Math.abs(x)<1e-6?0:(x>0?1:-1);
+    const sign0=(x)=> Math.abs(x)<1e-6 ? 0 : (x>0?1:-1);
+    const lerp =(a,b,t)=>a+(b-a)*t;
 
     // EMA smoother for tiles
     const smoother=(()=>{ const m=new Map(); let last=performance.now(); return{
@@ -193,161 +214,204 @@
     const $=id=>document.getElementById(id);
     const els={
       btnControls:$('btnControls'), drawer:$('controlsDrawer'),
-      btnStart:$('btnStart'), btnPause:$('btnPause'), btnReset:$('btnReset'), btnCsv:$('btnCsv'), btnFollow:$('btnFollow'),
+      btnStart:$('btnStart'), btnPause:$('btnPause'), btnReset:$('btnReset'), btnCsv:$('btnCsv'), btnFollow:$('btnFollow'), btnDisturb:$('btnDisturb'),
       tabs:[...document.querySelectorAll('.tab')], panels:{drive:$('panel-drive'), env:$('panel-env'), adv:$('panel-adv'), help:$('panel-help')},
+      // controls
       mode:$('mode'), targetKmh:$('targetKmh'), Kps:$('Kps'), Kis:$('Kis'),
       throttle:$('throttle'), brake:$('brake'), steer:$('steer'), keyRate:$('keyRate'),
-      Imax:$('Imax'), Kpc:$('Kpc'), Kic:$('Kic'), Vbus:$('Vbus'), R:$('R'), L:$('L'), kt:$('kt'), ke:$('ke'),
-      delayMs:$('delayMs'), ffOn:$('ffOn'), Iregen:$('Iregen'), Pregen:$('Pregen'),
-      mass:$('mass'), Rw:$('Rw'), gear:$('gear'), eta:$('eta'), CdA:$('CdA'), cr:$('cr'), rho:$('rho'), mu:$('mu'),
+      Imax:$('Imax'), Kpc:$('Kpc'), Kic:$('Kic'), Vbus:$('Vbus'), R:$('R'), L:$('L'), kt:$('kt'), ke:$('ke'), delayMs:$('delayMs'), ffOn:$('ffOn'),
+      Iregen:$('Iregen'), Pregen:$('Pregen'),
+      mass:$('mass'), Rw:$('Rw'), gear:$('gear'), eta:$('eta'), CdA:$('CdA'), cr:$('cr'), rho:$('rho'), mu:$('mu'), gradeDeg:$('gradeDeg'),
       chartMs:$('chartMs'), chartWindow:$('chartWindow'), smoothMs:$('smoothMs'),
+      // tiles
       v_kmh:$('v_kmh'), rpm:$('rpm'), i_a:$('i_a'), torque:$('torque'), v_cmd:$('v_cmd'), steerDeg:$('steerDeg')
     };
 
-    // Drawer & Tabs
+    // Drawer + tabs
     els.btnControls.addEventListener('click',()=>{ els.drawer.classList.toggle('open'); els.drawer.setAttribute('aria-hidden', !els.drawer.classList.contains('open'));});
     els.tabs.forEach(t=>t.addEventListener('click',()=>{ els.tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active'); const k=t.dataset.tab; Object.values(els.panels).forEach(p=>p.classList.remove('active')); $('panel-'+k).classList.add('active');}));
 
-    // Mode UI
+    // Mode swap visibility
     const cruiseBox=document.getElementById('cruiseBox'), pedalBox=document.getElementById('pedalBox');
     els.mode.addEventListener('change',()=>{ const m=els.mode.value; cruiseBox.style.display=m==='cruise'?'':'none'; pedalBox.style.display=m==='pedal'?'':''; });
 
-    // ===== Charts: linear time axis =====
+    // ---------- Charts (linear time axis) ----------
     const mkX=()=>({type:'linear', title:{display:true, text:'Time (s)', color:'#cfe4ff'}, ticks:{color:'#9fb3cc'}, grid:{color:'rgba(255,255,255,.08)'}});
     const mkY=(t)=>({title:{display:!!t, text:t, color:'#cfe4ff'}, ticks:{color:'#9fb3cc'}, grid:{color:'rgba(255,255,255,.06)'}});
     const plugins={legend:{labels:{color:'#cfe4ff'}}, decimation:{enabled:true, algorithm:'lttb', samples:800}};
-    const cSpeed=new Chart($('chartSpeed'),{type:'line',data:{datasets:[{label:'Speed (km/h)',data:[],pointRadius:0,borderWidth:2,tension:.18},{label:'Ref (km/h)',data:[],pointRadius:0,borderWidth:2,borderDash:[6,4],tension:.18}]},options:{animation:false, parsing:true, scales:{x:mkX(), y:mkY('km/h')}, plugins}});
-    const cCurrent=new Chart($('chartCurrent'),{type:'line',data:{datasets:[{label:'Current (A)',data:[],yAxisID:'y1',pointRadius:0,borderWidth:2,tension:.18},{label:'Voltage (V)',data:[],yAxisID:'y2',pointRadius:0,borderWidth:2,borderDash:[6,4],tension:.18}]},options:{animation:false, parsing:true, scales:{x:mkX(), y1:mkY('A'), y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#9fb3cc'}, title:{display:true, text:'V', color:'#cfe4ff'}}}, plugins}});
-    const cRpm=new Chart($('chartRpm'),{type:'line',data:{datasets:[{label:'Motor RPM',data:[],pointRadius:0,borderWidth:2,tension:.18}]},options:{animation:false, parsing:true, scales:{x:mkX(), y:mkY('RPM')}, plugins}});
-    const cTorque=new Chart($('chartTorque'),{type:'line',data:{datasets:[{label:'Drive Torque (Nm)',data:[],pointRadius:0,borderWidth:2,tension:.18},{label:'Load Torque (Nm)',data:[],pointRadius:0,borderWidth:2,borderDash:[6,4],tension:.18}]},options:{animation:false, parsing:true, scales:{x:mkX(), y:mkY('Nm')}, plugins}});
+    const cSpeed=new Chart($('chartSpeed'),{type:'line',data:{datasets:[
+      {label:'Speed (km/h)', data:[], borderWidth:2, pointRadius:0, tension:.18},
+      {label:'Ref (km/h)',   data:[], borderWidth:2, pointRadius:0, tension:.18, borderDash:[6,4]}
+    ]},options:{animation:false, scales:{x:mkX(), y:mkY('km/h')}, plugins}});
+    const cCurrent=new Chart($('chartCurrent'),{type:'line',data:{datasets:[
+      {label:'Current (A)', data:[], yAxisID:'y1', borderWidth:2, pointRadius:0, tension:.18},
+      {label:'Voltage (V)', data:[], yAxisID:'y2', borderWidth:2, pointRadius:0, tension:.18, borderDash:[6,4]}
+    ]},options:{animation:false, scales:{x:mkX(), y1:mkY('A'), y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#9fb3cc'}, title:{display:true, text:'V', color:'#cfe4ff'}}}, plugins}});
+    const cRpm=new Chart($('chartRpm'),{type:'line',data:{datasets:[{label:'Motor RPM', data:[], borderWidth:2, pointRadius:0, tension:.18}]},options:{animation:false, scales:{x:mkX(), y:mkY('RPM')}, plugins}});
+    const cTorque=new Chart($('chartTorque'),{type:'line',data:{datasets:[
+      {label:'Drive Torque (Nm)', data:[], borderWidth:2, pointRadius:0, tension:.18},
+      {label:'Load Torque (Nm)',  data:[], borderWidth:2, pointRadius:0, tension:.18, borderDash:[6,4]}
+    ]},options:{animation:false, scales:{x:mkX(), y:mkY('Nm')}, plugins}});
+
     const MAX_POINTS=6000;
     function chartIntervalMs(){ return Math.max(16, +els.chartMs.value||120); }
     function timeWindowSec(){ return Math.max(5, +els.chartWindow.value||60); }
-    function pushXY(ch,arr){ const t=state.t; ch.data.datasets.forEach((ds,i)=>{ ds.data.push({x:t, y:arr[i]}); if(ds.data.length>MAX_POINTS) ds.data.shift(); const win=timeWindowSec(); while(ds.data.length && ds.data[0].x < t-win) ds.data.shift();}); ch.update('none'); }
+    function pushXY(chart, arr){ const t=state.t; chart.data.datasets.forEach((ds,i)=>{ ds.data.push({x:t, y:arr[i]}); if(ds.data.length>MAX_POINTS) ds.data.shift(); const win=timeWindowSec(); while(ds.data.length && ds.data[0].x < t-win) ds.data.shift();}); chart.update('none'); }
 
-    // ===== 3D Scene =====
+    // ---------- 3D Scene (free plane) ----------
     const wrap=$('three-wrap');
     const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0b0f14);
     const camera=new THREE.PerspectiveCamera(55, wrap.clientWidth/Math.max(1,wrap.clientHeight), .1, 3000); camera.position.set(-18,10,18);
     const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(wrap.clientWidth, wrap.clientHeight); wrap.appendChild(renderer.domElement);
     const controls=new OrbitControls(camera, renderer.domElement); controls.target.set(0,1,0); controls.update();
     wrap.addEventListener('pointerdown',()=>wrap.focus()); window.addEventListener('load',()=>wrap.focus(),{once:true});
-    scene.add(new THREE.HemisphereLight(0xbfd1ff,0x202020,.9)); const dir=new THREE.DirectionalLight(0xffffff,.85); dir.position.set(10,20,10); scene.add(dir);
-    scene.add(new THREE.GridHelper(2000,200,0x2b415e,0x0e1624)); const axes=new THREE.AxesHelper(5); axes.position.y=0.01; scene.add(axes);
 
-    // ===== Car (박스형 세단) =====
+    scene.add(new THREE.HemisphereLight(0xbfd1ff, 0x202020, .9));
+    const dir=new THREE.DirectionalLight(0xffffff,.85); dir.position.set(10,20,10); dir.castShadow=true; scene.add(dir);
+    scene.add(new THREE.GridHelper(2000, 200, 0x2b415e, 0x0e1624));
+    const axes=new THREE.AxesHelper(5); axes.position.y=0.01; scene.add(axes);
+
+    // Car (new wedge design)
     const car=new THREE.Group();
-    // chassis
-    const chassis=new THREE.Mesh(new THREE.BoxGeometry(3.8,0.7,1.8), new THREE.MeshStandardMaterial({color:0x1e3552, metalness:.5, roughness:.35})); chassis.position.y=0.6; car.add(chassis);
-    // hood
-    const hood=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.45,1.7), new THREE.MeshStandardMaterial({color:0x234060, metalness:.5, roughness:.35})); hood.position.set(1.6,0.78,0); car.add(hood);
-    // cabin
-    const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.7,1.6), new THREE.MeshPhysicalMaterial({color:0x8fb9ff, roughness:0.05, metalness:0, transmission:0.45, transparent:true, ior:1.45})); cabin.position.set(-0.2,1.15,0); car.add(cabin);
+    // capsule body
+    const bodyGeo=new THREE.CapsuleGeometry(0.95, 2.5, 10, 20); bodyGeo.rotateZ(Math.PI/2);
+    const body=new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({color:0x144e7f, metalness:.6, roughness:.25}));
+    body.position.y=0.9; body.castShadow=true; car.add(body);
+    // wedge nose
+    const nose=new THREE.Mesh(new THREE.ConeGeometry(0.95, 1.2, 18), new THREE.MeshStandardMaterial({color:0x175c99, metalness:.6, roughness:.25}));
+    nose.rotation.z=-Math.PI/2; nose.position.set(1.7,0.88,0); car.add(nose);
+    // glass roof
+    const glass=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.5,1.3), new THREE.MeshPhysicalMaterial({color:0xaad4ff, metalness:0, roughness:0.05, transmission:0.5, transparent:true, ior:1.45}));
+    glass.position.set(0.2,1.4,0); car.add(glass);
     // lights
-    const headL=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.08,0.25), new THREE.MeshStandardMaterial({color:0x222, emissive:0xfff3c1, emissiveIntensity:2.8})); const headR=headL.clone();
-    headL.position.set(2.25,0.72, 0.6); headR.position.set(2.25,0.72,-0.6); car.add(headL,headR);
-    const tailL=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.08,0.3), new THREE.MeshStandardMaterial({color:0x222, emissive:0xff3b3b, emissiveIntensity:2.2})); const tailR=tailL.clone();
-    tailL.position.set(-2.25,0.7, 0.6); tailR.position.set(-2.25,0.7,-0.6); car.add(tailL,tailR);
-    // wheels
-    function wheel(){ const tire=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.11,16,28), new THREE.MeshStandardMaterial({color:0x111, roughness:.9})); tire.rotation.y=Math.PI/2; const rim=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.16,16), new THREE.MeshStandardMaterial({color:0xcad6e3, metalness:.7, roughness:.35})); rim.rotation.z=Math.PI/2; rim.position.x=0.02; const g=new THREE.Group(); g.add(tire,rim); return g; }
-    const wFL=wheel(), wFR=wheel(), wRL=wheel(), wRR=wheel(); wFL.position.set( 1.1,0.42, 0.85); wFR.position.set( 1.1,0.42,-0.85); wRL.position.set(-1.1,0.42, 0.85); wRR.position.set(-1.1,0.42,-0.85); car.add(wFL,wFR,wRL,wRR);
+    const headL=new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshStandardMaterial({color:0x222, emissive:0xfff4d0, emissiveIntensity:3}));
+    const headR=headL.clone(); headL.position.set(2.1,0.75, 0.45); headR.position.set(2.1,0.75,-0.45); car.add(headL,headR);
+    const tailL=new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshStandardMaterial({color:0x222, emissive:0xff3b3b, emissiveIntensity:2.2}));
+    const tailR=tailL.clone(); tailL.position.set(-2.1,0.75, 0.45); tailR.position.set(-2.1,0.75,-0.45); car.add(tailL,tailR);
+    // wheels (torus tire + rim)
+    function wheel(){
+      const tire=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.11,16,28), new THREE.MeshStandardMaterial({color:0x111, roughness:0.9, metalness:0.1}));
+      tire.rotation.y=Math.PI/2;
+      const rim=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.16,16), new THREE.MeshStandardMaterial({color:0xcad6e3, metalness:0.7, roughness:0.35}));
+      rim.rotation.z=Math.PI/2; rim.position.x=0.02;
+      const g=new THREE.Group(); g.add(tire,rim); return g;
+    }
+    const wFL=wheel(), wFR=wheel(), wRL=wheel(), wRR=wheel();
+    wFL.position.set( 0.95,0.42, 0.82); wFR.position.set( 0.95,0.42,-0.82);
+    wRL.position.set(-0.95,0.42, 0.82); wRR.position.set(-0.95,0.42,-0.82);
+    car.add(wFL,wFR,wRL,wRR);
+    const carAxes=new THREE.AxesHelper(1.2); carAxes.position.set(0,1,0); car.add(carAxes);
     scene.add(car);
 
-    // ===== Dynamics (free drive plane) =====
-    const state={running:false, follow:true, t:0, v:0, yaw:0, pos:new THREE.Vector3(0,0,0), i:0, ii:0, Vcmd:0, steerDeg:0, log:[]};
-    function P(){ return {
-      mode: els.mode.value, targetKmh:+(els.targetKmh?.value||80), Kps:+(els.Kps?.value||6), Kis:+(els.Kis?.value||2),
-      thr:+els.throttle.value/100, brk:+els.brake.value/100, keyRate:+els.keyRate.value,
-      Imax:+els.Imax.value, Kpc:+els.Kpc.value, Kic:+els.Kic.value, Vbus:+els.Vbus.value, R:+els.R.value, L:+els.L.value, kt:+els.kt.value, ke:+els.ke.value, delayMs:+els.delayMs.value, ffOn:(els.ffOn.value==='1'),
-      Iregen:+els.Iregen.value, Pregen:+els.Pregen.value*1000,
-      m:+els.mass.value, Rw:+els.Rw.value, gear:+els.gear.value, eta:+els.eta.value, CdA:+els.CdA.value, cr:+els.cr.value, rho:+els.rho.value, mu:+els.mu.value
-    };}
-
-    const kmh=v=>v*3.6; const motorWFromV=(v,p)=>(v/p.Rw)*p.gear;
-
-    function regenLimitTorque(tau,w,p){ if(tau>=0) return tau; const T_i=p.kt*p.Iregen; const T_p=Math.abs(w)>1e-3 ? p.Pregen/Math.abs(w) : 1e9; return Math.max(tau, -Math.min(T_i,T_p)); }
-
-    // keyboard (with auto-start & pedal mode)
+    // ---------- Dynamics (free drive) ----------
+    const state={running:false, follow:true, t:0, v:0, yaw:0, pos:new THREE.Vector3(0,0,0), i:0, ii:0, Vcmd:0, log:[]};
     const down=new Set();
-    function ensureRunning(){ if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop);} }
-    function ensurePedal(){ if(els.mode.value!=='pedal'){ els.mode.value='pedal'; els.mode.dispatchEvent(new Event('change')); } }
+    function ensurePedalMode(){ if(els.mode.value!=='pedal'){ els.mode.value='pedal'; els.mode.dispatchEvent(new Event('change')); } }
+
     window.addEventListener('keydown',e=>{
       const tag=(e.target?.tagName||'').toLowerCase(); if(tag==='input'||tag==='select'||tag==='textarea') return;
-      if(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)){ e.preventDefault(); down.add(e.code); ensureRunning(); }
+      if(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)){ e.preventDefault(); down.add(e.code); }
     }, {capture:true});
     window.addEventListener('keyup',e=>down.delete(e.code), {capture:true});
 
-    // Integrator
-    const DT_INT=0.001; let last=performance.now();
-    function stepSim(dt){
+    function P(){ return {
+      mode: els.mode.value, targetKmh:+(els.targetKmh?.value||80), Kps:+(els.Kps?.value||6), Kis:+(els.Kis?.value||2),
+      thr:+els.throttle.value/100, brk:+els.brake.value/100, steerDeg:+els.steer.value, keyRate:+els.keyRate.value,
+      Imax:+els.Imax.value, Kpc:+els.Kpc.value, Kic:+els.Kic.value, Vbus:+els.Vbus.value, R:+els.R.value, L:+els.L.value, kt:+els.kt.value, ke:+els.ke.value, delayMs:+els.delayMs.value, ffOn:(els.ffOn.value==='1'),
+      Iregen:+els.Iregen.value, Pregen:+els.Pregen.value*1000,
+      m:+els.mass.value, Rw:+els.Rw.value, gear:+els.gear.value, eta:+els.eta.value, CdA:+els.CdA.value, cr:+els.cr.value, rho:+els.rho.value, mu:+els.mu.value, gradeDeg:+els.gradeDeg.value
+    };}
+
+    const kmh = v=>v*3.6;
+    function motorWFromV(v,p){ return (v/p.Rw)*p.gear; } // rad/s
+
+    function regenLimitTorque(tau, w, p){
+      if(tau>=0) return tau;
+      const T_i = p.kt * p.Iregen;
+      const T_p = Math.abs(w)>1e-3 ? p.Pregen/Math.abs(w) : 1e9;
+      return Math.max(tau, -Math.min(T_i, T_p));
+    }
+
+    function applyKey(dt){
       const p=P();
-      // input dynamics
-      let thr=+els.throttle.value, brk=+els.brake.value;
+      // throttle/brake
+      let thr=+els.throttle.value, brk=+els.brake.value, steer=+els.steer.value;
       if(down.has('KeyW')||down.has('ArrowUp')) thr += p.keyRate*dt;
       if(down.has('KeyS')||down.has('ArrowDown')) brk += p.keyRate*dt;
       if(!(down.has('KeyW')||down.has('ArrowUp'))) thr -= p.keyRate*0.6*dt;
       if(!(down.has('KeyS')||down.has('ArrowDown'))) brk -= p.keyRate*0.8*dt;
-      thr=clamp(thr,0,100); brk=clamp(brk,0,100); if(thr>0&&brk>0){ if(thr>brk) brk=0; else thr=0; }
-      els.throttle.value=Math.round(thr); els.brake.value=Math.round(brk);
-      if(thr>0||brk>0){ ensurePedal(); }
+      thr=clamp(thr,0,100); brk=clamp(brk,0,100);
+      if(thr>0&&brk>0){ if(thr>brk) brk=0; else thr=0; }
+      // steering: A/D 일반, 방향키는 반대로(요청)
+      if(down.has('KeyA')) steer -= 120*dt;
+      if(down.has('KeyD')) steer += 120*dt;
+      if(down.has('ArrowLeft'))  steer += 120*dt; // ← = 우회전
+      if(down.has('ArrowRight')) steer -= 120*dt; // → = 좌회전
+      steer = clamp(steer, -30, 30);
 
-      // steering dynamics (self-centering + deadzone)
-      const steerRate=140; // deg/s
-      if(down.has('KeyA')) state.steerDeg -= steerRate*dt;
-      if(down.has('KeyD')) state.steerDeg += steerRate*dt;
-      // reversed arrows: ← right, → left
-      if(down.has('ArrowLeft'))  state.steerDeg -= (-steerRate)*dt; // right turn
-      if(down.has('ArrowRight')) state.steerDeg += (-steerRate)*dt; // left turn
-      // self-centering when no steering keys
-      const steeringActive = down.has('KeyA')||down.has('KeyD')||down.has('ArrowLeft')||down.has('ArrowRight');
-      if(!steeringActive){
-        const centerRate=180; // deg/s toward 0
-        state.steerDeg -= Math.sign(state.steerDeg) * Math.min(Math.abs(state.steerDeg), centerRate*dt);
-        if(Math.abs(state.steerDeg) < 0.2) state.steerDeg = 0; // deadzone
-      }
-      state.steerDeg = clamp(state.steerDeg, -30, 30);
-      els.steer.value = Math.round(state.steerDeg);
-      els.steerDeg.textContent = `${Math.round(state.steerDeg)}°`;
+      els.throttle.value=Math.round(thr); els.brake.value=Math.round(brk); els.steer.value=Math.round(steer);
+      els.steerDeg.textContent = `${Math.round(steer)}°`;
 
-      // control (pedal open-loop or cruise PI on speed)
-      let remain=dt; while(remain>1e-9){ const h=Math.min(DT_INT, remain);
+      if(down.has('Space')){ state.running=!state.running; down.delete('Space'); if(state.running){ last=performance.now(); requestAnimationFrame(loop);} }
+      ensurePedalMode();
+    }
+
+    // Integrator step
+    const DT_INT=0.001; let last=performance.now();
+    function stepSim(dt){
+      const p=P();
+      let remain=dt; while(remain>1e-9){ const h=Math.min(DT_INT,remain);
         let i_ref;
         if(p.mode==='cruise'){
-          const vref=clamp(+els.targetKmh.value,0,220)/3.6, ev=vref-state.v;
-          state.evInt=(state.evInt||0)+ev*h;
-          i_ref = clamp(p.Kps*ev + p.Kis*state.evInt, -p.Imax, p.Imax);
+          const vref = clamp(p.targetKmh,0,220)/3.6;
+          const ev = vref - state.v;
+          i_ref = clamp(p.Kps*ev + (state.evInt||0)*p.Kis, -p.Imax, p.Imax);
+          state.evInt = (state.evInt||0) + ev*h;
         }else{
-          i_ref = clamp(p.Imax*(thr/100) - 0.9*p.Iregen*(brk/100), -p.Imax, p.Imax);
+          i_ref = p.Imax*p.thr - p.Iregen*0.9*p.brk;
+          i_ref = clamp(i_ref, -p.Imax, p.Imax);
         }
-
-        const ei=i_ref-state.i, w=motorWFromV(state.v,p), Vff=p.ffOn?p.ke*w:0;
-        const Vunsat=p.Kpc*ei + p.Kic*state.ii + Vff, Vcmd=clamp(Vunsat,-p.Vbus,p.Vbus);
+        const ei = i_ref - state.i;
+        const w_motor = motorWFromV(state.v,p);
+        const Vff = p.ffOn ? p.ke*w_motor : 0;
+        const Vunsat = p.Kpc*ei + state.ii*(p.Kic) + Vff;
+        const Vcmd = clamp(Vunsat, -p.Vbus, p.Vbus);
         if((Vunsat>p.Vbus && ei<0) || (Vunsat<-p.Vbus && ei>0) || Math.abs(Vunsat)<=p.Vbus+1e-6) state.ii += ei*h;
-        const a=Math.min(1, h/Math.max(1e-6,p.delayMs/1000)); state.Vcmd=(1-a)*state.Vcmd + a*Vcmd;
+        const a = Math.min(1, h/Math.max(1e-6, p.delayMs/1000));
+        state.Vcmd = (1-a)*state.Vcmd + a*Vcmd;
 
-        // plant: L di/dt = V - R i - ke ω
-        const di=(state.Vcmd - p.R*state.i - p.ke*w)/Math.max(1e-9,p.L);
+        // electrical dynamics
+        const di = (state.Vcmd - p.R*state.i - p.ke*w_motor)/Math.max(1e-9,p.L);
         state.i += di*h; state.i = clamp(state.i, -p.Imax, p.Imax);
 
-        // torque and limits
-        let tau_m=p.kt*state.i; tau_m = regenLimitTorque(tau_m, w, p);
+        // torque + limits (regen)
+        let tau_m = p.kt*state.i;
+        tau_m = regenLimitTorque(tau_m, w_motor, p);
 
-        // traction and resistances
-        let F_trac=(tau_m * p.gear * p.eta)/Math.max(1e-6,p.Rw);
-        const F_mu = p.mu * p.m * 9.80665; F_trac = clamp(F_trac, -F_mu, F_mu);
-        const v=state.v, F_roll=p.m*9.80665*p.cr*sign0(v), F_aero=0.5*p.rho*p.CdA*v*v*sign0(v);
-        const F_long = F_trac - F_roll - F_aero;
+        // traction & forces
+        let F_trac = (tau_m * p.gear * p.eta) / Math.max(1e-6, p.Rw);
+        const F_mu = p.mu * p.m * 9.80665;
+        F_trac = clamp(F_trac, -F_mu, F_mu);
 
-        state.v += (F_long/Math.max(1e-6,p.m))*h;
+        const v = state.v;
+        const F_roll = p.m*9.80665*p.cr*sign0(v);
+        const F_aero = 0.5*p.rho*p.CdA*v*v*sign0(v);
+        const F_grade = p.m*9.80665*Math.sin((p.gradeDeg||0)*Math.PI/180);
+        const F_long = F_trac - F_roll - F_aero - F_grade;
 
-        // bicycle kinematics (flat): yawRate = tan(delta)*v/L
-        const L=2.6, delta = state.steerDeg*Math.PI/180, yawRate = Math.tan(delta)*state.v/L;
-        state.yaw += yawRate*h;
+        // integrate speed
+        state.v += (F_long/Math.max(1e-6,p.m)) * h;
+
+        // bicycle kinematics
+        const L = 2.6; // wheelbase
+        const steer = (+els.steer.value||0) * Math.PI/180;
+        const yawRate = Math.tan(steer) * state.v / L;
+        state.yaw += yawRate * h;
         state.pos.x += Math.cos(state.yaw)*state.v*h;
         state.pos.z += Math.sin(state.yaw)*state.v*h;
 
-        // gentle sticking at near rest
-        if(Math.abs(state.v)<0.02 && Math.abs(i_ref)<1) state.v *= 0.985;
+        // tiny stickiness at rest
+        if(Math.abs(state.v)<0.02 && Math.abs(i_ref)<1) state.v*=0.985;
 
         state.t += h; remain -= h;
       }
@@ -361,43 +425,49 @@
     }
 
     // Render
-    let last=performance.now(), lastChart=0;
+    let lastChart=0;
     function render(){
-      const dtMs=smoother.dt(), p=P();
-      const kmhVal=kmh(state.v), rpmVal = motorWFromV(state.v,p)*60/(2*Math.PI);
-      const tau=Math.max(0, +els.smoothMs.value||250);
-      els.v_kmh.textContent = `${smoother.run('kmh',kmhVal,tau,dtMs).toFixed(1)} km/h`;
-      els.rpm.textContent   = `${smoother.run('rpm', rpmVal,tau,dtMs).toFixed(0)}`;
-      els.i_a.textContent   = `${smoother.run('i',   state.i,tau,dtMs).toFixed(1)} A`;
-      const tq=p.kt*state.i; els.torque.textContent=`${smoother.run('tq',tq,tau,dtMs).toFixed(1)} N·m`;
-      els.v_cmd.textContent = `${smoother.run('vcmd',state.Vcmd,tau,dtMs).toFixed(1)} V`;
-      els.steerDeg.textContent = `${state.steerDeg.toFixed(0)}°`;
-
+      const dtMs=smoother.dt(); const p=P();
+      const kmhVal=kmh(state.v);
+      const rpmVal = motorWFromV(state.v,p) * 60/(2*Math.PI);
+      const tau = Math.max(0, +els.smoothMs.value||250);
+      els.v_kmh.textContent = `${smoother.run('kmh',kmhVal, tau, dtMs).toFixed(1)} km/h`;
+      els.rpm.textContent   = `${smoother.run('rpm', rpmVal, tau, dtMs).toFixed(0)}`;
+      els.i_a.textContent   = `${smoother.run('i',   state.i, tau, dtMs).toFixed(1)} A`;
+      const tqMotor = p.kt*state.i;
+      els.torque.textContent= `${smoother.run('tq', tqMotor, tau, dtMs).toFixed(1)} N·m`;
+      els.v_cmd.textContent = `${smoother.run('vcmd',state.Vcmd, tau, dtMs).toFixed(1)} V`;
+      els.steerDeg.textContent=`${(+els.steer.value||0).toFixed(0)}°`;
       updateCar();
 
       if(state.follow){
-        const back=new THREE.Vector3(-10,6,0).applyAxisAngle(new THREE.Vector3(0,1,0), state.yaw);
-        const camPos=new THREE.Vector3().copy(state.pos).add(back);
+        const back = new THREE.Vector3(-10,6,0).applyAxisAngle(new THREE.Vector3(0,1,0), state.yaw);
+        const camPos = new THREE.Vector3().copy(state.pos).add(back);
         camera.position.lerp(new THREE.Vector3(camPos.x, camPos.y, camPos.z), .15);
-        const look=new THREE.Vector3(state.pos.x,1,state.pos.z);
-        controls.target.lerp(look,.2); controls.update();
+        const look = new THREE.Vector3(state.pos.x, 1, state.pos.z);
+        controls.target.lerp(look, .2); controls.update();
       }
 
       const now=performance.now();
       if(now-lastChart>chartIntervalMs()){
-        const v=state.v, F_roll=p.m*9.80665*p.cr*sign0(v), F_aero=0.5*p.rho*p.CdA*v*v*sign0(v);
-        const tau_load=(F_roll+F_aero)*p.Rw/p.gear/Math.max(1e-6,p.eta);
-        pushXY(cSpeed,   [kmhVal, (p.mode==='cruise'?+els.targetKmh.value:kmhVal)]);
+        // load torque estimate for chart (roll+aero+grade at wheel to motor-side)
+        const v=state.v;
+        const F_roll = p.m*9.80665*p.cr*sign0(v);
+        const F_aero = 0.5*p.rho*p.CdA*v*v*sign0(v);
+        const F_grade= p.m*9.80665*Math.sin((p.gradeDeg||0)*Math.PI/180);
+        const tau_load = (F_roll+F_aero+F_grade)*p.Rw/p.gear/Math.max(1e-6,p.eta);
+
+        pushXY(cSpeed,   [kmh(state.v), (p.mode==='cruise'?p.targetKmh:kmh(state.v))]);
         pushXY(cCurrent, [state.i, state.Vcmd]);
         pushXY(cRpm,     [rpmVal]);
-        pushXY(cTorque,  [tq, tau_load]);
+        pushXY(cTorque,  [tqMotor, tau_load]);
         lastChart=now;
       }
 
-      state.log.push({t:state.t, kmh:kmhVal, ref:(p.mode==='cruise'?+els.targetKmh.value:kmhVal), i:state.i, v:state.Vcmd, tq:tq});
+      state.log.push({t:state.t, kmh:kmh(state.v), ref:(p.mode==='cruise'?p.targetKmh:kmh(state.v)), i:state.i, v:state.Vcmd, tq:tqMotor});
     }
 
-    function loop(now){ if(!state.running) return; const dt=Math.min(.05,(now-last)/1000); last=now; stepSim(dt); render(); renderer.render(scene,camera); requestAnimationFrame(loop); }
+    function loop(now){ if(!state.running) return; const dt=Math.min(.05,(now-last)/1000); last=now; applyKey(dt); stepSim(dt); render(); renderer.render(scene,camera); requestAnimationFrame(loop); }
 
     // Resize
     new ResizeObserver(()=>{ const w=wrap.clientWidth, h=wrap.clientHeight; renderer.setSize(w,h); camera.aspect=w/Math.max(1,h); camera.updateProjectionMatrix(); }).observe(wrap);
@@ -406,7 +476,7 @@
     els.btnStart.addEventListener('click',()=>{ if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop);} });
     els.btnPause.addEventListener('click',()=> state.running=false);
     els.btnReset.addEventListener('click',()=>{
-      state.running=false; Object.assign(state,{t:0,v:0,yaw:0,pos:new THREE.Vector3(0,0,0),i:0,ii:0,Vcmd:0,steerDeg:0,log:[]});
+      state.running=false; Object.assign(state,{t:0,v:0,yaw:0,pos:new THREE.Vector3(0,0,0),i:0,ii:0,Vcmd:0,log:[]});
       [cSpeed,cCurrent,cRpm,cTorque].forEach(ch=>{ ch.data.datasets.forEach(ds=>ds.data=[]); ch.update(); });
       car.position.set(0,0,0); car.rotation.set(0,0,0);
     });
@@ -418,16 +488,16 @@
     });
     els.btnFollow.addEventListener('click',()=>{ state.follow=!state.follow; els.btnFollow.textContent = state.follow?'🎥 Follow: ON':'🎥 Follow: OFF'; });
 
-    // Any slider interaction => auto-start + pedal mode
-    ['throttle','brake','steer'].forEach(id=>{
-      $(id)?.addEventListener('input',()=>{ ensurePedal(); ensureRunning(); state.steerDeg=+els.steer.value; });
-    });
+    // Focus
+    wrap.focus();
 
-    // Self-tests (light)
+    // ---------- Self-tests ----------
     (function(){
-      const ok = cond=>console.assert(cond,'Self-test failed');
-      ok(!!THREE.WebGLRenderer); ok(typeof OrbitControls==='function');
-      ok(['chartSpeed','chartCurrent','chartRpm','chartTorque'].every(id=>!!document.getElementById(id)));
+      const approx=(a,b,e=1e-6)=>Math.abs(a-b)<=e;
+      console.assert(!!THREE.WebGLRenderer,'THREE missing');
+      console.assert(typeof OrbitControls==='function','OrbitControls missing');
+      console.assert(['chartSpeed','chartCurrent','chartRpm','chartTorque'].every(id=>!!document.getElementById(id)),'Charts missing');
+      const p={Rw:0.31,gear:9}; const v=27.7778; const w=(v/p.Rw)*p.gear; const v2=w/p.gear*p.Rw; console.assert(approx(v,v2,1e-6),'w<->v mapping failed');
     })();
   </script>
 </body>
