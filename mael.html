@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>여우마을 3D — 가벼운 RPG & 데코 (CDN 폴백/오프라인 우선)</title>
+  <title>여우마을 3D — 가벼운 RPG & 데코 (CDN 폴백/오프라인 우선 · 확장판)</title>
   <style>
     :root{
       --bg:#0e1013; --panel:#171a1f; --panel-2:#1f2430; --text:#e9efff; --muted:#9fb0d3; --accent:#ffa63d; --accent-2:#ffd39b; --good:#49d27d; --warn:#ffd93d; --bad:#ff5c6a;
@@ -20,10 +20,10 @@
     .pill{padding:4px 8px;border-radius:999px;background:#111826;border:1px solid #273244;color:var(--muted);font-size:12px}
     .bar{width:160px;height:10px;background:#0b0f14;border-radius:99px;border:1px solid #2a3242;overflow:hidden}
     .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
-    .right{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:10px;min-width:260px;pointer-events:auto}
+    .right{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:10px;min-width:280px;pointer-events:auto;max-height:80vh;overflow:auto}
     .title{font-weight:800;letter-spacing:.2px;margin-bottom:6px}
     .small{font-size:12px;color:var(--muted)}
-    .quest-list{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto}
+    .quest-list{display:flex;flex-direction:column;gap:8px;max-height:40vh;overflow:auto}
     .quest{padding:8px;border-radius:10px;border:1px dashed #334055;background:#131821}
     .quest.done{opacity:.65;border-style:solid}
     .bottom{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;pointer-events:none}
@@ -32,7 +32,7 @@
     .dock .btn[aria-pressed="true"]{outline:2px solid var(--accent)}
     .dock .btn:hover{filter:brightness(1.05)}
     .panel{position:absolute;left:12px;bottom:12px;display:flex;gap:10px;pointer-events:auto}
-    .pane{min-width:260px}
+    .pane{min-width:280px}
     .list{display:grid;grid-template-columns:1fr auto;gap:6px}
     .row{display:contents}
     .row>div{padding:6px 8px;border-radius:8px;background:#10151c;border:1px solid #273046}
@@ -46,17 +46,23 @@
     .corner{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;align-items:center}
     .corner button{cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid #2c394f;background:#10161e;color:#cfe3ff}
     .corner button:hover{filter:brightness(1.08)}
-    .dialog{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:min(680px,90vw);pointer-events:auto;display:none}
+    .dialog{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:min(720px,92vw);pointer-events:auto;display:none}
     .dialog .bubble{background:linear-gradient(180deg,#141a24,#0f141c);border:1px solid #2a3650;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
     .dialog .speaker{font-weight:800;margin-bottom:6px;color:#ffc37a}
-    .shop{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:300px;display:none;pointer-events:auto}
+    .shop{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:320px;display:none;pointer-events:auto}
     .shop .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
     .shop .grid{display:grid;grid-template-columns:1fr auto;gap:6px}
-    .minimap{position:absolute;right:12px;bottom:92px;width:168px;height:168px;border-radius:12px;border:1px solid #253045;background:#0a0f15;box-shadow:var(--shadow);pointer-events:none}
+    .minimap{position:absolute;right:12px;bottom:92px;width:180px;height:180px;border-radius:12px;border:1px solid #253045;background:#0a0f15;box-shadow:var(--shadow);pointer-events:none}
     .hardfail{position:fixed;inset:0;background:#0c1117;display:none;place-items:center}
     .hardfail .panel{pointer-events:auto;max-width:760px;border-radius:16px;border:1px solid #2a3549;background:#0f1622;padding:16px;box-shadow:var(--shadow)}
     .hardfail h2{margin:0 0 8px 0;color:#ffd39b}
     .hardfail code{background:#0a0f15;border:1px solid #243047;border-radius:8px;padding:4px 6px;display:inline-block}
+    /* 모달들 */
+    .modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,94vw);display:none}
+    .modal .panel{background:linear-gradient(180deg,#141a24,#0f141c);border:1px solid #2a3650;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+    .modal .panel .title{display:flex;align-items:center;justify-content:space-between}
+    .modal .panel .content{max-height:60vh;overflow:auto;margin-top:8px}
+    .close{cursor:pointer;border:1px solid #34405a;background:#111722;color:#cfe3ff;border-radius:10px;padding:6px 10px}
   </style>
 
   <!-- 런타임 로더: 로컬 → CDN(jsDelivr → UNPKG) 순으로 THREE/OrbitControls 로드 -->
@@ -90,7 +96,7 @@
           try{ await loadScript(u); if(window.THREE && THREE.WebGLRenderer){ lastErr=null; break; } }catch(e){ lastErr=e; }
         }
         if(!(window.THREE && THREE.WebGLRenderer)) throw lastErr || new Error('THREE not loaded');
-        // Controls는 실패해도 내부 대체 컨트롤 사용
+        // OrbitControls는 실패해도 내부 대체 컨트롤 사용
         for(const u of CANDIDATES_CTRL){
           try{ await loadScript(u); break; }catch(e){}
         }
@@ -104,8 +110,8 @@
             <div class="small" style="margin-bottom:10px">네트워크/보안 정책으로 외부 스크립트를 불러오지 못했습니다.</div>
             <ol class="small" style="line-height:1.6">
               <li><b>오프라인 우선</b>: 이 파일과 같은 폴더에 <code>three.min.js</code>, <code>OrbitControls.js</code>를 넣고 다시 열기.</li>
-              <li><b>Tistory</b>: 포스트 본문이 스크립트를 제거할 수 있어요. 스킨 편집(HTML/CSS)이나 위젯 HTML에 넣거나, GitHub Pages를 <code>&lt;iframe&gt;</code>으로 임베드하세요.</li>
-              <li><b>CDN 허용</b>: 사내망/브라우저 확장 프로그램이 CDN을 차단하는지 확인.</li>
+              <li><b>Tistory</b>: 포스트 편집기가 스크립트를 제거할 수 있어요. 스킨 HTML/헤더 스크립트에 넣거나 GitHub Pages를 <code>&lt;iframe&gt;</code>으로 임베드.</li>
+              <li><b>CDN 허용</b>: 사내망/확장 프로그램의 CDN 차단 여부 확인.</li>
             </ol>
             <div class="small" style="margin-top:6px">에러: ${err && err.message ? err.message : 'unknown'}</div>
           </div>`;
@@ -122,6 +128,7 @@
 <body>
   <div id="app"></div>
   <div class="hud">
+    <!-- 상단 상태바 -->
     <div class="topbar card">
       <div class="stat"><span class="pill">솔방울</span><span id="pine">0</span></div>
       <div class="stat"><span class="pill">스태미나</span>
@@ -131,16 +138,34 @@
       <div class="stat"><span class="pill">시간</span><span id="clock">18:00</span></div>
       <div class="stat"><span class="pill">평판</span><span id="reputation">D</span></div>
       <div class="stat"><span class="pill">날씨</span><span id="weatherText">맑음</span></div>
+      <div class="stat"><span class="pill">좌표</span><span id="coord">0,0</span></div>
     </div>
 
+    <!-- 오른쪽 퀘스트/업적/설정 -->
     <div class="right">
       <div class="card">
         <div class="title">퀘스트</div>
         <div class="quest-list" id="questList"></div>
         <div class="small">가까이 다가가서 <span class="kbd">E</span> 채집/대화, <span class="kbd">B</span> 건설, <span class="kbd">M</span> 상점</div>
       </div>
+
+      <div class="card">
+        <div class="title">업적</div>
+        <div class="quest-list" id="achList"></div>
+        <div class="small">조건을 달성하면 자동 해금됩니다.</div>
+      </div>
+
+      <div class="card">
+        <div class="title">설정</div>
+        <div class="small" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="btnExport" style="padding:6px 10px">세이브 내보내기</button>
+          <button class="btn" id="btnImport" style="padding:6px 10px">가져오기</button>
+          <button class="btn" id="btnShot" style="padding:6px 10px">스크린샷</button>
+        </div>
+      </div>
     </div>
 
+    <!-- 하단 도크 -->
     <div class="bottom">
       <div class="dock" role="toolbar" aria-label="모드 선택">
         <button class="btn" id="modeExplore" aria-pressed="true">탐험</button>
@@ -152,6 +177,7 @@
       </div>
     </div>
 
+    <!-- 좌하단 패널 -->
     <div class="panel">
       <div class="card pane" id="panelCraft" hidden>
         <div class="title">제작</div>
@@ -170,8 +196,10 @@
       </div>
     </div>
 
+    <!-- 토스트 -->
     <div class="toast" id="toast"></div>
 
+    <!-- 우하단 퀵 -->
     <div class="corner">
       <span class="badge">저장: 자동</span>
       <button id="btnWeather">날씨</button>
@@ -179,6 +207,7 @@
       <button id="btnHelp">도움말</button>
     </div>
 
+    <!-- 대화 -->
     <div class="dialog" id="dialog">
       <div class="bubble">
         <div class="speaker" id="dialogSpeaker">???</div>
@@ -186,6 +215,7 @@
       </div>
     </div>
 
+    <!-- 상점 -->
     <div class="shop card" id="shopPanel">
       <div class="head">
         <div class="title">너구리 상점</div>
@@ -195,7 +225,19 @@
       <div class="small" style="margin-top:6px">솔방울로 재료/설계도를 구매하세요.</div>
     </div>
 
-    <canvas id="minimap" class="minimap" width="168" height="168"></canvas>
+    <!-- 미니맵 -->
+    <canvas id="minimap" class="minimap" width="180" height="180"></canvas>
+  </div>
+
+  <!-- 업적/도움말 모달 -->
+  <div class="modal" id="modalHelp">
+    <div class="panel">
+      <div class="title">
+        <span>도움말</span>
+        <button class="close" data-close="#modalHelp">닫기</button>
+      </div>
+      <div class="content small" id="helpContent"></div>
+    </div>
   </div>
 
   <script>
@@ -214,24 +256,38 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const snap=(v,g)=>Math.round(v/g)*g;
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
-const STORAGE_KEY='fox_village_save_safe_v4';
+const STORAGE_KEY='fox_village_save_safe_v5_ext';
+const nowSec=()=>performance.now()/1000;
+
+/* 스크린샷 */
+function saveScreenshot(renderer){
+  try{
+    const link=document.createElement('a');
+    link.download=`fox_village_${Date.now()}.png`;
+    link.href=renderer.domElement.toDataURL('image/png');
+    link.click();
+    toast('스크린샷 저장 완료!');
+  }catch(e){ toast('스크린샷 저장 실패'); }
+}
 
 const State={
   pine:0,
   stamina:100,maxStamina:100,
   time:18*60,
   repScore:0,
-  bag:{wood:0,stone:0,herb:0,fish:0,berry:0,ore:0,metal:0,brick:0,rope:0,plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0},
-  recipesUnlocked:{plank:true,bench:true,lantern:true,cloth:true,flowerbed:true,fence:true,arch:true,sign:true,stall:true,bridge:true,treelamp:true},
+  bag:{wood:0,stone:0,herb:0,fish:0,berry:0,ore:0,metal:0,brick:0,rope:0,plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,seed:0,road:0,house:0,statue:0,campfire:0,rod:1},
+  recipesUnlocked:{plank:true,bench:true,lantern:true,cloth:true,flowerbed:true,fence:true,arch:true,sign:true,stall:true,bridge:true,treelamp:true,seed:true,road:true,house:true,statue:true,campfire:true,rod:true},
   placed:[], level:1, xp:0,
   mode:'explore', buildSelection:null,
-  weather:'clear', flags:{talkedElder:false,metMerchant:false}
+  weather:'clear', flags:{talkedElder:false,metMerchant:false,metOwl:false,metKid:false},
+  stats:{fish:0,plant:0,harvest:0,place:0,talk:0,craft:0,photo:0},
+  farms:[], // {x,z,stage,ttl}
 };
 const repLetter=s=>s>=400?'S':s>=250?'A':s>=140?'B':s>=60?'C':'D';
 
 /********************** Three Setup ***************************/
 const app=$('#app');
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance',preserveDrawingBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;
@@ -259,61 +315,101 @@ const controls = (THREE.OrbitControls)? new THREE.OrbitControls(camera, renderer
 if(controls.target) controls.target.set(0,0,0);
 if('maxPolarAngle' in controls) controls.maxPolarAngle = Math.PI*0.495;
 
+/* 조명 */
 const hemi=new THREE.HemisphereLight(0xb0c7ff,0x334455,0.7); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffd9b0,0.9); sun.position.set(10,20,5);
 sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
 sun.shadow.camera.near=1; sun.shadow.camera.far=60; scene.add(sun);
+/* 번개용 플래쉬 */
+const flash=new THREE.PointLight(0xffffff,0,30,2); flash.position.set(0,12,0); scene.add(flash);
 
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x1a2a23,roughness:1,metalness:0}));
+/* 바닥/물/광장 */
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(220,220),new THREE.MeshStandardMaterial({color:0x1a2a23,roughness:1,metalness:0}));
 ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
 
-const water=new THREE.Mesh(new THREE.CircleGeometry(95,64),new THREE.MeshStandardMaterial({color:0x21323f,metalness:0.3,roughness:0.5,transparent:true,opacity:0.6}));
+const water=new THREE.Mesh(new THREE.CircleGeometry(100,64),new THREE.MeshStandardMaterial({color:0x21323f,metalness:0.3,roughness:0.5,transparent:true,opacity:0.6}));
 water.rotation.x=-Math.PI/2; water.position.y=0.002; scene.add(water);
 
-scene.add(new THREE.GridHelper(200,200,0x2a3744,0x1a2432));
+scene.add(new THREE.GridHelper(220,220,0x2a3744,0x1a2432));
 
-const plaza=new THREE.Mesh(new THREE.CylinderGeometry(4.2,4.2,0.01,36),new THREE.MeshStandardMaterial({color:0x24323a,roughness:1}));
+const plaza=new THREE.Mesh(new THREE.CylinderGeometry(4.5,4.5,0.01,36),new THREE.MeshStandardMaterial({color:0x24323a,roughness:1}));
 plaza.position.y=0.005; plaza.receiveShadow=true; scene.add(plaza);
 
+/* 플레이어: 캡슐 대신 실린더+스피어(구버전 three 대응) */
 const player=new THREE.Group();
 (function(){
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.35,0.7,6,12),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
-  body.castShadow=true; body.position.y=0.7;
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.9,14),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
+  body.castShadow=true; body.position.y=0.65;
+  const capTop=new THREE.Mesh(new THREE.SphereGeometry(0.35,14,10),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
+  capTop.position.y=1.1; capTop.castShadow=true;
+  const capBot=new THREE.Mesh(new THREE.SphereGeometry(0.35,14,10),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
+  capBot.position.y=0.2; capBot.castShadow=true;
   const chest=new THREE.Mesh(new THREE.SphereGeometry(0.25,12,12),new THREE.MeshStandardMaterial({color:0xfff2e0,roughness:0.9}));
-  chest.position.set(0,0.5,0.2); chest.castShadow=true;
+  chest.position.set(0,0.6,0.2); chest.castShadow=true;
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.28,12,12),new THREE.MeshStandardMaterial({color:0xff8a3a}));
-  head.position.set(0,1.2,0);
+  head.position.set(0,1.35,0);
   const earMat=new THREE.MeshStandardMaterial({color:0x8a3a00});
   const earGeom=new THREE.ConeGeometry(0.12,0.22,8);
-  const earL=new THREE.Mesh(earGeom,earMat); earL.position.set(-0.16,1.42,-0.03); earL.rotation.x=-0.2; earL.castShadow=true;
+  const earL=new THREE.Mesh(earGeom,earMat); earL.position.set(-0.16,1.56,-0.03); earL.rotation.x=-0.2; earL.castShadow=true;
   const earR=earL.clone(); earR.position.x=0.16;
   const tail=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.6,10),new THREE.MeshStandardMaterial({color:0xffa35a}));
-  tail.position.set(0,-0.05,-0.45); tail.rotation.x=Math.PI*0.9; tail.castShadow=true;
-  player.add(body,chest,head,earL,earR,tail);
+  tail.position.set(0,0.1,-0.45); tail.rotation.x=Math.PI*0.9; tail.castShadow=true;
+  player.add(body,capTop,capBot,chest,head,earL,earR,tail);
 })();
 player.position.set(0,0,0); scene.add(player);
 
 /********************** World Gen *****************************/
 const interactables=[]; const placables=[]; const npcs=[]; const tmpV=new THREE.Vector3();
-function addTree(x,z){ const g=new THREE.Group(); g.position.set(x,0,z);
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.24,1.3,8),new THREE.MeshStandardMaterial({color:0x6a402e,roughness:1})); trunk.position.y=0.65; trunk.castShadow=true; g.add(trunk);
+function addTree(x,z){
+  const g=new THREE.Group(); g.position.set(x,0,z);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.24,1.3,8),new THREE.MeshStandardMaterial({color:0x6a402e,roughness:1}));
+  trunk.position.y=0.65; trunk.castShadow=true; g.add(trunk);
   const crown=new THREE.Mesh(new THREE.SphereGeometry(rand(0.7,0.95),10,10),new THREE.MeshStandardMaterial({color:0x2a6a4a,roughness:0.9}));
   crown.position.y=1.5; crown.castShadow=true; g.add(crown);
-  scene.add(g); interactables.push({mesh:g,type:'tree',harvested:false}); }
-function addRock(x,z){ const m=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(0.25,0.5)),new THREE.MeshStandardMaterial({color:0x56606a,roughness:1}));
-  m.position.set(x,0.25,z); m.castShadow=true; scene.add(m); interactables.push({mesh:m,type:'rock',harvested:false}); }
-function addHerb(x,z){ const g=new THREE.Group(); g.position.set(x,0,z);
-  for(let i=0;i<3;i++){ const b=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.24,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));
-    b.position.set(rand(-0.08,0.08),0.12,rand(-0.08,0.08)); b.rotation.x=rand(-0.2,0.2); b.castShadow=true; g.add(b);} scene.add(g); interactables.push({mesh:g,type:'herb',harvested:false}); }
-function addBerry(x,z){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({color:0xaa2244,roughness:0.7}));
-  b.position.set(x,0.12,z); b.castShadow=true; scene.add(b); interactables.push({mesh:b,type:'berry',harvested:false}); }
-function addOre(x,z){ const o=new THREE.Mesh(new THREE.TetrahedronGeometry(rand(0.2,0.35)),new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.3}));
-  o.position.set(x,0.2,z); o.castShadow=true; scene.add(o); interactables.push({mesh:o,type:'ore',harvested:false}); }
-(function populate(){ for(let i=0;i<60;i++){ const x=rand(-45,45), z=rand(-45,45);
-  if(Math.hypot(x,z)<7){ i--; continue; } (Math.random()<0.55)?addTree(x,z):addRock(x,z);
-  if(Math.random()<0.25) addHerb(x+rand(-1.2,1.2),z+rand(-1.2,1.2));
-  if(Math.random()<0.12) addBerry(x+rand(-1.5,1.5),z+rand(-1.5,1.5));
-  if(Math.random()<0.10) addOre(x+rand(-2,2),z+rand(-2,2)); } })();
+  scene.add(g); interactables.push({mesh:g,type:'tree',harvested:false});
+}
+function addRock(x,z){
+  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(0.25,0.5)),new THREE.MeshStandardMaterial({color:0x56606a,roughness:1}));
+  m.position.set(x,0.25,z); m.castShadow=true; scene.add(m); interactables.push({mesh:m,type:'rock',harvested:false});
+}
+function addHerb(x,z){
+  const g=new THREE.Group(); g.position.set(x,0,z);
+  for(let i=0;i<3;i++){
+    const b=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.24,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));
+    b.position.set(rand(-0.08,0.08),0.12,rand(-0.08,0.08)); b.rotation.x=rand(-0.2,0.2); b.castShadow=true; g.add(b);
+  }
+  scene.add(g); interactables.push({mesh:g,type:'herb',harvested:false});
+}
+function addBerry(x,z){
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({color:0xaa2244,roughness:0.7}));
+  b.position.set(x,0.12,z); b.castShadow=true; scene.add(b); interactables.push({mesh:b,type:'berry',harvested:false});
+}
+function addOre(x,z){
+  const o=new THREE.Mesh(new THREE.TetrahedronGeometry(rand(0.2,0.35)),new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.3}));
+  o.position.set(x,0.2,z); o.castShadow=true; scene.add(o); interactables.push({mesh:o,type:'ore',harvested:false});
+}
+/* 물가 낚시 포인트 */
+const fishSpots=[];
+function addFishSpot(x,z){
+  const m=new THREE.Mesh(new THREE.CircleGeometry(0.4,16),new THREE.MeshStandardMaterial({color:0x2b4255,metalness:0.2,roughness:0.8,transparent:true,opacity:0.7}));
+  m.rotation.x=-Math.PI/2; m.position.set(x,0.003,z); m.userData.pulse=rand(0,Math.PI*2);
+  scene.add(m); fishSpots.push(m);
+}
+(function populate(){
+  for(let i=0;i<70;i++){
+    const x=rand(-50,50), z=rand(-50,50);
+    if(Math.hypot(x,z)<7){ i--; continue; }
+    (Math.random()<0.55)?addTree(x,z):addRock(x,z);
+    if(Math.random()<0.25) addHerb(x+rand(-1.2,1.2),z+rand(-1.2,1.2));
+    if(Math.random()<0.12) addBerry(x+rand(-1.5,1.5),z+rand(-1.5,1.5));
+    if(Math.random()<0.10) addOre(x+rand(-2,2),z+rand(-2,2));
+  }
+  /* 물가 주변에 낚시 포인트 몇 개 */
+  for(let a=0;a<10;a++){
+    const r=rand(40,48), theta=rand(0,Math.PI*2);
+    addFishSpot(Math.cos(theta)*r, Math.sin(theta)*r);
+  }
+})();
 
 /********************** Buildables ***************************/
 const BuildPrefabs={
@@ -367,7 +463,31 @@ const BuildPrefabs={
     const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.08,10,10),new THREE.MeshStandardMaterial({emissive:0xffd37a,color:0x222222,emissiveIntensity:1.6}));
     bulb.position.set(0.2,1.2,0); g.add(bulb);
     const light=new THREE.PointLight(0xffd59a,2.2,5,2); light.position.copy(bulb.position); g.add(light);
-    return g; }
+    return g; },
+  /* 확장: 도로, 집, 여우상, 모닥불 */
+  road:()=>{ const g=new THREE.Group();
+    const p=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.04,1.2),new THREE.MeshStandardMaterial({color:0x2a2e32,roughness:1}));
+    p.position.y=0.02; p.receiveShadow=true; g.add(p); return g; },
+  house:()=>{ const g=new THREE.Group();
+    const base=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.2,2.2),new THREE.MeshStandardMaterial({color:0x6d7a8a,roughness:1}));
+    base.position.y=0.6; base.castShadow=true; g.add(base);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(1.6,0.9,6),new THREE.MeshStandardMaterial({color:0x8a3a2a,roughness:0.9}));
+    roof.position.y=1.45; roof.castShadow=true; g.add(roof);
+    return g; },
+  statue:()=>{ const g=new THREE.Group();
+    const plinth=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.3,12),new THREE.MeshStandardMaterial({color:0x4a5566,roughness:1}));
+    plinth.position.y=0.15; plinth.castShadow=true; g.add(plinth);
+    const fox=new THREE.Mesh(new THREE.SphereGeometry(0.35,12,12),new THREE.MeshStandardMaterial({color:0xffb380,roughness:0.8}));
+    fox.position.y=0.7; fox.castShadow=true; g.add(fox);
+    return g; },
+  campfire:()=>{ const g=new THREE.Group();
+    const pile=new THREE.Mesh(new THREE.ConeGeometry(0.35,0.4,8),new THREE.MeshStandardMaterial({color:0x7a5238,roughness:1}));
+    pile.position.y=0.2; g.add(pile);
+    const flame=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({emissive:0xff8a3d,color:0x331100,emissiveIntensity:1.4}));
+    flame.position.y=0.28; g.add(flame);
+    const light=new THREE.PointLight(0xff9a5a,1.8,6,2); light.position.set(0,0.4,0); light.castShadow=true; g.add(light);
+    g.userData.buff='rest'; return g;
+  }
 };
 const BuildDefs={
   bench:{name:'여우벤치',score:12,cost:{plank:4,cloth:1}},
@@ -378,7 +498,11 @@ const BuildDefs={
   sign:{name:'표지판',score:5,cost:{plank:1,cloth:1}},
   stall:{name:'노점상',score:18,cost:{plank:6,cloth:2}},
   bridge:{name:'다리',score:20,cost:{plank:8,rope:2}},
-  treelamp:{name:'나무등롱',score:12,cost:{wood:4,herb:1}}
+  treelamp:{name:'나무등롱',score:12,cost:{wood:4,herb:1}},
+  road:{name:'도로',score:2,cost:{stone:2}},
+  house:{name:'작은 집',score:22,cost:{plank:10,brick:6}},
+  statue:{name:'여우상',score:24,cost:{stone:12}},
+  campfire:{name:'모닥불',score:10,cost:{wood:6,herb:1}}
 };
 const Recipes={
   plank:{name:'판재',cost:{wood:2},stamina:4,make:()=>State.bag.plank++},
@@ -394,33 +518,100 @@ const Recipes={
   sign:{name:'표지판',cost:BuildDefs.sign.cost,stamina:4,make:()=>State.bag.sign++},
   stall:{name:'노점상',cost:BuildDefs.stall.cost,stamina:12,make:()=>State.bag.stall++},
   bridge:{name:'다리',cost:BuildDefs.bridge.cost,stamina:14,make:()=>State.bag.bridge++},
-  treelamp:{name:'나무등롱',cost:BuildDefs.treelamp.cost,stamina:9,make:()=>State.bag.treelamp++}
+  treelamp:{name:'나무등롱',cost:BuildDefs.treelamp.cost,stamina:9,make:()=>State.bag.treelamp++},
+  seed:{name:'씨앗',cost:{berry:2},stamina:2,make:()=>State.bag.seed++},
+  road:{name:'도로',cost:BuildDefs.road.cost,stamina:3,make:()=>State.bag.road++},
+  house:{name:'작은 집(부품)',cost:BuildDefs.house.cost,stamina:16,make:()=>State.bag.house++},
+  statue:{name:'여우상(부품)',cost:BuildDefs.statue.cost,stamina:12,make:()=>State.bag.statue++},
+  campfire:{name:'모닥불',cost:BuildDefs.campfire.cost,stamina:6,make:()=>State.bag.campfire++},
+  rod:{name:'낚싯대',cost:{wood:4,rope:1},stamina:4,make:()=>State.bag.rod++}
 };
 
 /********************** NPCs & Dialog ************************/
-class NPC{ constructor(name,color,lines){ this.name=name; this.lines=lines; this.idx=0;
-  const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.32,0.5,6,12),new THREE.MeshStandardMaterial({color,roughness:0.8})); body.position.y=0.6; body.castShadow=true; g.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,12,12),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9})); head.position.y=1.2; head.castShadow=true; g.add(head);
-  this.mesh=g; this.talkRadius=1.8; this.wanderTimer=rand(3,8); this.dir=new THREE.Vector3(); } }
+class NPC{
+  constructor(name,color,lines){
+    this.name=name; this.lines=lines; this.idx=0;
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.7,12),new THREE.MeshStandardMaterial({color,roughness:0.8})); body.position.y=0.55; body.castShadow=true; g.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,12,12),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9})); head.position.y=1.1; head.castShadow=true; g.add(head);
+    this.mesh=g; this.talkRadius=1.9; this.wanderTimer=rand(3,8); this.dir=new THREE.Vector3();
+  }
+}
 function addNPC(name,color,lines,x,z){ const n=new NPC(name,color,lines); n.mesh.position.set(x,0,z); scene.add(n.mesh); npcs.push(n); return n; }
-const elder=addNPC('마을장 할배여우',0xffa050,[ '여우마을에 온 걸 환영한다네! 채집은 E, 제작은 C, 건설은 B라네.', '광장에 벤치 하나만 있어도 분위기가 달라진다네.', '밤에는 등롱이 빛을 내지. 장식 점수도 오르고!' ],-2.8,-1.5);
-const merchant=addNPC('너구리 상인',0x9c6b3a,[ '솔방울로 재료를 팔지! M으로 상점 열어봐.', '가끔 희귀 설계도도 가져오지. 눈여겨봐!' ],2.4,1.8);
+const elder=addNPC('마을장 할배여우',0xffa050,[
+  '여우마을에 온 걸 환영한다네! 채집은 E, 제작은 C, 건설은 B라네.',
+  '광장에 벤치 하나만 있어도 분위기가 달라진다네.',
+  '밤에는 등롱이 빛을 내지. 장식 점수도 오르고!'
+],-2.8,-1.5);
+const merchant=addNPC('너구리 상인',0x9c6b3a,[
+  '솔방울로 재료를 팔지! M으로 상점 열어봐.',
+  '가끔 희귀 설계도도 가져오지. 눈여겨봐!'
+],2.4,1.8);
+const owl=addNPC('올빼미 학자',0x7aa0ff,[
+  '농사는 인내의 예술. 씨앗을 심고 시간을 기다리게.',
+  '번개가 칠 때는 등롱을 끄고 집 안에. 안전이 우선!'
+],-4.2,2.4);
+const kid=addNPC('꼬마 여우',0xffd37a,[
+  '낚시 재밌어! 물결이 크게 출렁일 때 딱!',
+  '도움을 원하면 H를 눌러봐!'
+],3.6,-2.0);
 
 /********************** Interactions *************************/
 function nearestInteractable(maxDist=2.0){ let best=null,d=1e9; for(const it of interactables){ if(it.harvested) continue; const pos=it.mesh.position||tmpV.setFromMatrixPosition(it.mesh.matrixWorld); const dd=player.position.distanceTo(pos); if(dd<maxDist && dd<d){ d=dd; best=it; } } return best; }
 function nearestNPC(maxDist=2.0){ let best=null,d=1e9; for(const n of npcs){ const dd=player.position.distanceTo(n.mesh.position); if(dd<maxDist && dd<d){ d=dd; best=n; } } return best; }
-function harvest(it){ if(State.stamina<6) return toast('스태미나가 부족합니다'); it.harvested=true; State.stamina-=6; State.pine+=2; addXP(4); QuestState._staminaSpend++; const loot=(it.type==='tree')?{wood:randi(2,4)}:(it.type==='rock')?{stone:randi(1,3)}:(it.type==='ore')?{ore:randi(1,2)}:(it.type==='berry')?{berry:randi(1,2)}:{herb:randi(2,3)}; for(const k in loot) State.bag[k]+=loot[k]; toast(`${lootText(loot)} 획득! (+솔방울2)`); it.mesh.traverse(n=>{ if(n.isMesh) fadeAndRemove(n); }); checkQuests(); save(); refreshUI(); }
+function harvest(it){
+  if(State.stamina<6) return toast('스태미나가 부족합니다');
+  it.harvested=true; State.stamina-=6; State.pine+=2; addXP(4); QuestState._staminaSpend++; State.stats.plant++;
+  const loot=(it.type==='tree')?{wood:randi(2,4)}:(it.type==='rock')?{stone:randi(1,3)}:(it.type==='ore')?{ore:randi(1,2)}:(it.type==='berry')?{berry:randi(1,2)}:{herb:randi(2,3)};
+  for(const k in loot) State.bag[k]+=loot[k];
+  toast(`${lootText(loot)} 획득! (+솔방울2)`);
+  it.mesh.traverse(n=>{ if(n.isMesh) fadeAndRemove(n); });
+  checkQuests(); save(); refreshUI();
+}
 function fadeAndRemove(mesh){ const m=mesh.material; if(!m) return; mesh.userData.fade=1; mesh.userData._orig=m.transparent; m.transparent=true; }
 
 /********************** Build *******************************/
 let buildGhost=null, buildRot=0, currentBuildKey=null;
-function enterBuild(key){ State.mode='build'; currentBuildKey=key||currentBuildKey; toggleDock('modeBuild'); $('#panelBuild').hidden=false; $('#panelCraft').hidden=true; $('#panelBag').hidden=true; if(buildGhost){ scene.remove(buildGhost); buildGhost=null; } if(!currentBuildKey) return; const prefab=BuildPrefabs[currentBuildKey](); prefab.traverse(n=>{ if(n.isMesh){ n.material=n.material.clone(); n.material.transparent=true; n.material.opacity=0.6; }}); prefab.userData.isGhost=true; buildGhost=prefab; scene.add(buildGhost); }
-function placeBuild(pos){ if(!currentBuildKey) return; const key=currentBuildKey; if((State.bag[key]|0)<=0) return toast('제작된 아이템이 없습니다. 먼저 제작하세요.'); State.bag[key]--; const prefab=BuildPrefabs[key](); prefab.position.copy(pos); prefab.rotation.y=buildRot; prefab.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }}); scene.add(prefab); const score=BuildDefs[key].score||0; placables.push({mesh:prefab,type:key,score}); State.repScore+=score; addXP(6); if(key!=='lantern'&&key!=='treelamp'){ for(const p of placables){ if((p.type==='lantern'||p.type==='treelamp') && p.mesh.position.distanceTo(prefab.position)<2.8){ State.repScore+=Math.round(score*0.05); } } } QuestState._placed[key]=(QuestState._placed[key]||0)+1; State.placed.push({type:key,x:pos.x,y:pos.y,z:pos.z,rot:buildRot}); save(); refreshUI(); checkQuests(); }
+function enterBuild(key){
+  State.mode='build'; currentBuildKey=key||currentBuildKey; toggleDock('modeBuild');
+  $('#panelBuild').hidden=false; $('#panelCraft').hidden=true; $('#panelBag').hidden=true;
+  if(buildGhost){ scene.remove(buildGhost); buildGhost=null; }
+  if(!currentBuildKey) return;
+  const prefab=BuildPrefabs[currentBuildKey]();
+  prefab.traverse(n=>{ if(n.isMesh){ n.material=n.material.clone(); n.material.transparent=true; n.material.opacity=0.6; }});
+  prefab.userData.isGhost=true; buildGhost=prefab; scene.add(buildGhost);
+}
+function placeBuild(pos){
+  if(!currentBuildKey) return; const key=currentBuildKey;
+  if((State.bag[key]|0)<=0) return toast('제작된 아이템이 없습니다. 먼저 제작하세요.');
+  State.bag[key]--;
+  const prefab=BuildPrefabs[key](); prefab.position.copy(pos); prefab.rotation.y=buildRot;
+  prefab.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }});
+  scene.add(prefab);
+  const score=BuildDefs[key].score||0; placables.push({mesh:prefab,type:key,score}); State.repScore+=score; addXP(6);
+  /* 등롱 근처 보너스 */
+  if(key!=='lantern'&&key!=='treelamp'){
+    for(const p of placables){ if((p.type==='lantern'||p.type==='treelamp') && p.mesh.position.distanceTo(prefab.position)<2.8){ State.repScore+=Math.round(score*0.05); } }
+  }
+  /* 모닥불 버프 영역 */
+  if(key==='campfire'){ prefab.userData.buff='rest'; }
+  QuestState._placed[key]=(QuestState._placed[key]||0)+1; State.stats.place++;
+  State.placed.push({type:key,x:pos.x,y:pos.y,z:pos.z,rot:buildRot});
+  save(); refreshUI(); checkQuests();
+}
 function cancelBuild(){ if(buildGhost){ scene.remove(buildGhost); buildGhost=null; } currentBuildKey=null; buildRot=0; }
 
 /********************** Shop *******************************/
-const shopItems=[ {id:'wood5',name:'나무 ×5',cost:5,give:{wood:5}}, {id:'stone5',name:'돌 ×5',cost:5,give:{stone:5}}, {id:'herb5',name:'허브 ×5',cost:6,give:{herb:5}}, {id:'ore3',name:'광석 ×3',cost:8,give:{ore:3}}, {id:'blue_fence',name:'설계도: 울타리',cost:20,unlock:'fence'}, {id:'blue_bridge',name:'설계도: 다리',cost:24,unlock:'bridge'}, {id:'blue_stall',name:'설계도: 노점상',cost:20,unlock:'stall'} ];
+const shopItems=[
+  {id:'wood5',name:'나무 ×5',cost:5,give:{wood:5}},
+  {id:'stone5',name:'돌 ×5',cost:5,give:{stone:5}},
+  {id:'herb5',name:'허브 ×5',cost:6,give:{herb:5}},
+  {id:'ore3',name:'광석 ×3',cost:8,give:{ore:3}},
+  {id:'seed5',name:'씨앗 ×5',cost:10,give:{seed:5}},
+  {id:'blue_fence',name:'설계도: 울타리',cost:20,unlock:'fence'},
+  {id:'blue_bridge',name:'설계도: 다리',cost:24,unlock:'bridge'},
+  {id:'blue_stall',name:'설계도: 노점상',cost:20,unlock:'stall'}
+];
 function renderShop(){ const root=$('#shopList'); root.innerHTML=''; for(const it of shopItems){ const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${it.name}</b><br><span class="small">가격: ${it.cost} 솔방울</span>`; const right=document.createElement('div'); right.className='cta'; right.textContent='구매'; right.onclick=()=>buyShop(it); row.append(left,right); root.append(row); } }
 function buyShop(it){ if(State.pine<it.cost) return toast('솔방울이 부족합니다'); State.pine-=it.cost; if(it.give){ for(const [k,v] of Object.entries(it.give)) State.bag[k]=(State.bag[k]||0)+v; } if(it.unlock){ State.recipesUnlocked[it.unlock]=true; toast(`${it.name} 해금!`); } else { toast(`${it.name} 구매 완료`); } save(); refreshUI(); }
 function toggleShop(){ const el=$('#shopPanel'); if(!el) return; const vis=getComputedStyle(el).display!=='none'; if(vis) closeShop(); else openShop(); }
@@ -428,35 +619,54 @@ function openShop(){ const el=$('#shopPanel'); el.style.display='block'; State.m
 function closeShop(){ const el=$('#shopPanel'); el.style.display='none'; if(State.mode==='shop'){ State.mode='explore'; toggleDock('modeExplore'); } }
 $('#shopClose').onclick=()=>closeShop();
 
-/********************** Quests ******************************/
+/********************** Quests & Achievements *****************/
 const QuestDefs=[
-  {id:'q1',title:'첫 채집',desc:'나무, 돌, 허브 중 아무거나 1회 채집',test:s=>s._harvestCount>=1,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q2',title:'판재 만들기',desc:'판재 3개 제작',test:s=>s._crafted.plank>=3,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q3',title:'광장에 벤치',desc:'여우벤치 1개 배치',test:s=>s._placed.bench>=1,reward:()=>{State.repScore+=10;addXP(12);}},
-  {id:'q4',title:'밤길을 비춰요',desc:'등롱 1개 배치',test:s=>s._placed.lantern>=1,reward:()=>{State.pine+=15;addXP(12);}},
-  {id:'q5',title:'정원 가꾸기',desc:'화단 1개 배치',test:s=>s._placed.flowerbed>=1,reward:()=>{State.repScore+=8;addXP(10);}},
-  {id:'q6',title:'장식 점수 60 달성',desc:'장식 점수(평판 점수) 60 달성',test:s=>State.repScore>=60,reward:()=>{addXP(18);}},
-  {id:'q7',title:'제작가',desc:'제작 10회 수행',test:s=>s._craftCount>=10,reward:()=>{State.pine+=25;addXP(18);}},
-  {id:'q8',title:'사진가',desc:'포토 모드에서 스샷 1회(키: P)',test:s=>s._photoTaken,reward:()=>{State.repScore+=6;addXP(10);}},
-  {id:'q9',title:'근면한 여우',desc:'스태미나를 3회 이상 소모하는 행동 수행',test:s=>s._staminaSpend>=3,reward:()=>{State.pine+=20;addXP(12);}},
-  {id:'q10',title:'평판 올리기',desc:'평판 C 달성',test:s=>State.repScore>=60,reward:()=>{addXP(20);}},
-  {id:'q11',title:'상인과 대화',desc:'너구리 상인과 대화하기 (E)',test:s=>State.flags.metMerchant,reward:()=>{State.pine+=12;addXP(10);}},
-  {id:'q12',title:'마을장과 대화',desc:'마을장에게 인사하기 (E)',test:s=>State.flags.talkedElder,reward:()=>{State.repScore+=10;addXP(14);}},
-  {id:'q13',title:'울타리 설치',desc:'울타리 3개 배치',test:s=>(QuestState._placed.fence||0)>=3,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q14',title:'노점상 꾸미기',desc:'노점상 1개 배치',test:s=>(QuestState._placed.stall||0)>=1,reward:()=>{State.repScore+=12;addXP(12);}},
-  {id:'q15',title:'다리 건설',desc:'다리 1개 배치',test:s=>(QuestState._placed.bridge||0)>=1,reward:()=>{State.repScore+=20;addXP(16);}}
+  {id:'q1', title:'첫 채집', desc:'나무/돌/허브/열매 중 아무거나 1회 채집', test:s=>s._harvestCount>=1, reward:()=>{State.pine+=10;addXP(10);} },
+  {id:'q2', title:'판재 만들기', desc:'판재 3개 제작', test:s=>s._crafted.plank>=3, reward:()=>{State.pine+=10;addXP(10);} },
+  {id:'q3', title:'광장에 벤치', desc:'여우벤치 1개 배치', test:s=>s._placed.bench>=1, reward:()=>{State.repScore+=10;addXP(12);} },
+  {id:'q4', title:'밤길을 비춰요', desc:'등롱 1개 배치', test:s=>s._placed.lantern>=1, reward:()=>{State.pine+=15;addXP(12);} },
+  {id:'q5', title:'정원 가꾸기', desc:'화단 1개 배치', test:s=>s._placed.flowerbed>=1, reward:()=>{State.repScore+=8;addXP(10);} },
+  {id:'q6', title:'장식 점수 60', desc:'평판 점수 60 달성', test:s=>State.repScore>=60, reward:()=>{addXP(18);} },
+  {id:'q7', title:'제작가', desc:'제작 10회', test:s=>s._craftCount>=10, reward:()=>{State.pine+=25;addXP(18);} },
+  {id:'q8', title:'사진가', desc:'포토 모드 스샷 1회(P)', test:s=>s._photoTaken, reward:()=>{State.repScore+=6;addXP(10);} },
+  {id:'q9', title:'근면한 여우', desc:'스태미나 소비 행동 3회', test:s=>s._staminaSpend>=3, reward:()=>{State.pine+=20;addXP(12);} },
+  {id:'q10', title:'평판 C', desc:'평판 C 달성', test:s=>State.repScore>=60, reward:()=>{addXP(20);} },
+  {id:'q11', title:'상인과 대화', desc:'너구리 상인과 대화(E)', test:s=>State.flags.metMerchant, reward:()=>{State.pine+=12;addXP(10);} },
+  {id:'q12', title:'마을장과 대화', desc:'마을장에게 인사(E)', test:s=>State.flags.talkedElder, reward:()=>{State.repScore+=10;addXP(14);} },
+  {id:'q13', title:'울타리 3개', desc:'울타리 3개 배치', test:s=>(QuestState._placed.fence||0)>=3, reward:()=>{State.pine+=10;addXP(10);} },
+  {id:'q14', title:'노점상', desc:'노점상 1개 배치', test:s=>(QuestState._placed.stall||0)>=1, reward:()=>{State.repScore+=12;addXP(12);} },
+  {id:'q15', title:'다리 건설', desc:'다리 1개 배치', test:s=>(QuestState._placed.bridge||0)>=1, reward:()=>{State.repScore+=20;addXP(16);} },
+  /* 확장 */
+  {id:'q16', title:'씨앗 심기', desc:'농지에 씨앗 1회 심기', test:s=>s._farmsPlanted>=1, reward:()=>{State.pine+=10;addXP(10);} },
+  {id:'q17', title:'첫 수확', desc:'작물 1회 수확', test:s=>s._farmsHarvested>=1, reward:()=>{State.repScore+=8;addXP(12);} },
+  {id:'q18', title:'낚시 성공', desc:'물가에서 낚시 1회 성공', test:s=>s._fishCaught>=1, reward:()=>{State.pine+=10;addXP(12);} },
+  {id:'q19', title:'모닥불', desc:'모닥불 1개 배치', test:s=>(QuestState._placed.campfire||0)>=1, reward:()=>{State.repScore+=10;addXP(10);} },
+  {id:'q20', title:'작은 집', desc:'집 1개 배치', test:s=>(QuestState._placed.house||0)>=1, reward:()=>{State.repScore+=20;addXP(16);} }
 ];
-const QuestState={done:{},_harvestCount:0,_craftCount:0,_placed:{bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0},_crafted:{plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,rope:0,metal:0,brick:0},_photoTaken:false,_staminaSpend:0};
+const QuestState={done:{},_harvestCount:0,_craftCount:0,_placed:{bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,road:0,house:0,statue:0,campfire:0},_crafted:{plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,rope:0,metal:0,brick:0,seed:0,road:0,house:0,statue:0,campfire:0,rod:0},_photoTaken:false,_staminaSpend:0,_farmsPlanted:0,_farmsHarvested:0,_fishCaught:0};
+
+const AchDefs=[
+  {id:'a1', name:'목수', desc:'판재 10개 제작', test:()=>QuestState._crafted.plank>=10},
+  {id:'a2', name:'장식왕', desc:'평판 점수 200', test:()=>State.repScore>=200},
+  {id:'a3', name:'길 개척자', desc:'도로 10개 배치', test:()=>QuestState._placed.road>=10},
+  {id:'a4', name:'농부', desc:'작물 5회 수확', test:()=>QuestState._farmsHarvested>=5},
+  {id:'a5', name:'어부', desc:'물고기 5마리', test:()=>QuestState._fishCaught>=5},
+  {id:'a6', name:'건축가', desc:'집 3채', test:()=>QuestState._placed.house>=3}
+];
+const AchState={done:{}};
+
 function checkQuests(){ for(const q of QuestDefs){ if(QuestState.done[q.id]) continue; if(q.test(QuestState)){ QuestState.done[q.id]=true; q.reward(); toast(`퀘스트 완료: ${q.title}`); save(); } } refreshQuests(); refreshUI(); }
+function checkAchievements(){ for(const a of AchDefs){ if(AchState.done[a.id]) continue; if(a.test()){ AchState.done[a.id]=true; toast(`업적 달성: ${a.name}`); save(); } } renderAchievements(); }
 
 /********************** UI & Lists ***************************/
-const elPine=$('#pine'), elStBar=$('#staminaBar'), elStText=$('#staminaText'), elClock=$('#clock'), elRep=$('#reputation'), elQuestList=$('#questList'), elWeatherText=$('#weatherText');
-function refreshUI(){ elPine.textContent=State.pine|0; elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time); elRep.textContent=repLetter(State.repScore); elWeatherText.textContent=(State.weather==='rain')?'비':'맑음'; renderCraftList(); renderBagList(); renderBuildList(); }
+const elPine=$('#pine'), elStBar=$('#staminaBar'), elStText=$('#staminaText'), elClock=$('#clock'), elRep=$('#reputation'), elQuestList=$('#questList'), elWeatherText=$('#weatherText'), elCoord=$('#coord'), elAch=$('#achList');
+function refreshUI(){ elPine.textContent=State.pine|0; elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time); elRep.textContent=repLetter(State.repScore); elWeatherText.textContent=(State.weather==='rain')?'비':(State.weather==='storm')?'폭풍':'맑음'; renderCraftList(); renderBagList(); renderBuildList(); }
 function renderCraftList(){ const root=$('#craftList'); root.innerHTML=''; for(const key of Object.keys(Recipes)){ if(!State.recipesUnlocked[key]) continue; const r=Recipes[key]; const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${r.name}</b><br><span class="small">${costText(r.cost)} · 스태미나 ${r.stamina}</span>`; const right=document.createElement('div'); right.className='cta'; right.textContent='제작'; right.onclick=()=>craft(key); row.append(left,right); root.append(row); } }
 function renderBagList(){ const root=$('#bagList'); root.innerHTML=''; for(const [k,v] of Object.entries(State.bag)){ const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${label(k)}</b>`; const right=document.createElement('div'); right.textContent=v|0; row.append(left,right); root.append(row); } }
 function renderBuildList(){ const root=$('#buildList'); root.innerHTML=''; for(const k of Object.keys(BuildDefs)){ const def=BuildDefs[k]; const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${def.name}</b><br><span class="small">점수 ${def.score} · 필요: ${costText(def.cost)}</span>`; const right=document.createElement('div'); right.className='cta'; right.innerHTML=`배치 (${State.bag[k]|0})`; right.onclick=()=>{ if(State.bag[k]>0) enterBuild(k); else toast('해당 아이템이 없습니다. 먼저 제작해 주세요.'); }; row.append(left,right); root.append(row); } }
 function refreshQuests(){ elQuestList.innerHTML=''; for(const q of QuestDefs){ const d=document.createElement('div'); d.className='quest card'; if(QuestState.done[q.id]) d.classList.add('done'); d.innerHTML=`<div class="title">${q.title}</div><div class="small">${q.desc}</div>`; elQuestList.append(d); } }
-function label(k){ const m={wood:'나무',stone:'돌',herb:'허브',fish:'물고기',berry:'열매',ore:'광석',metal:'금속괴',brick:'벽돌',rope:'밧줄',plank:'판재',cloth:'천',bench:'여우벤치',lantern:'등롱',flowerbed:'화단',fence:'울타리',arch:'아치',sign:'표지판',stall:'노점상',bridge:'다리',treelamp:'나무등롱'}; return m[k]||k; }
+function renderAchievements(){ elAch.innerHTML=''; for(const a of AchDefs){ const d=document.createElement('div'); d.className='quest card'; if(AchState.done[a.id]) d.classList.add('done'); d.innerHTML=`<div class="title">${a.name}</div><div class="small">${a.desc}</div>`; elAch.append(d); } }
+function label(k){ const m={wood:'나무',stone:'돌',herb:'허브',fish:'물고기',berry:'열매',ore:'광석',metal:'금속괴',brick:'벽돌',rope:'밧줄',plank:'판재',cloth:'천',bench:'여우벤치',lantern:'등롱',flowerbed:'화단',fence:'울타리',arch:'아치',sign:'표지판',stall:'노점상',bridge:'다리',treelamp:'나무등롱',seed:'씨앗',road:'도로',house:'집',statue:'여우상',campfire:'모닥불',rod:'낚싯대'}; return m[k]||k; }
 function costText(cost){ return Object.entries(cost).map(([k,v])=>`${label(k)}×${v}`).join(', '); }
 function lootText(loot){ return Object.entries(loot).map(([k,v])=>`${label(k)}×${v|0}`).join(', '); }
 function fmtTime(min){ const h=Math.floor(min/60)%24,m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
@@ -464,28 +674,112 @@ function fmtTime(min){ const h=Math.floor(min/60)%24,m=min%60; return `${String(
 /********************** Craft/XP *****************************/
 function canPay(cost){ for(const [k,v] of Object.entries(cost)) if((State.bag[k]|0)<v) return false; return true; }
 function pay(cost){ for(const [k,v] of Object.entries(cost)) State.bag[k]-=v; }
-function craft(key){ const r=Recipes[key]; if(!canPay(r.cost)) return toast('재료가 부족합니다'); if(State.stamina<(r.stamina||0)) return toast('스태미나가 부족합니다'); pay(r.cost); State.stamina-=r.stamina||0; QuestState._staminaSpend++; r.make(); QuestState._craftCount++; QuestState._crafted[key]=(QuestState._crafted[key]||0)+1; addXP(5); State.pine+=1; toast(`${r.name} 제작 완료!`); checkQuests(); save(); refreshUI(); }
+function craft(key){
+  const r=Recipes[key]; if(!canPay(r.cost)) return toast('재료가 부족합니다'); if(State.stamina<(r.stamina||0)) return toast('스태미나가 부족합니다');
+  pay(r.cost); State.stamina-=r.stamina||0; QuestState._staminaSpend++; r.make(); QuestState._craftCount++; QuestState._crafted[key]=(QuestState._crafted[key]||0)+1; addXP(5); State.pine+=1;
+  toast(`${r.name} 제작 완료!`); checkQuests(); checkAchievements(); save(); refreshUI();
+}
 function addXP(x){ State.xp+=x; while(State.xp>=20){ State.xp-=20; State.level++; toast(`레벨 업! Lv.${State.level}`); State.maxStamina+=5; State.stamina=State.maxStamina; } }
+
+/********************** Farming ******************************/
+function tryPlant(){
+  if(State.bag.seed<=0) return toast('씨앗이 없습니다');
+  if(State.stamina<3) return toast('스태미나가 부족합니다');
+  raycaster.setFromCamera(mouse,camera);
+  const hit=raycaster.intersectObject(ground,false)[0];
+  if(!hit) return;
+  const p=hit.point.clone(); p.x=snap(p.x,0.5); p.z=snap(p.z,0.5); p.y=0.001;
+  if(p.length()>80) return toast('여기엔 심기 어려워요');
+  State.bag.seed--; State.stamina-=3; QuestState._staminaSpend++;
+  const farm={x:p.x,z:p.z,stage:0,ttl:randi(40,90)}; // ttl 분
+  State.farms.push(farm); spawnFarmMesh(farm);
+  QuestState._farmsPlanted++; checkQuests(); save(); refreshUI(); toast('씨앗을 심었습니다');
+}
+const farmMeshes=[];
+function spawnFarmMesh(f){
+  const g=new THREE.Group(); g.position.set(f.x,0,f.z);
+  const bed=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.06,10),new THREE.MeshStandardMaterial({color:0x463a2a,roughness:1}));
+  bed.position.y=0.03; bed.castShadow=true; g.add(bed);
+  const sprout=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.2,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));
+  sprout.position.y=0.18; g.add(sprout);
+  g.userData.sprout=sprout; g.userData.farm=f; scene.add(g); farmMeshes.push(g);
+}
+function updateFarms(dt){
+  for(const g of farmMeshes){
+    const f=g.userData.farm; if(!f) continue;
+    f.ttl-=dt*3; // 게임 시간 비례
+    if(f.ttl<=0 && f.stage<2){ f.stage++; f.ttl=randi(20,50); // 다음 스테이지
+      if(f.stage===1){ g.userData.sprout.scale.set(1.3,1.6,1.3); }
+      if(f.stage===2){ g.userData.sprout.material.color.set(0x3aa35a); g.userData.sprout.scale.set(1.8,2.2,1.8); }
+    }
+  }
+}
+function tryHarvest(){
+  // 가장 가까운 농지 수확
+  let best=null, bd=1.2;
+  for(const g of farmMeshes){
+    const d=player.position.distanceTo(g.position);
+    if(d<bd && g.userData.farm.stage===2){ bd=d; best=g; }
+  }
+  if(!best) return toast('수확할 작물이 없어요(가까이!)');
+  if(State.stamina<2) return toast('스태미나가 부족합니다');
+  State.stamina-=2; State.pine+=2; addXP(4); QuestState._staminaSpend++;
+  const yieldLoot={herb:randi(2,3), berry:randi(1,2)};
+  for(const k in yieldLoot) State.bag[k]+=yieldLoot[k];
+  // 제거
+  scene.remove(best); farmMeshes.splice(farmMeshes.indexOf(best),1);
+  QuestState._farmsHarvested++; State.stats.harvest++; checkQuests(); checkAchievements(); save(); refreshUI();
+  toast(`수확! ${lootText(yieldLoot)}`);
+}
+
+/********************** Fishing ******************************/
+let fishing=false, fishProg=0, fishSpot=null;
+function tryFish(){
+  if(fishing) return;
+  if(State.bag.rod<=0) return toast('낚싯대가 필요합니다');
+  // 가장 가까운 포인트
+  let best=null, d=1.4;
+  for(const s of fishSpots){ const dd=player.position.distanceTo(s.position); if(dd<d){ d=dd; best=s; } }
+  if(!best) return toast('물가 포인트에 더 가까이 가세요');
+  fishing=true; fishProg=0; fishSpot=best; toast('낚시 시작! (E를 타이밍 맞춰 눌러 유지)');
+}
+function stepFishing(dt){
+  if(!fishing) return;
+  // 간단한 미니게임: 진행도가 위아래로 흔들림, E키 타이밍으로 보정
+  fishProg+=dt*(0.1+Math.random()*0.2);
+  if(fishProg>=1){
+    fishing=false; fishProg=0; State.bag.fish++; State.pine+=3; addXP(6); QuestState._fishCaught++; State.stats.fish++; checkQuests(); checkAchievements(); save(); refreshUI(); toast('물고기를 잡았습니다!');
+  }
+}
 
 /********************** Input *******************************/
 const move={f:0,b:0,l:0,r:0}; let sprint=false;
-window.addEventListener('keydown',e=>{ if(e.repeat) return;
+window.addEventListener('keydown',e=>{
+  if(e.repeat) return;
   if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1; if(e.code==='ShiftLeft') sprint=true;
   if(e.code==='KeyB'){ State.mode=(State.mode==='build'?'explore':'build'); toggleDock(State.mode==='build'?'modeBuild':'modeExplore'); $('#panelBuild').hidden=(State.mode!=='build'); if(State.mode!=='build') cancelBuild(); }
   if(e.code==='KeyM'){ toggleShop(); }
-  if(e.code==='KeyE'){ const n=nearestNPC(1.9); if(n){ talk(n); return; } const it=nearestInteractable(2.0); if(it){ harvest(it); QuestState._harvestCount++; } }
+  if(e.code==='KeyH'){ openHelp(); }
+  if(e.code==='KeyE'){
+    if(fishing){ fishProg=Math.max(0,fishProg-0.15); return; }
+    const n=nearestNPC(1.9); if(n){ talk(n); State.stats.talk++; return; }
+    const it=nearestInteractable(2.0); if(it){ harvest(it); QuestState._harvestCount++; return; }
+    tryHarvest();
+  }
+  if(e.code==='KeyF'){ tryFish(); }
   if(e.code==='KeyC'){ togglePanel('panelCraft'); }
   if(e.code==='KeyI'){ togglePanel('panelBag'); }
-  if(e.code==='KeyP'){ QuestState._photoTaken=true; checkQuests(); toast('찰칵! (가상의 스샷)'); }
+  if(e.code==='KeyP'){ QuestState._photoTaken=true; State.stats.photo++; checkQuests(); toast('찰칵! (가상의 스샷)'); }
   if(e.code==='KeyR'){ buildRot=(buildRot+Math.PI/2)%(Math.PI*2); }
-  if(e.code==='Escape'){ cancelBuild(); State.mode='explore'; toggleDock('modeExplore'); hidePanels(); closeShop(); hideDialog(); }
+  if(e.code==='KeyG'){ tryPlant(); }
+  if(e.code==='Escape'){ cancelBuild(); State.mode='explore'; toggleDock('modeExplore'); hidePanels(); closeShop(); hideDialog(); closeHelp(); }
 });
 window.addEventListener('keyup',e=>{ if(e.code==='KeyW') move.f=0; if(e.code==='KeyS') move.b=0; if(e.code==='KeyA') move.l=0; if(e.code==='KeyD') move.r=0; if(e.code==='ShiftLeft') sprint=false; });
 function togglePanel(id){ const el=document.getElementById(id); el.hidden=!el.hidden; }
 function hidePanels(){ $('#panelCraft').hidden=true; $('#panelBag').hidden=true; $('#panelBuild').hidden=true; }
 function toggleDock(id){ for(const b of document.querySelectorAll('.dock .btn')) b.setAttribute('aria-pressed','false'); document.getElementById(id).setAttribute('aria-pressed','true'); }
 
-// Dock buttons
+// Dock buttons + 설정 버튼
 $('#modeExplore').onclick = ()=>{ State.mode='explore'; toggleDock('modeExplore'); hidePanels(); cancelBuild(); };
 $('#modeBuild').onclick   = ()=>{ State.mode='build';   toggleDock('modeBuild');   $('#panelBuild').hidden=false; };
 $('#modeCraft').onclick   = ()=>{ State.mode='craft';   toggleDock('modeCraft');   $('#panelCraft').hidden=false; };
@@ -493,17 +787,41 @@ $('#modeBag').onclick     = ()=>{ State.mode='bag';     toggleDock('modeBag');  
 $('#modeShop').onclick    = ()=>{ toggleShop(); };
 $('#modePhoto').onclick   = ()=>{ QuestState._photoTaken=true; checkQuests(); toast('찰칵! (가상의 스샷)'); };
 $('#btnReset').onclick    = ()=>{ if(confirm('모든 진행도가 초기화됩니다. 계속할까요?')){ localStorage.removeItem(STORAGE_KEY); location.reload(); } };
-$('#btnHelp').onclick     = ()=>{ alert('조작:\nWASD 이동, Shift 달리기, E 상호작용/대화, B 건설, C 제작, I 가방, M 상점, R 회전, P 포토, Esc 취소'); };
-$('#btnWeather').onclick  = ()=>{ Weather.set(State.weather==='rain'?'clear':'rain'); };
+$('#btnHelp').onclick     = ()=>{ openHelp(); };
+$('#btnWeather').onclick  = ()=>{ Weather.toggle(); };
+$('#btnExport').onclick   = ()=>{ const data=btoa(unescape(encodeURIComponent(JSON.stringify({State,QuestState,AchState})))); navigator.clipboard.writeText(data).then(()=>toast('클립보드에 저장됨')); };
+$('#btnImport').onclick   = ()=>{ const s=prompt('세이브 문자열을 붙여넣으세요'); if(!s) return; try{ const obj=JSON.parse(decodeURIComponent(escape(atob(s)))); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); Object.assign(AchState,obj.AchState||{}); save(); location.reload(); }catch(e){ alert('불러오기 실패'); } };
+$('#btnShot').onclick     = ()=>saveScreenshot(renderer);
 
 /********************** Dialog ******************************/
 const dialogEl=$('#dialog'), dialogSpeaker=$('#dialogSpeaker'), dialogText=$('#dialogText');
-function talk(n){ dialogEl.style.display='block'; dialogSpeaker.textContent=n.name; dialogText.textContent=n.lines[n.idx% n.lines.length]; n.idx++; if(n===elder) State.flags.talkedElder=true; if(n===merchant) State.flags.metMerchant=true; checkQuests(); save(); setTimeout(()=>{ dialogEl.style.display='none'; },2200); }
+function talk(n){ dialogEl.style.display='block'; dialogSpeaker.textContent=n.name; dialogText.textContent=n.lines[n.idx% n.lines.length]; n.idx++; if(n===elder) State.flags.talkedElder=true; if(n===merchant) State.flags.metMerchant=true; if(n===owl) State.flags.metOwl=true; if(n===kid) State.flags.metKid=true; checkQuests(); save(); setTimeout(()=>{ dialogEl.style.display='none'; },2200); }
 function hideDialog(){ dialogEl.style.display='none'; }
 
+/********************** Help Modal ***************************/
+function openHelp(){
+  const el=$('#modalHelp'); const c=$('#helpContent');
+  c.innerHTML = `
+  <div><b>조작</b></div>
+  <div class="small">WASD 이동, Shift 달리기, E 상호작용/대화/수확, B 건설, C 제작, I 가방, M 상점, R 회전, P 포토, G 씨앗 심기, F 낚시, H 도움말, Esc 취소</div>
+  <hr style="border:0;border-top:1px solid #2a3650;margin:8px 0">
+  <div><b>시스템</b></div>
+  <ul class="small">
+    <li>자동 저장 (우측 하단 배지 확인)</li>
+    <li>날씨(맑음/비/폭풍) 순환, 번개 효과</li>
+    <li>모닥불 근처에서 서 있으면 스태미나 회복 보너스</li>
+    <li>낚시 포인트는 물가의 둥근 표시. F로 시작, E로 진행도 유지</li>
+    <li>농사: G로 씨앗 심기 → 성장 → E로 수확</li>
+    <li>설정: 세이브 내보내기/가져오기, 스크린샷</li>
+  </ul>`;
+  el.style.display='block';
+}
+function closeHelp(){ $('#modalHelp').style.display='none'; }
+$$('.close').forEach(b=>b.onclick=()=>{ const id=b.getAttribute('data-close'); if(id) $(id).style.display='none'; });
+
 /********************** Save/Load ***************************/
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({State,QuestState})); }
-function load(){ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return; try{ const obj=JSON.parse(raw); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); }catch(e){ console.warn('Load failed',e); } }
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({State,QuestState,AchState})); }
+function load(){ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return; try{ const obj=JSON.parse(raw); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); Object.assign(AchState,obj.AchState||{}); }catch(e){ console.warn('Load failed',e); } }
 
 /********************** Raycast & Mouse **********************/
 const raycaster=new THREE.Raycaster();
@@ -513,61 +831,126 @@ renderer.domElement.addEventListener('mousedown',()=>{ if(State.mode==='build'&&
 
 /********************** Minimap ******************************/
 const minimap=document.getElementById('minimap'); const mctx=minimap.getContext('2d');
-function drawMinimap(){ const W=minimap.width,H=minimap.height; mctx.clearRect(0,0,W,H); mctx.fillStyle='#0e1420'; mctx.fillRect(0,0,W,H); mctx.strokeStyle='#28364a'; mctx.strokeRect(0.5,0.5,W-1,H-1); const scale=1.5, ox=W/2, oy=H/2; mctx.beginPath(); mctx.arc(ox,oy,90/scale,0,Math.PI*2); mctx.strokeStyle='#203040'; mctx.stroke(); mctx.fillStyle='#88aaff'; for(const p of placables){ const x=ox+p.mesh.position.x/scale; const y=oy+p.mesh.position.z/scale; mctx.fillRect(x-2,y-2,4,4); } mctx.fillStyle='#5de0a1'; mctx.beginPath(); mctx.arc(ox,oy,4,0,Math.PI*2); mctx.fill(); }
+function drawMinimap(){
+  const W=minimap.width,H=minimap.height; mctx.clearRect(0,0,W,H);
+  mctx.fillStyle='#0e1420'; mctx.fillRect(0,0,W,H);
+  mctx.strokeStyle='#28364a'; mctx.strokeRect(0.5,0.5,W-1,H-1);
+  const scale=1.5, ox=W/2, oy=H/2;
+  mctx.beginPath(); mctx.arc(ox,oy,95/scale,0,Math.PI*2); mctx.strokeStyle='#203040'; mctx.stroke();
+  // 배치물
+  mctx.fillStyle='#88aaff';
+  for(const p of placables){ const x=ox+p.mesh.position.x/scale; const y=oy+p.mesh.position.z/scale; mctx.fillRect(x-2,y-2,4,4); }
+  // 플레이어
+  mctx.fillStyle='#5de0a1'; mctx.beginPath(); mctx.arc(ox+player.position.x/scale,oy+player.position.z/scale,4,0,Math.PI*2); mctx.fill();
+}
 
 /********************** Weather ******************************/
-let rainParticles=null; const rainCount=400; const rainGeo=new THREE.BufferGeometry(); const rainMat=new THREE.PointsMaterial({color:0x9fb0d3,size:0.07,transparent:true,opacity:0.7});
-function makeRain(){ const positions=new Float32Array(rainCount*3); for(let i=0;i<rainCount;i++){ positions[i*3+0]=rand(-30,30); positions[i*3+1]=rand(2,14); positions[i*3+2]=rand(-30,30); } rainGeo.setAttribute('position', new THREE.BufferAttribute(positions,3)); rainParticles=new THREE.Points(rainGeo,rainMat); rainParticles.visible=false; scene.add(rainParticles); }
-function updateRain(dt){ if(!rainParticles||!rainParticles.visible) return; const pos=rainGeo.attributes.position; for(let i=0;i<rainCount;i++){ let y=pos.getY(i)-dt*8; if(y<0){ y=rand(6,14); pos.setX(i,rand(-30,30)); pos.setZ(i,rand(-30,30)); } pos.setY(i,y); } pos.needsUpdate=true; }
-const Weather={ timerMin:0, set(mode){ if(State.weather===mode) return; State.weather=mode; if(mode==='rain'){ if(!rainParticles) makeRain(); rainParticles.visible=true; toast('🌦️ 비가 내리기 시작했어요!'); this.timerMin=randi(40,120); } else { if(rainParticles) rainParticles.visible=false; toast('☀️ 날이 갰어요.'); this.timerMin=randi(120,360); } }, force(mode){ this.set(mode); this.timerMin=1; }, step(dt){ const dtMin=dt*3; this.timerMin-=dtMin; if(this.timerMin<=0){ if(State.weather==='clear'){ if(Math.random()<0.35) this.set('rain'); else this.set('clear'); } else { this.set('clear'); } } } };
+let rainParticles=null; const rainCount=450; const rainGeo=new THREE.BufferGeometry(); const rainMat=new THREE.PointsMaterial({color:0x9fb0d3,size:0.07,transparent:true,opacity:0.7});
+function makeRain(){ const positions=new Float32Array(rainCount*3); for(let i=0;i<rainCount;i++){ positions[i*3+0]=rand(-35,35); positions[i*3+1]=rand(2,14); positions[i*3+2]=rand(-35,35); } rainGeo.setAttribute('position', new THREE.BufferAttribute(positions,3)); rainParticles=new THREE.Points(rainGeo,rainMat); rainParticles.visible=false; scene.add(rainParticles); }
+function updateRain(dt){ if(!rainParticles||!rainParticles.visible) return; const pos=rainGeo.attributes.position; for(let i=0;i<rainCount;i++){ let y=pos.getY(i)-dt*8; if(y<0){ y=rand(6,14); pos.setX(i,rand(-35,35)); pos.setZ(i,rand(-35,35)); } pos.setY(i,y); } pos.needsUpdate=true; }
+const Weather={
+  timerMin:0,
+  set(mode){
+    if(State.weather===mode) return; State.weather=mode;
+    if(mode==='rain'||mode==='storm'){
+      if(!rainParticles) makeRain(); rainParticles.visible=true; toast(mode==='storm'?'⛈️ 폭풍이 몰아쳐요!':'🌦️ 비가 내리기 시작했어요!');
+      this.timerMin=randi(40,120);
+    } else {
+      if(rainParticles) rainParticles.visible=false; toast('☀️ 날이 갰어요.'); this.timerMin=randi(120,360);
+    }
+  },
+  toggle(){ this.set(State.weather==='clear'?'rain':'clear'); },
+  force(mode){ this.set(mode); this.timerMin=1; },
+  step(dt){
+    const dtMin=dt*3; this.timerMin-=dtMin;
+    // 확률적으로 폭풍 전환
+    if(this.timerMin<=0){
+      if(State.weather==='clear'){ const r=Math.random(); if(r<0.25) this.set('rain'); else this.set('clear'); }
+      else if(State.weather==='rain'){ if(Math.random()<0.2) this.set('storm'); else this.set('clear'); }
+      else { this.set('clear'); }
+    }
+    // 폭풍일 때 번개 플래쉬
+    if(State.weather==='storm'){
+      if(Math.random()<0.02){ flash.intensity=3; setTimeout(()=>flash.intensity=0, 120+Math.random()*180); }
+    }
+  }
+};
 
 /********************** Game Loop ****************************/
 let last=performance.now();
 function tick(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   State.time+=dt*3; if(State.time>=1440) State.time-=1440;
-  const t=State.time/1440; const day=Math.cos((t-0.75)*Math.PI*2)*0.5+0.5; const over=(State.weather==='rain')?0.7:1.0;
+  const t=State.time/1440;
+  const day=Math.cos((t-0.75)*Math.PI*2)*0.5+0.5; const over=(State.weather==='rain')?0.7:(State.weather==='storm')?0.6:1.0;
   hemi.intensity=lerp(0.15,0.8,day)*over; sun.intensity=lerp(0.1,1.0,day)*over; scene.background.setHSL(0.58,0.5,lerp(0.06,0.16,day*over)); sun.position.set(20*Math.cos(t*Math.PI*2),18*day+2,20*Math.sin(t*Math.PI*2));
-  if(State.stamina<State.maxStamina) State.stamina+=dt*(day>0.3?2.2:1.2);
+  // 모닥불 회복 버프
+  let nearCamp=false;
+  for(const p of placables){ if(p.type==='campfire' && p.mesh.position.distanceTo(player.position)<2.5){ nearCamp=true; break; } }
+  const regen=(day>0.3?2.2:1.2)*(nearCamp?1.8:1);
+  if(State.stamina<State.maxStamina) State.stamina=Math.min(State.maxStamina, State.stamina+dt*regen);
+
+  // 이동
   const forward=new THREE.Vector3(); camera.getWorldDirection(forward); forward.y=0; forward.normalize(); const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).multiplyScalar(-1);
   const dir=new THREE.Vector3(); if(move.f) dir.add(forward); if(move.b) dir.sub(forward); if(move.r) dir.add(right); if(move.l) dir.sub(right); if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(moveSpeed()*dt); player.position.add(dir); if(controls.target) controls.target.copy(player.position); }
+
   if(controls.update) controls.update();
   if(State.mode==='build'&&buildGhost){ raycaster.setFromCamera(mouse,camera); const hit=raycaster.intersectObject(ground,false)[0]; if(hit){ buildGhost.position.copy(hit.point); buildGhost.position.set(snap(buildGhost.position.x,0.5),0,snap(buildGhost.position.z,0.5)); buildGhost.rotation.y=buildRot; } }
+
+  // 페이드 제거
   scene.traverse(o=>{ if(o.userData&&o.userData.fade){ o.userData.fade-=dt*0.7; if(o.material) o.material.opacity=Math.max(0,o.userData.fade); if(o.userData.fade<=0){ if(o.parent) o.parent.remove(o); if(o.material) o.material.transparent=o.userData._orig; o.userData.fade=0; } } });
-  for(const n of npcs){ n.wanderTimer-=dt; if(n.wanderTimer<=0){ n.wanderTimer=rand(2,6); if(!n.dir) n.dir=new THREE.Vector3(); n.dir.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(rand(0.2,0.8)); } if(n.dir) n.mesh.position.addScaledVector(n.dir,dt); if(n.mesh.position.length()>6) n.dir&&n.dir.multiplyScalar(-1); }
-  Weather.step(dt); updateRain(dt);
+
+  // NPC 간단 배회
+  for(const n of npcs){
+    n.wanderTimer-=dt;
+    if(n.wanderTimer<=0){ n.wanderTimer=rand(2,6); if(!n.dir) n.dir=new THREE.Vector3(); n.dir.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(rand(0.2,0.8)); }
+    if(n.dir) n.mesh.position.addScaledVector(n.dir,dt);
+    if(n.mesh.position.length()>7) n.dir&&n.dir.multiplyScalar(-1);
+  }
+
+  Weather.step(dt); updateRain(dt); stepFishing(dt); updateFarms(dt);
   refreshTopBarFast(); drawMinimap();
   renderer.render(scene,camera);
   requestAnimationFrame(tick);
 }
 function moveSpeed(){ let s=3.2*(sprint?1.6:1); if((move.f||move.b||move.l||move.r)&&sprint){ State.stamina=Math.max(0,State.stamina-0.02); } return s; }
-function refreshTopBarFast(){ elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time|0); elRep.textContent=repLetter(State.repScore); elPine.textContent=State.pine|0; }
+function refreshTopBarFast(){ elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time|0); elRep.textContent=repLetter(State.repScore); elPine.textContent=State.pine|0; elCoord.textContent=`${player.position.x.toFixed(1)},${player.position.z.toFixed(1)}`; }
 
 /********************** Boot ******************************/
-function restorePlaced(){ for(const p of State.placed){ if(!BuildPrefabs[p.type]) continue; const o=BuildPrefabs[p.type](); o.position.set(p.x,p.y,p.z); o.rotation.y=p.rot||0; o.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }}); scene.add(o); placables.push({mesh:o,type:p.type,score:(BuildDefs[p.type]?.score)||0}); } }
-load(); refreshUI(); refreshQuests(); restorePlaced(); makeRain(); if(State.weather==='rain') rainParticles.visible=true; Weather.timerMin=(State.weather==='rain')?randi(40,120):randi(120,360); requestAnimationFrame(tick);
+function restorePlaced(){
+  for(const p of State.placed){
+    if(!BuildPrefabs[p.type]) continue;
+    const o=BuildPrefabs[p.type](); o.position.set(p.x,p.y,p.z); o.rotation.y=p.rot||0;
+    o.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }});
+    scene.add(o); placables.push({mesh:o,type:p.type,score:(BuildDefs[p.type]?.score)||0});
+  }
+}
+load(); refreshUI(); refreshQuests(); renderAchievements(); restorePlaced(); makeRain(); if(State.weather!=='clear') rainParticles.visible=true; Weather.timerMin=(State.weather==='rain'||State.weather==='storm')?randi(40,120):randi(120,360); requestAnimationFrame(tick);
 
 /********************** Toast & Resize **********************/
-const tEl=$('#toast'); let tTimer=null; function toast(msg){ tEl.textContent=msg; tEl.classList.add('show'); clearTimeout(tTimer); tTimer=setTimeout(()=>tEl.classList.remove('show'),1400); }
+const tEl=$('#toast'); let tTimer=null; function toast(msg){ tEl.textContent=msg; tEl.classList.add('show'); clearTimeout(tTimer); tTimer=setTimeout(()=>tEl.classList.remove('show'),1500); }
 window.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
-setTimeout(()=>toast('WASD 이동, E 상호작용/대화, B 건설, C 제작, I 가방, M 상점'),500);
+setTimeout(()=>toast('WASD 이동, E 상호작용/대화/수확, B 건설, C 제작, I 가방, M 상점, R 회전, P 포토, G 심기, F 낚시'),500);
 
 /********************** Self Tests ***************************/
-(function selfTest(){ const tests=[]; const ok=(n,c)=>tests.push({n,pass:!!c}); try{
-  ok('THREE 전역', typeof THREE==='object'&&!!THREE.WebGLRenderer);
-  ok('컨트롤러 존재', !!THREE.OrbitControls || typeof MinimalOrbitControls==='function');
-  ok('repLetter', repLetter(0)==='D'&&repLetter(60)==='C'&&repLetter(250)==='A'&&repLetter(500)==='S');
-  ok('Prefab bench', (function(){const o=BuildPrefabs.bench();return o&&o.isObject3D;})());
-  ok('Recipe plank cost', Recipes.plank.cost.wood===2);
-  (function(){ const bak=State.bag.wood; State.bag.wood=2; ok('canPay wood2', canPay({wood:2})===true); pay({wood:2}); ok('pay->0', State.bag.wood===0); State.bag.wood=bak; })();
-  ok('QuestDefs len', Array.isArray(QuestDefs)&&QuestDefs.length>=10);
-  ok('BuildDefs 필수', !!BuildDefs.fence&&!!BuildDefs.stall&&!!BuildDefs.bridge);
-  Weather.force('rain'); ok('Weather rain', State.weather==='rain'); Weather.force('clear'); ok('Weather clear', State.weather==='clear');
-  ok('Minimap DOM', !!document.getElementById('minimap'));
-}catch(e){ console.warn('SelfTest error',e); }
-const pass=tests.filter(t=>t.pass).length,total=tests.length; if(pass!==total){ console.warn('SelfTests',tests); toast(`테스트 실패 ${pass}/${total} — 콘솔 확인`); } else { console.log('SelfTests OK',tests); toast(`Self-test OK ${pass}/${total}`); } })();
-
+(function selfTest(){
+  const tests=[]; const ok=(n,c)=>tests.push({n,pass:!!c});
+  try{
+    ok('THREE 전역', typeof THREE==='object'&&!!THREE.WebGLRenderer);
+    ok('컨트롤러 존재', !!THREE.OrbitControls || typeof MinimalOrbitControls==='function');
+    ok('repLetter', repLetter(0)==='D'&&repLetter(60)==='C'&&repLetter(250)==='A'&&repLetter(500)==='S');
+    ok('Prefab bench', (function(){const o=BuildPrefabs.bench();return o&&o.isObject3D;})());
+    ok('Recipe plank cost', Recipes.plank.cost.wood===2);
+    (function(){ const bak=State.bag.wood; State.bag.wood=2; ok('canPay wood2', canPay({wood:2})===true); pay({wood:2}); ok('pay->0', State.bag.wood===0); State.bag.wood=bak; })();
+    ok('QuestDefs len', Array.isArray(QuestDefs)&&QuestDefs.length>=15);
+    ok('BuildDefs 확장', !!BuildDefs.road&&!!BuildDefs.house&&!!BuildDefs.statue&&!!BuildDefs.campfire);
+    Weather.force('rain'); ok('Weather rain', State.weather==='rain'); Weather.force('clear'); ok('Weather clear', State.weather==='clear');
+    ok('Minimap DOM', !!document.getElementById('minimap'));
+  }catch(e){ console.warn('SelfTest error',e); }
+  const pass=tests.filter(t=>t.pass).length,total=tests.length;
+  if(pass!==total){ console.warn('SelfTests',tests); toast(`테스트 실패 ${pass}/${total} — 콘솔 확인`); } else { console.log('SelfTests OK',tests); toast(`Self-test OK ${pass}/${total}`); }
+})();
 } // initGame
   </script>
 </body>
