@@ -1,574 +1,845 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-<title>여우마을 3D — 안정판 (CDN 우선 · 전체 실패시에만 에러패널)</title>
-<style>
-  :root{--bg:#0e1013;--panel:#171a1f;--panel-2:#1f2430;--text:#e9efff;--muted:#9fb0d3;--accent:#ffa63d;--accent-2:#ffd39b;--shadow:0 10px 30px rgba(0,0,0,.35)}
-  *{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif}
-  #app{position:relative;height:100vh;overflow:hidden}canvas{display:block;outline:none}
-  .hud{position:absolute;inset:0;pointer-events:none}
-  .topbar{position:absolute;left:12px;top:12px;display:flex;gap:8px;align-items:center;pointer-events:auto}
-  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid #202532;border-radius:14px;box-shadow:var(--shadow);padding:10px 12px}
-  .stat{display:flex;align-items:center;gap:6px;font-weight:700}
-  .pill{padding:4px 8px;border-radius:999px;background:#111826;border:1px solid #273244;color:var(--muted);font-size:12px}
-  .bar{width:160px;height:10px;background:#0b0f14;border-radius:99px;border:1px solid #2a3242;overflow:hidden}
-  .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
-  .right{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:10px;min-width:280px;pointer-events:auto;max-height:80vh;overflow:auto}
-  .title{font-weight:800;letter-spacing:.2px;margin-bottom:6px}.small{font-size:12px;color:var(--muted)}
-  .quest-list{display:flex;flex-direction:column;gap:8px;max-height:40vh;overflow:auto}
-  .quest{padding:8px;border-radius:10px;border:1px dashed #334055;background:#131821}.quest.done{opacity:.65;border-style:solid}
-  .bottom{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;pointer-events:none}
-  .dock{pointer-events:auto;display:flex;gap:10px;padding:10px;margin-bottom:12px;background:linear-gradient(180deg,#121821,#0e131b);border:1px solid #253045;border-radius:16px;box-shadow:var(--shadow)}
-  .dock .btn{cursor:pointer;user-select:none;padding:10px 12px;border-radius:12px;border:1px solid #2b374b;background:#121720;color:#d6e3ff;font-weight:700}
-  .dock .btn[aria-pressed="true"]{outline:2px solid var(--accent)}.dock .btn:hover{filter:brightness(1.05)}
-  .panel{position:absolute;left:12px;bottom:12px;display:flex;gap:10px;pointer-events:auto}.pane{min-width:280px}
-  .list{display:grid;grid-template-columns:1fr auto;gap:6px}.row{display:contents}.row>div{padding:6px 8px;border-radius:8px;background:#10151c;border:1px solid #273046}
-  .row .cta{cursor:pointer;background:#131b25;border:1px solid #334054}.row .cta:hover{filter:brightness(1.08)}
-  .toast{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);background:#10151c;border:1px solid #2c384d;color:#d6e3ff;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);display:none}
-  .toast.show{display:block;animation:pop .2s ease-out}@keyframes pop{from{transform:translateX(-50%) scale(.96);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
-  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid #2b384f;background:#10151c;color:#bcd1ff;font-size:12px}
-  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid #2b384f;background:#0a0f15;color:#cfe0ff}
-  .corner{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;align-items:center}
-  .corner button{cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid #2c394f;background:#10161e;color:#cfe3ff}
-  .corner button:hover{filter:brightness(1.08)}
-  .dialog{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:min(720px,92vw);pointer-events:auto;display:none}
-  .dialog .bubble{background:linear-gradient(180deg,#141a24,#0f141c);border:1px solid #2a3650;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
-  .dialog .speaker{font-weight:800;margin-bottom:6px;color:#ffc37a}
-  .shop{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:320px;display:none;pointer-events:auto}
-  .shop .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-  .shop .grid{display:grid;grid-template-columns:1fr auto;gap:6px}
-  .minimap{position:absolute;right:12px;bottom:92px;width:180px;height:180px;border-radius:12px;border:1px solid #253045;background:#0a0f15;box-shadow:var(--shadow);pointer-events:none}
-  .hardfail{position:fixed;inset:0;background:#0c1117;display:none;place-items:center;z-index:99999}
-  .hardfail .panel{pointer-events:auto;max-width:820px;border-radius:16px;border:1px solid #2a3549;background:#0f1622;padding:16px;box-shadow:var(--shadow)}
-  .hardfail h2{margin:0 0 8px 0;color:#ffd39b}.hardfail code{background:#0a0f15;border:1px solid #243047;border-radius:8px;padding:4px 6px;display:inline-block;word-break:break-all}
-</style>
-
-<!-- 로더: CDN(jsDelivr→fastly→UNPKG→cdnjs) 우선 → 로컬 폴백 / 전체 실패시에만 에러표시 -->
-<script>
-(function(){
-  const CANDIDATES_THREE = [
-    'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.min.js',
-    'https://fastly.jsdelivr.net/npm/three@0.164.1/build/three.min.js',
-    'https://unpkg.com/three@0.164.1/build/three.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r164/three.min.js',
-    './three.min.js',
-    './libs/three.min.js'
-  ];
-  const CANDIDATES_CTRL = [
-    'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/js/controls/OrbitControls.js',
-    'https://fastly.jsdelivr.net/npm/three@0.164.1/examples/js/controls/OrbitControls.js',
-    'https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r164/examples/js/controls/OrbitControls.min.js',
-    './OrbitControls.js',
-    './libs/OrbitControls.js'
-  ];
-
-  let LOADING_THREE = false;
-  const tried = {three:[], ctrl:[]};
-
-  function loadScript(src){
-    return new Promise((resolve,reject)=>{
-      const s=document.createElement('script');
-      s.src=src; s.defer=true; s.crossOrigin='anonymous'; s.referrerPolicy='no-referrer';
-      s.onload=()=>resolve(src);
-      s.onerror=()=>reject(new Error('fail '+src));
-      document.head.appendChild(s);
-    });
-  }
-
-  function showHardFail(err, detailList){
-    const wrap=document.createElement('div');
-    wrap.className='hardfail';
-    const listHTML = (detailList||[]).map(u=>`<code>${u}</code>`).join(' ');
-    wrap.innerHTML = `
-      <div class="panel">
-        <h2>three.js 로드/실행 오류</h2>
-        <div class="small" style="margin-bottom:10px">네트워크/캐시/보안 정책으로 CDN이 막혔거나, 로컬 three 파일이 비어있을 수 있어요.</div>
-        <ol class="small" style="line-height:1.6">
-          <li><b>CDN 허용</b>: jsDelivr / UNPKG / cdnjs 차단 해제</li>
-          <li><b>로컬 폴백</b>: 같은 폴더나 <code>./libs/</code> 에 <code>three.min.js</code>, <code>OrbitControls.js</code> 추가</li>
-          <li><b>하드 새로고침</b>: Ctrl+F5 또는 Cmd+Shift+R</li>
-        </ol>
-        <div class="small" style="margin-top:6px">시도한 경로: ${listHTML||'-'}</div>
-        <div class="small" style="margin-top:6px">에러: <code>${(err && (err.message||err))||'unknown'}</code></div>
-      </div>`;
-    document.body.appendChild(wrap);
-    wrap.style.display='grid';
-  }
-
-  // 전역 에러 핸들러: 로더가 동작 중일 때의 <script> 로드에러는 무시
-  window.addEventListener('error', e=>{
-    if(LOADING_THREE && e && e.target && e.target.tagName==='SCRIPT') return;
-    console.error('[window error]', e.error||e.message||e);
-  });
-  window.addEventListener('unhandledrejection', e=>{
-    if(LOADING_THREE) return;
-    console.error('[unhandledrejection]', e.reason||e);
-  });
-
-  async function ensureThree(){
-    if(window.THREE && THREE.WebGLRenderer) return 'present';
-    LOADING_THREE = true;
-
-    let lastErr = null, loaded = null;
-    for(const u of CANDIDATES_THREE){
-      try{
-        await loadScript(u);
-        tried.three.push('ok ' + u);
-        if(window.THREE && THREE.WebGLRenderer){ loaded=u; lastErr=null; break; }
-        else { lastErr = new Error('loaded but THREE missing: '+u); }
-      }catch(e){ tried.three.push(e.message); lastErr=e; }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DTC‑SVM + EKF 보상 3D 시뮬레이터 (GitHub Pages)</title>
+  <style>
+    :root{
+      --panel-bg: rgba(16,18,27,.75);
+      --panel-br: rgba(255,255,255,.12);
+      --fg: #e7eef7;
+      --muted: #98a2b3;
+      --accent: #60a5fa;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --chart-bg: #0b1322;
+      --grid: rgba(255,255,255,.08);
     }
-    LOADING_THREE = false;
+    html,body{height:100%;margin:0;background:radial-gradient(1200px 700px at 15% 10%,#0b1220,#0a0f1a 60%,#070b12 100%);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Apple Color Emoji,Noto Color Emoji,Segoe UI Emoji,Segoe UI Symbol,"Noto Sans KR",sans-serif}
+    #scene{position:fixed;inset:0}
+    .panel{position:fixed;top:12px;left:12px;width:min(420px, 45vw); backdrop-filter: blur(10px); background:var(--panel-bg); border:1px solid var(--panel-br); border-radius:16px; padding:14px 14px 10px}
+    .row{display:grid;grid-template-columns:160px 1fr;gap:8px;align-items:center;margin:8px 0}
+    .row label{font-size:12px;color:var(--muted)}
+    .row input[type=range]{width:100%}
+    .row input[type=number], .row select{width:100%;background:#0f172a;border:1px solid var(--panel-br);color:var(--fg);border-radius:10px;padding:6px 8px}
+    .row .val{font-variant-numeric:tabular-nums;justify-self:end;color:#cbd5e1}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid var(--panel-br);color:#cbd5e1;margin-right:6px}
+    .title{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .title h1{font-size:15px;margin:0;font-weight:700}
+    .grid{position:fixed;right:12px;top:12px;display:grid;gap:8px;max-width:min(480px,48vw)}
+    .card{background:var(--panel-bg);border:1px solid var(--panel-br);border-radius:16px;padding:12px}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .kpi{background:#0b1322;border:1px solid var(--panel-br);border-radius:12px;padding:10px}
+    .kpi h3{margin:0 0 6px 0;font-size:12px;color:var(--muted)}
+    .kpi .v{font-size:16px;font-variant-numeric:tabular-nums}
+    button{cursor:pointer;border-radius:12px;border:1px solid var(--panel-br);background:#0f172a;color:var(--fg);padding:8px 10px}
+    button:hover{background:#111c30}
+    .legend{display:flex;gap:8px;flex-wrap:wrap}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .legend .item{display:flex;align-items:center;gap:6px;font-size:12px;color:#cbd5e1}
+    .footer{font-size:11px;color:#9aa6b2;margin-top:8px}
+    a{color:var(--accent);text-decoration:none}
+    .tests{margin-top:8px}
+    .test-pass{color:var(--ok)}
+    .test-fail{color:var(--bad)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px}
+    .charts{display:grid;gap:8px}
+    .chart{background:var(--chart-bg);border:1px solid var(--panel-br);border-radius:12px;padding:6px}
+    .chart h4{margin:2px 6px 6px 6px;font-size:12px;color:var(--muted)}
+    canvas.plot{width:100%;height:120px;display:block;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.0));}
+    .row.preset{grid-template-columns:1fr 1fr 1fr}
+  </style>
 
-    if(!(window.THREE && THREE.WebGLRenderer)){
-      showHardFail(lastErr || new Error('THREE not loaded'), tried.three);
-      throw lastErr || new Error('THREE not loaded');
+  <!-- Import Map + Shim to resolve bare module specifiers like "three" in browsers -->
+  <script async src="https://unpkg.com/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
     }
-
-    // OrbitControls는 실패해도 내부 대체 컨트롤 사용
-    for(const u of CANDIDATES_CTRL){
-      try{ await loadScript(u); tried.ctrl.push('ok ' + u); break; }
-      catch(e){ tried.ctrl.push(e.message); }
-    }
-
-    // 짧게 버전 태그
-    try{
-      const tag=document.createElement('div');
-      tag.style.cssText='position:fixed;right:10px;top:10px;font:12px ui-monospace;padding:4px 6px;border:1px solid #2b384f;background:#0b0f15;color:#9fb0d3;border-radius:8px;z-index:9999';
-      tag.textContent=`three r${THREE.REVISION||'?'} ✓`;
-      document.body.appendChild(tag); setTimeout(()=>tag.remove(),2500);
-    }catch(_){}
   }
-
-  window.__bootFoxVillage = async function(init){
-    try{ await ensureThree(); init(); }
-    catch(e){ /* ensureThree가 이미 패널 띄움 */ console.error('[boot fail]', e); }
-  };
-})();
-</script>
+  </script>
 </head>
 <body>
-  <!-- ===== HUD / UI ===== -->
-  <div id="app"></div>
-  <div class="hud">
-    <div class="topbar card">
-      <div class="stat"><span class="pill">솔방울</span><span id="pine">0</span></div>
-      <div class="stat"><span class="pill">스태미나</span>
-        <div class="bar"><span id="staminaBar" style="width:100%"></span></div>
-        <span class="small" id="staminaText">100/100</span>
-      </div>
-      <div class="stat"><span class="pill">시간</span><span id="clock">18:00</span></div>
-      <div class="stat"><span class="pill">평판</span><span id="reputation">D</span></div>
-      <div class="stat"><span class="pill">날씨</span><span id="weatherText">맑음</span></div>
-      <div class="stat"><span class="pill">좌표</span><span id="coord">0,0</span></div>
+  <canvas id="scene"></canvas>
+
+  <div class="panel">
+    <div class="title">
+      <span class="badge">EV PMSM</span>
+      <h1>DTC‑SVM + EKF 보상 3D 시뮬레이터</h1>
     </div>
 
-    <div class="right">
-      <div class="card">
-        <div class="title">퀘스트</div>
-        <div class="quest-list" id="questList"></div>
-        <div class="small">가까이 다가가서 <span class="kbd">E</span> 채집/대화, <span class="kbd">B</span> 건설, <span class="kbd">M</span> 상점</div>
-      </div>
-      <div class="card">
-        <div class="title">업적</div>
-        <div class="quest-list" id="achList"></div>
-      </div>
-      <div class="card">
-        <div class="title">설정</div>
-        <div class="small" style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" id="btnExport" style="padding:6px 10px">세이브 내보내기</button>
-          <button class="btn" id="btnImport" style="padding:6px 10px">가져오기</button>
-          <button class="btn" id="btnShot" style="padding:6px 10px">스크린샷</button>
-        </div>
-      </div>
+    <div class="row preset">
+      <button id="presetCreep">🚗 크리프(저속)</button>
+      <button id="presetCruise">🛣 정속</button>
+      <button id="presetFW">⚡ 필드위크닝</button>
     </div>
 
-    <div class="bottom">
-      <div class="dock" role="toolbar" aria-label="모드 선택">
-        <button class="btn" id="modeExplore" aria-pressed="true">탐험</button>
-        <button class="btn" id="modeBuild">건설</button>
-        <button class="btn" id="modeCraft">제작</button>
-        <button class="btn" id="modeBag">가방</button>
-        <button class="btn" id="modeShop">상점</button>
-        <button class="btn" id="modePhoto">포토</button>
-      </div>
+    <div class="row"><label>모드</label>
+      <select id="mode">
+        <option value="realtime">실시간 시뮬레이션</option>
+        <option value="map">3D 리플 맵</option>
+      </select>
     </div>
 
-    <div class="panel">
-      <div class="card pane" id="panelCraft" hidden>
-        <div class="title">제작</div>
-        <div class="list" id="craftList"></div>
-        <div class="small" style="margin-top:6px">제작은 스태미나를 소모합니다. 일부 레시피는 해금이 필요합니다.</div>
-      </div>
-      <div class="card pane" id="panelBag" hidden>
-        <div class="title">가방</div>
-        <div class="list" id="bagList"></div>
-        <div class="small" style="margin-top:6px">소지품. 건설 모드에서 배치 가능.</div>
-      </div>
-      <div class="card pane" id="panelBuild" hidden>
-        <div class="title">건설</div>
-        <div class="small" style="margin-bottom:6px">땅을 클릭해 배치. <span class="kbd">R</span> 회전, <span class="kbd">Esc</span> 취소.</div>
-        <div class="list" id="buildList"></div>
-      </div>
+    <div class="row"><label>보상(Compensation)</label>
+      <select id="compMode">
+        <option value="off">OFF</option>
+        <option value="ekf">EKF</option>
+      </select>
     </div>
 
-    <div class="toast" id="toast"></div>
-
-    <div class="corner">
-      <span class="badge">저장: 자동</span>
-      <button id="btnWeather">날씨</button>
-      <button id="btnReset">새 시작</button>
-      <button id="btnHelp">도움말</button>
+    <div class="row"><label>메인 제어(백본)</label>
+      <select id="backbone">
+        <option value="foc">FOC(+SVM) 등가</option>
+        <option value="dtc">DTC-SVM 등가</option>
+      </select>
     </div>
 
-    <div class="dialog" id="dialog">
-      <div class="bubble">
-        <div class="speaker" id="dialogSpeaker">???</div>
-        <div class="small" id="dialogText">...</div>
-      </div>
+    <div class="row"><label>극쌍수 p</label>
+      <input id="pp" type="number" min="1" step="1" value="4" />
     </div>
 
-    <div class="shop card" id="shopPanel">
-      <div class="head">
-        <div class="title">너구리 상점</div>
-        <button class="btn" id="shopClose" style="padding:6px 10px">닫기</button>
-      </div>
-      <div class="grid" id="shopList"></div>
-      <div class="small" style="margin-top:6px">솔방울로 재료/설계도를 구매하세요.</div>
+    <div class="row"><label>전기 각속도 ω<sub>e</sub> [rad/s]</label>
+      <input id="omega" type="range" min="1" max="1200" value="300" />
+      <div class="val" id="omegaVal">300</div>
     </div>
 
-    <canvas id="minimap" class="minimap" width="180" height="180"></canvas>
+    <div class="row"><label>DC 링크 V<sub>dc</sub> [V]</label>
+      <input id="vdc" type="range" min="100" max="800" value="350" />
+      <div class="val" id="vdcVal">350</div>
+    </div>
+
+    <div class="row"><label>데드타임 t<sub>d</sub> [ns]</label>
+      <input id="tdead" type="range" min="50" max="3000" value="800" />
+      <div class="val" id="tdeadVal">800</div>
+    </div>
+
+    <div class="row"><label>소자 유형</label>
+      <select id="device">
+        <option value="igbt">IGBT (V<sub>f</sub>≈1.7V)</option>
+        <option value="sic">SiC MOSFET (V<sub>f</sub>≈1.2V)</option>
+      </select>
+    </div>
+
+    <div class="row"><label>샘플링 T<sub>s</sub> [µs]</label>
+      <input id="ts" type="range" min="25" max="200" value="100" />
+      <div class="val" id="tsVal">100</div>
+    </div>
+
+    <div class="row"><label>R<sub>s</sub> [Ω]</label>
+      <input id="rs" type="range" min="0.02" max="0.3" step="0.01" value="0.08" />
+      <div class="val" id="rsVal">0.08</div>
+    </div>
+
+    <div class="row"><label>L<sub>d</sub>=L<sub>q</sub> [mH]</label>
+      <input id="ld" type="range" min="0.1" max="3.0" step="0.1" value="1.2" />
+      <div class="val" id="ldVal">1.2</div>
+    </div>
+
+    <div class="row"><label>영구자석 쇄교 Ψ<sub>f</sub> [Wb]</label>
+      <input id="psif" type="range" min="0.02" max="0.25" step="0.01" value="0.08" />
+      <div class="val" id="psifVal">0.08</div>
+    </div>
+
+    <div class="row"><label>i<sub>d</sub>* [A]</label>
+      <input id="idref" type="range" min="-50" max="50" step="1" value="0" />
+      <div class="val" id="idrefVal">0</div>
+    </div>
+
+    <div class="row"><label>i<sub>q</sub>* [A]</label>
+      <input id="iqref" type="range" min="-200" max="200" step="1" value="60" />
+      <div class="val" id="iqrefVal">60</div>
+    </div>
+
+    <div class="row"><label>EKF Q<sub>dist</sub> (×1e-2)</label>
+      <input id="qscale" type="range" min="1" max="100" step="1" value="20" />
+      <div class="val" id="qscaleVal">0.20</div>
+    </div>
+
+    <div class="row"><label>EKF R<sub>meas</sub> (A²)</label>
+      <input id="rmeas" type="range" min="0.0001" max="0.01" step="0.0001" value="0.001" />
+      <div class="val" id="rmeasVal">0.0010</div>
+    </div>
+
+    <div class="row"><label>맵 해상도 (N×N)</label>
+      <input id="mapN" type="range" min="8" max="28" step="2" value="16" />
+      <div class="val" id="mapNVal">16×16</div>
+    </div>
+
+    <div class="row" style="grid-template-columns:1fr 1fr;gap:8px">
+      <button id="toggle">⏸︎ 일시정지</button>
+      <button id="reset">↺ 리셋</button>
+    </div>
+    <div class="row" style="grid-template-columns:1fr;gap:8px">
+      <button id="genMap">🗺 3D 리플 맵 생성</button>
+    </div>
+
+    <div class="legend" style="margin-top:6px">
+      <div class="item"><span class="dot" style="background:#60a5fa"></span>v<sub>cmd</sub></div>
+      <div class="item"><span class="dot" style="background:#ef4444"></span>v<sub>dist,true</sub></div>
+      <div class="item"><span class="dot" style="background:#22c55e"></span>v<sub>comp (EKF)</sub></div>
+      <div class="item"><span class="dot" style="background:#f59e0b"></span>ψ (플럭스 궤적)</div>
+    </div>
+
+    <div class="footer">※ 교육용 단순화 모델입니다. 실제 구동기 적용 전 HIL/차대 검증이 필수입니다.</div>
   </div>
 
-  <!-- ===== 게임 스크립트 ===== -->
-  <script>
-  window.addEventListener('DOMContentLoaded', ()=>{ window.__bootFoxVillage(initGame); });
+  <div class="grid">
+    <div class="card">
+      <div class="kpis">
+        <div class="kpi"><h3>토크 평균 [Nm]</h3><div class="v" id="torqueAvg">0.00</div></div>
+        <div class="kpi"><h3>토크 리플 RMS [%]</h3><div class="v" id="torqueRipple">0.00</div></div>
+        <div class="kpi"><h3>i<sub>q</sub> 리플 RMS [A]</h3><div class="v" id="iqRipple">0.00</div></div>
+        <div class="kpi"><h3>전류 THD* [%]</h3><div class="v" id="thd">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="badge">CHARTS</span><strong>실시간 그래프</strong></div>
+      <div class="charts">
+        <div class="chart"><h4>토크 시간파형</h4><canvas id="torquePlot" class="plot" width="440" height="140"></canvas></div>
+        <div class="chart"><h4>전류 i<sub>q</sub> 시간파형</h4><canvas id="iqPlot" class="plot" width="440" height="140"></canvas></div>
+        <div class="chart"><h4>상전류 i<sub>a</sub> 시간파형</h4><canvas id="iaPlot" class="plot" width="440" height="140"></canvas></div>
+        <div class="chart"><h4>스펙트럼 (i<sub>a</sub>, 1~10차)</h4><canvas id="specPlot" class="plot" width="440" height="160"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="badge">TESTS</span><strong>진단 / 유닛 테스트</strong></div>
+      <button id="runTests">🧪 테스트 실행</button>
+      <div id="testOut" class="tests mono"></div>
+    </div>
+  </div>
 
-  function initGame(){
-'use strict';
-/* ========= Utils & State ========= */
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const rand=(a,b)=>a+Math.random()*(b-a);
-const randi=(a,b)=>Math.floor(a+Math.random()*(b-a+1));
-const lerp=(a,b,t)=>a+(b-a)*t;
-const snap=(v,g)=>Math.round(v/g)*g;
-const $=s=>document.querySelector(s);
-const $$=s=>Array.from(document.querySelectorAll(s));
-const STORAGE_KEY='fox_village_save_safe_v7';
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-function saveScreenshot(renderer){
-  try{ const link=document.createElement('a'); link.download=`fox_${Date.now()}.png`; link.href=renderer.domElement.toDataURL('image/png'); link.click(); toast('스크린샷 저장!'); }
-  catch(_){ toast('스크린샷 실패'); }
-}
+    // ---------- 3D SCENE ----------
+    const canvas = document.getElementById('scene');
+    const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
 
-const State={
-  pine:0, stamina:100, maxStamina:100, time:18*60, repScore:0,
-  bag:{wood:0,stone:0,herb:0,fish:0,berry:0,ore:0,metal:0,brick:0,rope:0,plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,seed:0,road:0,house:0,statue:0,campfire:0,rod:1},
-  recipesUnlocked:{plank:true,bench:true,lantern:true,cloth:true,flowerbed:true,fence:true,arch:true,sign:true,stall:true,bridge:true,treelamp:true,seed:true,road:true,house:true,statue:true,campfire:true,rod:true},
-  placed:[], level:1, xp:0,
-  mode:'explore', weather:'clear',
-  flags:{talkedElder:false,metMerchant:false,metOwl:false,metKid:false},
-  stats:{fish:0,plant:0,harvest:0,place:0,talk:0,craft:0,photo:0},
-  farms:[]
-};
-const repLetter=s=>s>=400?'S':s>=250?'A':s>=140?'B':s>=60?'C':'D';
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0a0f1a, 40, 160);
 
-/* ========= Three Setup ========= */
-const app=$('#app');
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance',preserveDrawingBuffer:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
-renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled=true;
-app.appendChild(renderer.domElement);
+    const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 500);
+    camera.position.set(0, 16, 28);
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x0b1117);
-const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,1000);
-camera.position.set(12,10,12);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0,0,0);
 
-/* OrbitControls 폴백 */
-function MinimalOrbitControls(cam,dom){
-  this.camera=cam; this.target=new THREE.Vector3(); this.enableDamping=true; this.dampingFactor=0.12;
-  this.spherical=new THREE.Spherical(12,Math.PI/3,Math.PI/4);
-  let down=false,lx=0,ly=0;
-  dom.addEventListener('mousedown',e=>{down=true;lx=e.clientX;ly=e.clientY;});
-  window.addEventListener('mouseup',()=>down=false);
-  window.addEventListener('mousemove',e=>{ if(!down) return; const dx=(e.clientX-lx)/200; const dy=(e.clientY-ly)/200; lx=e.clientX; ly=e.clientY; this.spherical.theta-=dx; this.spherical.phi=clamp(this.spherical.phi+dy,0.1,Math.PI*0.495); });
-  dom.addEventListener('wheel',e=>{ e.preventDefault(); this.spherical.radius=clamp(this.spherical.radius+e.deltaY*0.003,6,28); },{passive:false});
-  this.update=()=>{ const s=this.spherical; const pos=new THREE.Vector3().setFromSpherical(s).add(this.target); cam.position.lerp(pos,this.enableDamping?this.dampingFactor:1); cam.lookAt(this.target); };
-}
-const controls = (THREE.OrbitControls)? new THREE.OrbitControls(camera, renderer.domElement)
-                                       : new MinimalOrbitControls(camera, renderer.domElement);
-if(controls.target) controls.target.set(0,0,0);
-if('maxPolarAngle' in controls) controls.maxPolarAngle=Math.PI*0.495;
+    const light = new THREE.DirectionalLight(0xffffff, 1.0);
+    light.position.set(10,20,10);
+    scene.add(light, new THREE.AmbientLight(0xffffff, .35));
 
-/* 라이트 & 환경 */
-const hemi=new THREE.HemisphereLight(0xb0c7ff,0x334455,0.7); scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xffd9b0,0.9); sun.position.set(10,20,5);
-sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
-sun.shadow.camera.near=1; sun.shadow.camera.far=60; scene.add(sun);
-const flash=new THREE.PointLight(0xffffff,0,30,2); flash.position.set(0,12,0); scene.add(flash);
+    const grid = new THREE.GridHelper(40, 40, 0x19324d, 0x0f2136);
+    grid.material.opacity = 0.7; grid.material.transparent = true;
+    scene.add(grid);
 
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(220,220),new THREE.MeshStandardMaterial({color:0x1a2a23,roughness:1}));
-ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
-const water=new THREE.Mesh(new THREE.CircleGeometry(100,64),new THREE.MeshStandardMaterial({color:0x21323f,metalness:0.3,roughness:0.5,transparent:true,opacity:0.6}));
-water.rotation.x=-Math.PI/2; water.position.y=0.002; scene.add(water);
-scene.add(new THREE.GridHelper(220,220,0x2a3744,0x1a2432));
-const plaza=new THREE.Mesh(new THREE.CylinderGeometry(4.5,4.5,0.01,36),new THREE.MeshStandardMaterial({color:0x24323a,roughness:1}));
-plaza.position.y=0.005; plaza.receiveShadow=true; scene.add(plaza);
+    const axes = new THREE.AxesHelper(8); axes.position.y = .01; scene.add(axes);
 
-/* 플레이어(구버전 호환) */
-const player=new THREE.Group();
-(function(){
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.9,14),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
-  body.castShadow=true; body.position.y=0.65;
-  const capTop=new THREE.Mesh(new THREE.SphereGeometry(0.35,14,10),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
-  capTop.position.y=1.1; capTop.castShadow=true;
-  const capBot=new THREE.Mesh(new THREE.SphereGeometry(0.35,14,10),new THREE.MeshStandardMaterial({color:0xff7f2a,roughness:0.7}));
-  capBot.position.y=0.2; capBot.castShadow=true;
-  const chest=new THREE.Mesh(new THREE.SphereGeometry(0.25,12,12),new THREE.MeshStandardMaterial({color:0xfff2e0,roughness:0.9}));
-  chest.position.set(0,0.6,0.2); chest.castShadow=true;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.28,12,12),new THREE.MeshStandardMaterial({color:0xff8a3a}));
-  head.position.set(0,1.35,0);
-  const earMat=new THREE.MeshStandardMaterial({color:0x8a3a00});
-  const earGeom=new THREE.ConeGeometry(0.12,0.22,8);
-  const earL=new THREE.Mesh(earGeom,earMat); earL.position.set(-0.16,1.56,-0.03); earL.rotation.x=-0.2; earL.castShadow=true;
-  const earR=earL.clone(); earR.position.x=0.16;
-  const tail=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.6,10),new THREE.MeshStandardMaterial({color:0xffa35a}));
-  tail.position.set(0,0.1,-0.45); tail.rotation.x=Math.PI*0.9; tail.castShadow=true;
-  player.add(body,capTop,capBot,chest,head,earL,earR,tail);
-})();
-player.position.set(0,0,0); scene.add(player);
+    // αβ-평면 시각 가이드(육각 SVM)
+    const hex = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.CircleGeometry(8,6)),
+      new THREE.LineBasicMaterial({color:0x22405f, transparent:true, opacity:.7})
+    );
+    hex.rotation.x = -Math.PI/2; hex.position.y = 0.01; scene.add(hex);
 
-/* ========= World Gen ========= */
-const interactables=[]; const placables=[]; const npcs=[]; const tmpV=new THREE.Vector3();
-function addTree(x,z){ const g=new THREE.Group(); g.position.set(x,0,z);
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.24,1.3,8),new THREE.MeshStandardMaterial({color:0x6a402e,roughness:1})); trunk.position.y=0.65; trunk.castShadow=true; g.add(trunk);
-  const crown=new THREE.Mesh(new THREE.SphereGeometry(rand(0.7,0.95),10,10),new THREE.MeshStandardMaterial({color:0x2a6a4a,roughness:0.9}));
-  crown.position.y=1.5; crown.castShadow=true; g.add(crown);
-  scene.add(g); interactables.push({mesh:g,type:'tree',harvested:false}); }
-function addRock(x,z){ const m=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(0.25,0.5)),new THREE.MeshStandardMaterial({color:0x56606a,roughness:1}));
-  m.position.set(x,0.25,z); m.castShadow=true; scene.add(m); interactables.push({mesh:m,type:'rock',harvested:false}); }
-function addHerb(x,z){ const g=new THREE.Group(); g.position.set(x,0,z);
-  for(let i=0;i<3;i++){ const b=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.24,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));
-    b.position.set(rand(-0.08,0.08),0.12,rand(-0.08,0.08)); b.rotation.x=rand(-0.2,0.2); b.castShadow=true; g.add(b);} scene.add(g); interactables.push({mesh:g,type:'herb',harvested:false}); }
-function addBerry(x,z){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({color:0xaa2244,roughness:0.7}));
-  b.position.set(x,0.12,z); b.castShadow=true; scene.add(b); interactables.push({mesh:b,type:'berry',harvested:false}); }
-function addOre(x,z){ const o=new THREE.Mesh(new THREE.TetrahedronGeometry(rand(0.2,0.35)),new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.3}));
-  o.position.set(x,0.2,z); o.castShadow=true; scene.add(o); interactables.push({mesh:o,type:'ore',harvested:false}); }
-(function populate(){ for(let i=0;i<70;i++){ const x=rand(-50,50), z=rand(-50,50);
-  if(Math.hypot(x,z)<7){ i--; continue; } (Math.random()<0.55)?addTree(x,z):addRock(x,z);
-  if(Math.random()<0.25) addHerb(x+rand(-1.2,1.2),z+rand(-1.2,1.2));
-  if(Math.random()<0.12) addBerry(x+rand(-1.5,1.5),z+rand(-1.5,1.5));
-  if(Math.random()<0.10) addOre(x+rand(-2,2),z+rand(-2,2)); } })();
+    function makeArrow(color=0x60a5fa){
+      const g1 = new THREE.CylinderGeometry(.06,.06,3.0,12);
+      const g2 = new THREE.ConeGeometry(.14,.5,16);
+      const m = new THREE.MeshStandardMaterial({color, metalness:.2, roughness:.4});
+      const shaft = new THREE.Mesh(g1, m); const head = new THREE.Mesh(g2, m);
+      head.position.y = 1.75; shaft.position.y = .25;
+      const group = new THREE.Group(); group.add(shaft, head); return group;
+    }
 
-/* ========= Buildables / Recipes (생략 없이 유지) ========= */
-const BuildPrefabs={ /* ... (이전 답변과 동일; 벤치/등롱/화단/울타리/아치/표지판/노점상/다리/나무등롱/도로/집/여우상/모닥불) ... */ };
-// — 길이 때문에 핵심만 남기면 오작동 위험이 있어 전체를 유지합니다 —
-BuildPrefabs.bench=()=>{const g=new THREE.Group();const wood=new THREE.MeshStandardMaterial({color:0x8a552f,roughness:0.9});const sl=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.08,0.28),wood);sl.position.y=0.5;sl.castShadow=true;g.add(sl);const lg=new THREE.BoxGeometry(0.08,0.5,0.08);const m=(x,z)=>{const t=new THREE.Mesh(lg,wood);t.position.set(x,0.25,z);t.castShadow=true;return t};g.add(m(-0.5,0.1),m(0.5,0.1),m(-0.5,-0.1),m(0.5,-0.1));return g;};
-BuildPrefabs.lantern=()=>{const g=new THREE.Group();const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.05,1.6,10),new THREE.MeshStandardMaterial({color:0x444f5e,roughness:0.8}));pole.position.y=0.8;pole.castShadow=true;g.add(pole);const head=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.22),new THREE.MeshStandardMaterial({color:0x222c37,roughness:0.5}));head.position.set(0,1.5,0);head.castShadow=true;g.add(head);const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.08,10,10),new THREE.MeshStandardMaterial({emissive:0xffd37a,color:0x222222,emissiveIntensity:1.5}));bulb.position.set(0,1.5,0);g.add(bulb);const light=new THREE.PointLight(0xffd59a,2.4,6,2);light.position.set(0,1.5,0);light.castShadow=true;g.add(light);return g;};
-BuildPrefabs.flowerbed=()=>{const g=new THREE.Group();const box=new THREE.Mesh(new THREE.BoxGeometry(1,0.2,1),new THREE.MeshStandardMaterial({color:0x60462d,roughness:1}));box.position.y=0.1;box.castShadow=true;g.add(box);for(let i=0;i<8;i++){const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.2,6),new THREE.MeshStandardMaterial({color:0x3aa35a,roughness:1}));stem.position.set(rand(-0.4,0.4),0.2,rand(-0.4,0.4));stem.castShadow=true;g.add(stem);const flower=new THREE.Mesh(new THREE.SphereGeometry(0.05,10,10),new THREE.MeshStandardMaterial({color:0xff7fb0,roughness:0.8}));flower.position.set(stem.position.x,0.32,stem.position.z);flower.castShadow=true;g.add(flower);}return g;};
-BuildPrefabs.fence=()=>{const g=new THREE.Group();const mat=new THREE.MeshStandardMaterial({color:0x7a4f2a,roughness:1});const rail=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.06,0.12),mat);rail.position.y=0.6;g.add(rail);const rail2=rail.clone();rail2.position.y=0.3;g.add(rail2);const post=x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.9,0.1),mat);p.position.set(x,0.45,0);p.castShadow=true;return p};g.add(post(-0.7),post(0.7));return g;};
-BuildPrefabs.arch=()=>{const g=new THREE.Group();const mat=new THREE.MeshStandardMaterial({color:0x926c3a});const post=x=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,1.8,10),mat);p.position.set(x,0.9,0);p.castShadow=true;return p};g.add(post(-0.9),post(0.9));const top=new THREE.Mesh(new THREE.TorusGeometry(1,0.08,8,24,Math.PI),mat);top.rotation.x=Math.PI/2;top.position.y=1.8;g.add(top);return g;};
-BuildPrefabs.sign=()=>{const g=new THREE.Group();const mat=new THREE.MeshStandardMaterial({color:0x7d542b});const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.07,1.4,10),mat);pole.position.y=0.7;g.add(pole);const board=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.4,0.08),new THREE.MeshStandardMaterial({color:0x2c3a4a}));board.position.set(0,1,0);g.add(board);return g;};
-BuildPrefabs.stall=()=>{const g=new THREE.Group();const frame=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.9,1),new THREE.MeshStandardMaterial({color:0x3b4a5a,roughness:1}));frame.position.y=0.45;frame.castShadow=true;g.add(frame);const roof=new THREE.Mesh(new THREE.ConeGeometry(0.95,0.5,6),new THREE.MeshStandardMaterial({color:0x8a2f2f,roughness:0.9}));roof.position.y=1.2;roof.castShadow=true;g.add(roof);return g;};
-BuildPrefabs.bridge=()=>{const g=new THREE.Group();const m=new THREE.MeshStandardMaterial({color:0x68523a});for(let i=0;i<6;i++){const s=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,1.8),m);s.position.set(i*0.52-1.3,0.03,0);s.castShadow=true;g.add(s);}return g;};
-BuildPrefabs.treelamp=()=>{const g=new THREE.Group();const tree=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.22,1.4,8),new THREE.MeshStandardMaterial({color:0x6a402e}));tree.position.y=0.7;g.add(tree);const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.08,10,10),new THREE.MeshStandardMaterial({emissive:0xffd37a,color:0x222222,emissiveIntensity:1.6}));bulb.position.set(0.2,1.2,0);g.add(bulb);const light=new THREE.PointLight(0xffd59a,2.2,5,2);light.position.copy(bulb.position);g.add(light);return g;};
-BuildPrefabs.road=()=>{const g=new THREE.Group();const p=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.04,1.2),new THREE.MeshStandardMaterial({color:0x2a2e32,roughness:1}));p.position.y=0.02;p.receiveShadow=true;g.add(p);return g;};
-BuildPrefabs.house=()=>{const g=new THREE.Group();const base=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.2,2.2),new THREE.MeshStandardMaterial({color:0x6d7a8a,roughness:1}));base.position.y=0.6;base.castShadow=true;g.add(base);const roof=new THREE.Mesh(new THREE.ConeGeometry(1.6,0.9,6),new THREE.MeshStandardMaterial({color:0x8a3a2a,roughness:0.9}));roof.position.y=1.45;roof.castShadow=true;g.add(roof);return g;};
-BuildPrefabs.statue=()=>{const g=new THREE.Group();const pl=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.3,12),new THREE.MeshStandardMaterial({color:0x4a5566,roughness:1}));pl.position.y=0.15;pl.castShadow=true;g.add(pl);const fox=new THREE.Mesh(new THREE.SphereGeometry(0.35,12,12),new THREE.MeshStandardMaterial({color:0xffb380,roughness:0.8}));fox.position.y=0.7;fox.castShadow=true;g.add(fox);return g;};
-BuildPrefabs.campfire=()=>{const g=new THREE.Group();const pile=new THREE.Mesh(new THREE.ConeGeometry(0.35,0.4,8),new THREE.MeshStandardMaterial({color:0x7a5238,roughness:1}));pile.position.y=0.2;g.add(pile);const flame=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({emissive:0xff8a3d,color:0x331100,emissiveIntensity:1.4}));flame.position.y=0.28;g.add(flame);const light=new THREE.PointLight(0xff9a5a,1.8,6,2);light.position.set(0,0.4,0);light.castShadow=true;g.add(light);g.userData.buff='rest';return g;};
+    const arrowCmd = makeArrow(0x60a5fa); // v_cmd
+    const arrowDist = makeArrow(0xef4444); // v_dist,true
+    const arrowComp = makeArrow(0x22c55e); // v_comp
+    scene.add(arrowCmd, arrowDist, arrowComp);
 
-const BuildDefs={bench:{name:'여우벤치',score:12,cost:{plank:4,cloth:1}},lantern:{name:'등롱',score:10,cost:{plank:2,herb:1}},flowerbed:{name:'화단',score:8,cost:{plank:2,herb:2}},fence:{name:'울타리',score:4,cost:{plank:2,rope:1}},arch:{name:'아치',score:14,cost:{plank:4,flowerbed:1}},sign:{name:'표지판',score:5,cost:{plank:1,cloth:1}},stall:{name:'노점상',score:18,cost:{plank:6,cloth:2}},bridge:{name:'다리',score:20,cost:{plank:8,rope:2}},treelamp:{name:'나무등롱',score:12,cost:{wood:4,herb:1}},road:{name:'도로',score:2,cost:{stone:2}},house:{name:'작은 집',score:22,cost:{plank:10,brick:6}},statue:{name:'여우상',score:24,cost:{stone:12}},campfire:{name:'모닥불',score:10,cost:{wood:6,herb:1}}};
+    // Flux trail
+    const trailN = 600; const trailGeom = new THREE.BufferGeometry();
+    const trailPos = new Float32Array(trailN*3);
+    trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+    const trailMat = new THREE.LineBasicMaterial({color:0xf59e0b, transparent:true, opacity:.9});
+    const trail = new THREE.Line(trailGeom, trailMat); scene.add(trail);
 
-const Recipes={plank:{name:'판재',cost:{wood:2},stamina:4,make:()=>State.bag.plank++},cloth:{name:'천',cost:{herb:3},stamina:6,make:()=>State.bag.cloth++},rope:{name:'밧줄',cost:{herb:2},stamina:5,make:()=>State.bag.rope++},metal:{name:'금속괴',cost:{ore:3},stamina:6,make:()=>State.bag.metal++},brick:{name:'벽돌',cost:{stone:3},stamina:5,make:()=>State.bag.brick++},bench:{name:'여우벤치',cost:BuildDefs.bench.cost,stamina:8,make:()=>State.bag.bench++},lantern:{name:'등롱',cost:BuildDefs.lantern.cost,stamina:8,make:()=>State.bag.lantern++},flowerbed:{name:'화단',cost:BuildDefs.flowerbed.cost,stamina:6,make:()=>State.bag.flowerbed++},fence:{name:'울타리',cost:BuildDefs.fence.cost,stamina:5,make:()=>State.bag.fence++},arch:{name:'아치',cost:BuildDefs.arch.cost,stamina:10,make:()=>State.bag.arch++},sign:{name:'표지판',cost:BuildDefs.sign.cost,stamina:4,make:()=>State.bag.sign++},stall:{name:'노점상',cost:BuildDefs.stall.cost,stamina:12,make:()=>State.bag.stall++},bridge:{name:'다리',cost:BuildDefs.bridge.cost,stamina:14,make:()=>State.bag.bridge++},treelamp:{name:'나무등롱',cost:BuildDefs.treelamp.cost,stamina:9,make:()=>State.bag.treelamp++},seed:{name:'씨앗',cost:{berry:2},stamina:2,make:()=>State.bag.seed++},road:{name:'도로',cost:BuildDefs.road.cost,stamina:3,make:()=>State.bag.road++},house:{name:'작은 집(부품)',cost:BuildDefs.house.cost,stamina:16,make:()=>State.bag.house++},statue:{name:'여우상(부품)',cost:BuildDefs.statue.cost,stamina:12,make:()=>State.bag.statue++},campfire:{name:'모닥불',cost:BuildDefs.campfire.cost,stamina:6,make:()=>State.bag.campfire++},rod:{name:'낚싯대',cost:{wood:4,rope:1},stamina:4,make:()=>State.bag.rod++}};
+    // Map surfaces (created on demand)
+    let mapGroup = new THREE.Group(); scene.add(mapGroup);
 
-/* ========= NPC & 대화 ========= */
-class NPC{constructor(name,color,lines){this.name=name;this.lines=lines;this.idx=0;const g=new THREE.Group();const body=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.7,12),new THREE.MeshStandardMaterial({color,roughness:0.8}));body.position.y=0.55;body.castShadow=true;g.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,12,12),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9}));head.position.y=1.1;head.castShadow=true;g.add(head);this.mesh=g;this.talkRadius=1.9;this.wanderTimer=rand(3,8);this.dir=new THREE.Vector3();}}
-function addNPC(name,color,lines,x,z){const n=new NPC(name,color,lines);n.mesh.position.set(x,0,z);scene.add(n.mesh);npcs.push(n);return n;}
-const elder=addNPC('마을장 할배여우',0xffa050,['여우마을에 온 걸 환영! 채집은 E, 제작은 C, 건설은 B라네.','광장에 벤치 하나만 있어도 분위기가 달라진다네.','밤에는 등롱이 빛을 내지.'], -2.8,-1.5);
-const merchant=addNPC('너구리 상인',0x9c6b3a,['솔방울로 재료를 팔지! M으로 상점 열어봐.','가끔 희귀 설계도도 가져오지.'],2.4,1.8);
-const owl=addNPC('올빼미 학자',0x7aa0ff,['씨앗을 심고 인내하라.','폭풍엔 모닥불이 따뜻하지만 조심!'],-4.2,2.4);
-const kid=addNPC('꼬마 여우',0xffd37a,['낚시는 F로 시작! 물결이 클 때가 찬스야.','도움말은 H!'],3.6,-2);
+    // ---------- UTIL ----------
+    const sqrt3 = Math.sqrt(3);
+    function clamp(x,a,b){return Math.min(b, Math.max(a,x));}
+    function sign(x){return x>=0?1:-1}
 
-/* ========= 상호작용 ========= */
-function nearestInteractable(maxDist=2.0){let best=null,d=1e9;for(const it of interactables){if(it.harvested)continue;const pos=it.mesh.position||tmpV.setFromMatrixPosition(it.mesh.matrixWorld);const dd=player.position.distanceTo(pos);if(dd<maxDist&&dd<d){d=dd;best=it;}}return best;}
-function nearestNPC(maxDist=2.0){let best=null,d=1e9;for(const n of npcs){const dd=player.position.distanceTo(n.mesh.position);if(dd<maxDist&&dd<d){d=dd;best=n;}}return best;}
-function harvest(it){if(State.stamina<6) return toast('스태미나가 부족합니다');it.harvested=true;State.stamina-=6;State.pine+=2;addXP(4);QuestState._staminaSpend++;State.stats.plant++;const loot=(it.type==='tree')?{wood:randi(2,4)}:(it.type==='rock')?{stone:randi(1,3)}:(it.type==='ore')?{ore:randi(1,2)}:(it.type==='berry')?{berry:randi(1,2)}:{herb:randi(2,3)};for(const k in loot) State.bag[k]+=loot[k];toast(`${lootText(loot)} 획득! (+솔방울2)`);it.mesh.traverse(n=>{if(n.isMesh) fadeAndRemove(n);});checkQuests();save();refreshUI();}
-function fadeAndRemove(mesh){const m=mesh.material;if(!m) return;mesh.userData.fade=1;mesh.userData._orig=m.transparent;m.transparent=true;}
+    function dq_to_albe(id, iq, theta){
+      const c=Math.cos(theta), s=Math.sin(theta);
+      const ial = c*id - s*iq; const ibe = s*id + c*iq; return [ial, ibe];
+    }
+    function albe_to_dq(ial, ibe, theta){
+      const c=Math.cos(theta), s=Math.sin(theta);
+      const id = c*ial + s*ibe; const iq = -s*ial + c*ibe; return [id, iq];
+    }
+    function albe_to_abc(ial, ibe){
+      const ia=ial; const ib=-0.5*ial + (sqrt3/2)*ibe; const ic=-0.5*ial - (sqrt3/2)*ibe; return [ia,ib,ic];
+    }
+    function abc_to_albe(ia,ib,ic){
+      const ial = (2/3)*(ia - 0.5*ib - 0.5*ic);
+      const ibe = (2/3)*((sqrt3/2)*(ib - ic));
+      return [ial, ibe];
+    }
 
-/* ========= 건설 ========= */
-let buildGhost=null, buildRot=0, currentBuildKey=null;
-function enterBuild(key){State.mode='build';currentBuildKey=key||currentBuildKey;toggleDock('modeBuild');$('#panelBuild').hidden=false;$('#panelCraft').hidden=true;$('#panelBag').hidden=true;if(buildGhost){scene.remove(buildGhost);buildGhost=null;}if(!currentBuildKey)return;const prefab=BuildPrefabs[currentBuildKey]();prefab.traverse(n=>{if(n.isMesh){n.material=n.material.clone();n.material.transparent=true;n.material.opacity=0.6;}});prefab.userData.isGhost=true;buildGhost=prefab;scene.add(buildGhost);}
-function placeBuild(pos){if(!currentBuildKey)return;const key=currentBuildKey;if((State.bag[key]|0)<=0)return toast('제작된 아이템이 없습니다.');State.bag[key]--;const prefab=BuildPrefabs[key]();prefab.position.copy(pos);prefab.rotation.y=buildRot;prefab.traverse(n=>{if(n.isMesh){n.castShadow=true;n.receiveShadow=true;}});scene.add(prefab);const score=BuildDefs[key].score||0;placables.push({mesh:prefab,type:key,score});State.repScore+=score;addXP(6);if(key!=='lantern'&&key!=='treelamp'){for(const p of placables){if((p.type==='lantern'||p.type==='treelamp')&&p.mesh.position.distanceTo(prefab.position)<2.8){State.repScore+=Math.round(score*0.05);}}}QuestState._placed[key]=(QuestState._placed[key]||0)+1;State.stats.place++;State.placed.push({type:key,x:pos.x,y:pos.y,z:pos.z,rot:buildRot});save();refreshUI();checkQuests();}
-function cancelBuild(){if(buildGhost){scene.remove(buildGhost);buildGhost=null;}currentBuildKey=null;buildRot=0;}
+    // ---------- SIM MODEL ----------
+    const params = {
+      p: 4, // pole pairs
+      omega_e: 300,
+      Vdc: 350,
+      tdead_ns: 800,
+      Ts: 100e-6, // 100us
+      Rs: 0.08,
+      Ld: 1.2e-3,
+      Lq: 1.2e-3,
+      psi_f: 0.08,
+      id_ref: 0,
+      iq_ref: 60,
+      device: 'igbt',
+      backbone: 'foc',
+      compMode: 'off',
+      qScale: 0.20, // Qdist scaling
+      rMeas: 0.001, // A^2
+    };
 
-/* ========= 상점 ========= */
-const shopItems=[{id:'wood5',name:'나무 ×5',cost:5,give:{wood:5}},{id:'stone5',name:'돌 ×5',cost:5,give:{stone:5}},{id:'herb5',name:'허브 ×5',cost:6,give:{herb:5}},{id:'ore3',name:'광석 ×3',cost:8,give:{ore:3}},{id:'seed5',name:'씨앗 ×5',cost:10,give:{seed:5}},{id:'blue_fence',name:'설계도: 울타리',cost:20,unlock:'fence'},{id:'blue_bridge',name:'설계도: 다리',cost:24,unlock:'bridge'},{id:'blue_stall',name:'설계도: 노점상',cost:20,unlock:'stall'}];
-function renderShop(){const root=$('#shopList');root.innerHTML='';for(const it of shopItems){const row=document.createElement('div');row.className='row';const left=document.createElement('div');left.innerHTML=`<b>${it.name}</b><br><span class="small">가격: ${it.cost} 솔방울</span>`;const right=document.createElement('div');right.className='cta';right.textContent='구매';right.onclick=()=>buyShop(it);row.append(left,right);root.append(row);}}
-function buyShop(it){if(State.pine<it.cost)return toast('솔방울이 부족합니다');State.pine-=it.cost;if(it.give){for(const [k,v] of Object.entries(it.give)) State.bag[k]=(State.bag[k]||0)+v;}if(it.unlock){State.recipesUnlocked[it.unlock]=true;toast(`${it.name} 해금!`);}else{toast(`${it.name} 구매 완료`);}save();refreshUI();}
-function toggleShop(){const el=$('#shopPanel');const vis=getComputedStyle(el).display!=='none';if(vis) closeShop(); else openShop();}
-function openShop(){const el=$('#shopPanel');el.style.display='block';State.mode='shop';toggleDock('modeShop');renderShop();}
-function closeShop(){const el=$('#shopPanel');el.style.display='none';if(State.mode==='shop'){State.mode='explore';toggleDock('modeExplore');}}
-$('#shopClose').onclick=()=>closeShop();
+    const state = {
+      theta: 0,
+      id: 0, iq: 0,
+      // EKF state
+      x: new Float64Array([0,0,0,0]), // [id, iq, vddist, vqdist]
+      P: (function(){const I=new Float64Array(16); for(let i=0;i<4;i++) I[i*4+i]=0.1; return I;})(),
+    };
 
-/* ========= 퀘스트 & 업적 ========= */
-const QuestDefs=[
-  {id:'q1',title:'첫 채집',desc:'자원 1회 채집',test:s=>s._harvestCount>=1,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q2',title:'판재 만들기',desc:'판재 3개',test:s=>s._crafted.plank>=3,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q3',title:'광장에 벤치',desc:'벤치 1개 배치',test:s=>s._placed.bench>=1,reward:()=>{State.repScore+=10;addXP(12);}},
-  {id:'q4',title:'밤길을 비춰요',desc:'등롱 1개',test:s=>s._placed.lantern>=1,reward:()=>{State.pine+=15;addXP(12);}},
-  {id:'q5',title:'정원 가꾸기',desc:'화단 1개',test:s=>s._placed.flowerbed>=1,reward:()=>{State.repScore+=8;addXP(10);}},
-  {id:'q6',title:'장식 점수 60',desc:'평판 60 달성',test:s=>State.repScore>=60,reward:()=>{addXP(18);}},
-  {id:'q7',title:'제작가',desc:'제작 10회',test:s=>s._craftCount>=10,reward:()=>{State.pine+=25;addXP(18);}},
-  {id:'q8',title:'사진가',desc:'포토 1회',test:s=>s._photoTaken,reward:()=>{State.repScore+=6;addXP(10);}},
-  {id:'q9',title:'근면한 여우',desc:'스태미나 소비 3회',test:s=>s._staminaSpend>=3,reward:()=>{State.pine+=20;addXP(12);}},
-  {id:'q10',title:'평판 C',desc:'평판 C 달성',test:s=>State.repScore>=60,reward:()=>{addXP(20);}},
-  {id:'q11',title:'상인과 대화',desc:'너구리와 대화',test:s=>State.flags.metMerchant,reward:()=>{State.pine+=12;addXP(10);}},
-  {id:'q12',title:'마을장과 대화',desc:'마을장에게 인사',test:s=>State.flags.talkedElder,reward:()=>{State.repScore+=10;addXP(14);}},
-  {id:'q13',title:'울타리 3개',desc:'울타리 3개',test:s=>(QuestState._placed.fence||0)>=3,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q14',title:'노점상',desc:'노점상 1개',test:s=>(QuestState._placed.stall||0)>=1,reward:()=>{State.repScore+=12;addXP(12);}},
-  {id:'q15',title:'다리 건설',desc:'다리 1개',test:s=>(QuestState._placed.bridge||0)>=1,reward:()=>{State.repScore+=20;addXP(16);}},
-  {id:'q16',title:'씨앗 심기',desc:'씨앗 1회 심기',test:s=>s._farmsPlanted>=1,reward:()=>{State.pine+=10;addXP(10);}},
-  {id:'q17',title:'첫 수확',desc:'작물 1회 수확',test:s=>s._farmsHarvested>=1,reward:()=>{State.repScore+=8;addXP(12);}},
-  {id:'q18',title:'낚시 성공',desc:'낚시 1회',test:s=>s._fishCaught>=1,reward:()=>{State.pine+=10;addXP(12);}},
-  {id:'q19',title:'모닥불',desc:'모닥불 1개',test:s=>(QuestState._placed.campfire||0)>=1,reward:()=>{State.repScore+=10;addXP(10);}},
-  {id:'q20',title:'작은 집',desc:'집 1채',test:s=>(QuestState._placed.house||0)>=1,reward:()=>{State.repScore+=20;addXP(16);}}
-];
-const QuestState={done:{},_harvestCount:0,_craftCount:0,_placed:{bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,road:0,house:0,statue:0,campfire:0},_crafted:{plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,rope:0,metal:0,brick:0,seed:0,road:0,house:0,statue:0,campfire:0,rod:0},_photoTaken:false,_staminaSpend:0,_farmsPlanted:0,_farmsHarvested:0,_fishCaught:0};
-const AchDefs=[{id:'a1',name:'목수',desc:'판재 10개',test:()=>QuestState._crafted.plank>=10},{id:'a2',name:'장식왕',desc:'평판 200',test:()=>State.repScore>=200},{id:'a3',name:'길 개척자',desc:'도로 10개',test:()=>QuestState._placed.road>=10},{id:'a4',name:'농부',desc:'수확 5회',test:()=>QuestState._farmsHarvested>=5},{id:'a5',name:'어부',desc:'물고기 5마리',test:()=>QuestState._fishCaught>=5},{id:'a6',name:'건축가',desc:'집 3채',test:()=>QuestState._placed.house>=3}];
-const AchState={done:{}};
-function checkQuests(){for(const q of QuestDefs){if(QuestState.done[q.id])continue;if(q.test(QuestState)){QuestState.done[q.id]=true;q.reward();toast(`퀘스트 완료: ${q.title}`);save();}}refreshQuests();refreshUI();}
-function checkAchievements(){for(const a of AchDefs){if(AchState.done[a.id])continue;if(a.test()){AchState.done[a.id]=true;toast(`업적 달성: ${a.name}`);save();}}renderAchievements();}
+    // PI controllers (simple, for demo)
+    const ctrl = {
+      id_i:0, iq_i:0,
+      Kp: 2.5, Ki: 800, // coarse defaults
+    };
 
-/* ========= UI ========= */
-const elPine=$('#pine'), elStBar=$('#staminaBar'), elStText=$('#staminaText'), elClock=$('#clock'), elRep=$('#reputation'), elQuestList=$('#questList'), elWeatherText=$('#weatherText'), elCoord=$('#coord'), elAch=$('#achList');
-function refreshUI(){elPine.textContent=State.pine|0;elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`;elStText.textContent=`${State.stamina|0}/${State.maxStamina}`;elClock.textContent=fmtTime(State.time);elRep.textContent=repLetter(State.repScore);elWeatherText.textContent=(State.weather==='rain')?'비':(State.weather==='storm')?'폭풍':'맑음';renderCraftList();renderBagList();renderBuildList();}
-function renderCraftList(){const root=$('#craftList');root.innerHTML='';for(const key of Object.keys(Recipes)){if(!State.recipesUnlocked[key])continue;const r=Recipes[key];const row=document.createElement('div');row.className='row';const left=document.createElement('div');left.innerHTML=`<b>${r.name}</b><br><span class="small">${costText(r.cost)} · 스태미나 ${r.stamina}</span>`;const right=document.createElement('div');right.className='cta';right.textContent='제작';right.onclick=()=>craft(key);row.append(left,right);root.append(row);}}
-function renderBagList(){const root=$('#bagList');root.innerHTML='';for(const [k,v] of Object.entries(State.bag)){const row=document.createElement('div');row.className='row';const left=document.createElement('div');left.innerHTML=`<b>${label(k)}</b>`;const right=document.createElement('div');right.textContent=v|0;row.append(left,right);root.append(row);}}
-function renderBuildList(){const root=$('#buildList');root.innerHTML='';for(const k of Object.keys(BuildDefs)){const def=BuildDefs[k];const row=document.createElement('div');row.className='row';const left=document.createElement('div');left.innerHTML=`<b>${def.name}</b><br><span class="small">점수 ${def.score} · 필요: ${costText(def.cost)}</span>`;const right=document.createElement('div');right.className='cta';right.innerHTML=`배치 (${State.bag[k]|0})`;right.onclick=()=>{if(State.bag[k]>0) enterBuild(k); else toast('먼저 제작하세요.');};row.append(left,right);root.append(row);}}
-function refreshQuests(){elQuestList.innerHTML='';for(const q of QuestDefs){const d=document.createElement('div');d.className='quest card';if(QuestState.done[q.id]) d.classList.add('done');d.innerHTML=`<div class="title">${q.title}</div><div class="small">${q.desc}</div>`;elQuestList.append(d);}}
-function renderAchievements(){elAch.innerHTML='';for(const a of AchDefs){const d=document.createElement('div');d.className='quest card';if(AchState.done[a.id]) d.classList.add('done');d.innerHTML=`<div class="title">${a.name}</div><div class="small">${a.desc}</div>`;elAch.append(d);}}
-function label(k){const m={wood:'나무',stone:'돌',herb:'허브',fish:'물고기',berry:'열매',ore:'광석',metal:'금속괴',brick:'벽돌',rope:'밧줄',plank:'판재',cloth:'천',bench:'여우벤치',lantern:'등롱',flowerbed:'화단',fence:'울타리',arch:'아치',sign:'표지판',stall:'노점상',bridge:'다리',treelamp:'나무등롱',seed:'씨앗',road:'도로',house:'집',statue:'여우상',campfire:'모닥불',rod:'낚싯대'};return m[k]||k;}
-function costText(cost){return Object.entries(cost).map(([k,v])=>`${label(k)}×${v}`).join(', ');}
-function lootText(loot){return Object.entries(loot).map(([k,v])=>`${label(k)}×${v|0}`).join(', ');}
-function fmtTime(min){const h=Math.floor(min/60)%24,m=min%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;}
+    const meters = { torque:[], iq:[], ia:[] };
+    const meterMax = 4096; // for nicer FFT window
 
-/* ========= 제작 / XP ========= */
-function canPay(cost){for(const [k,v] of Object.entries(cost)) if((State.bag[k]|0)<v) return false; return true;}
-function pay(cost){for(const [k,v] of Object.entries(cost)) State.bag[k]-=v;}
-function craft(key){const r=Recipes[key];if(!canPay(r.cost)) return toast('재료 부족'); if(State.stamina<(r.stamina||0)) return toast('스태미나 부족');pay(r.cost);State.stamina-=r.stamina||0;QuestState._staminaSpend++;r.make();QuestState._craftCount++;QuestState._crafted[key]=(QuestState._crafted[key]||0)+1;addXP(5);State.pine+=1;toast(`${r.name} 제작 완료!`);checkQuests();checkAchievements();save();refreshUI();}
-function addXP(x){State.xp+=x;while(State.xp>=20){State.xp-=20;State.level++;toast(`레벨 업! Lv.${State.level}`);State.maxStamina+=5;State.stamina=State.maxStamina;}}
+    function deviceVf(){ return params.device==='igbt'? 1.7 : 1.2; }
 
-/* ========= 농사 ========= */
-const farmMeshes=[];
-function tryPlant(){if(State.bag.seed<=0)return toast('씨앗이 없습니다');if(State.stamina<3)return toast('스태미나 부족');raycaster.setFromCamera(mouse,camera);const hit=raycaster.intersectObject(ground,false)[0];if(!hit)return;const p=hit.point.clone();p.x=snap(p.x,0.5);p.z=snap(p.z,0.5);p.y=0.001;if(p.length()>80)return toast('여기엔 심기 어려워요');State.bag.seed--;State.stamina-=3;QuestState._staminaSpend++;const farm={x:p.x,z:p.z,stage:0,ttl:randi(40,90)};State.farms.push(farm);spawnFarmMesh(farm);QuestState._farmsPlanted++;checkQuests();save();refreshUI();toast('씨앗을 심었습니다');}
-function spawnFarmMesh(f){const g=new THREE.Group();g.position.set(f.x,0,f.z);const bed=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.06,10),new THREE.MeshStandardMaterial({color:0x463a2a,roughness:1}));bed.position.y=0.03;bed.castShadow=true;g.add(bed);const sprout=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.2,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));sprout.position.y=0.18;g.add(sprout);g.userData.sprout=sprout;g.userData.farm=f;scene.add(g);farmMeshes.push(g);}
-function updateFarms(dt){for(const g of farmMeshes){const f=g.userData.farm;if(!f)continue;f.ttl-=dt*3;if(f.ttl<=0 && f.stage<2){f.stage++;f.ttl=randi(20,50);if(f.stage===1){g.userData.sprout.scale.set(1.3,1.6,1.3);}if(f.stage===2){g.userData.sprout.material.color.set(0x3aa35a);g.userData.sprout.scale.set(1.8,2.2,1.8);}}}}
-function tryHarvest(){let best=null,bd=1.2;for(const g of farmMeshes){const d=player.position.distanceTo(g.position);if(d<bd && g.userData.farm.stage===2){bd=d;best=g;}}if(!best)return toast('수확할 작물이 없어요');if(State.stamina<2)return toast('스태미나 부족');State.stamina-=2;State.pine+=2;addXP(4);QuestState._staminaSpend++;const yieldLoot={herb:randi(2,3),berry:randi(1,2)};for(const k in yieldLoot) State.bag[k]+=yieldLoot[k];scene.remove(best);farmMeshes.splice(farmMeshes.indexOf(best),1);QuestState._farmsHarvested++;State.stats.harvest++;checkQuests();checkAchievements();save();refreshUI();toast(`수확! ${lootText(yieldLoot)}`);}
+    function computeDisturbanceABC(ia,ib,ic){
+      // Very simplified: average phase voltage error due to deadtime + diode drop
+      // Δv_phase ≈ sign(i_phase) * (Vdc * tdead/Ts) + sign(i_phase) * V_diode*k
+      const kdt = 1.0;
+      const kd = 1.0;
+      const dv = params.Vdc * (params.tdead_ns*1e-9) / params.Ts * kdt; // in volts
+      const Vf = deviceVf();
+      const da = sign(ia)*dv + sign(ia)*Vf*kd;
+      const db = sign(ib)*dv + sign(ib)*Vf*kd;
+      const dc = sign(ic)*dv + sign(ic)*Vf*kd;
+      return [da,db,dc];
+    }
 
-/* ========= 낚시 ========= */
-let fishing=false, fishProg=0, fishSpot=null; const fishSpots=[];
-function addFishSpot(x,z){const m=new THREE.Mesh(new THREE.CircleGeometry(0.4,16),new THREE.MeshStandardMaterial({color:0x2b4255,metalness:0.2,roughness:0.8,transparent:true,opacity:0.7}));m.rotation.x=-Math.PI/2;m.position.set(x,0.003,z);m.userData.pulse=Math.random()*Math.PI*2;scene.add(m);fishSpots.push(m);}
-for(let a=0;a<10;a++){const r=40+Math.random()*8,th=Math.random()*Math.PI*2;addFishSpot(Math.cos(th)*r,Math.sin(th)*r);}
-function tryFish(){if(fishing)return;if(State.bag.rod<=0)return toast('낚싯대 필요');let best=null,d=1.4;for(const s of fishSpots){const dd=player.position.distanceTo(s.position);if(dd<d){d=dd;best=s;}}if(!best)return toast('물가 포인트에 더 가까이');fishing=true;fishProg=0;fishSpot=best;toast('낚시 시작! (E로 진행도 조절)');}
-function stepFishing(dt){if(!fishing)return;fishProg+=dt*(0.1+Math.random()*0.2);if(fishProg>=1){fishing=false;fishProg=0;State.bag.fish++;State.pine+=3;addXP(6);QuestState._fishCaught++;State.stats.fish++;checkQuests();checkAchievements();save();refreshUI();toast('물고기를 잡았습니다!');}}
+    function voltageLimit(vd, vq){
+      // SVM linear modulation limit (no overmod): Vmax ≈ Vdc/√3
+      const vmax = params.Vdc / sqrt3;
+      const mag = Math.hypot(vd, vq);
+      if(mag>vmax){ const s=vmax/mag; return [vd*s, vq*s]; }
+      return [vd,vq];
+    }
 
-/* ========= 입력 ========= */
-const move={f:0,b:0,l:0,r:0}; let sprint=false;
-window.addEventListener('keydown',e=>{
-  if(e.repeat) return;
-  if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1; if(e.code==='ShiftLeft') sprint=true;
-  if(e.code==='KeyB'){State.mode=(State.mode==='build'?'explore':'build');toggleDock(State.mode==='build'?'modeBuild':'modeExplore');$('#panelBuild').hidden=(State.mode!=='build');if(State.mode!=='build') cancelBuild();}
-  if(e.code==='KeyM'){toggleShop();}
-  if(e.code==='KeyH'){openHelp();}
-  if(e.code==='KeyE'){if(fishing){fishProg=Math.max(0,fishProg-0.15);return;}const n=nearestNPC(1.9);if(n){talk(n);State.stats.talk++;return;}const it=nearestInteractable(2.0);if(it){harvest(it);QuestState._harvestCount++;return;}tryHarvest();}
-  if(e.code==='KeyF'){tryFish();}
-  if(e.code==='KeyC'){togglePanel('panelCraft');}
-  if(e.code==='KeyI'){togglePanel('panelBag');}
-  if(e.code==='KeyP'){QuestState._photoTaken=true;State.stats.photo++;checkQuests();toast('찰칵! (가상의 스샷)');}
-  if(e.code==='KeyR'){buildRot=(buildRot+Math.PI/2)%(Math.PI*2);}
-  if(e.code==='KeyG'){tryPlant();}
-  if(e.code==='Escape'){cancelBuild();State.mode='explore';toggleDock('modeExplore');hidePanels();closeShop();hideDialog();}
-});
-window.addEventListener('keyup',e=>{if(e.code==='KeyW') move.f=0;if(e.code==='KeyS') move.b=0;if(e.code==='KeyA') move.l=0;if(e.code==='KeyD') move.r=0;if(e.code==='ShiftLeft') sprint=false;});
-function togglePanel(id){const el=document.getElementById(id);el.hidden=!el.hidden;}
-function hidePanels(){$('#panelCraft').hidden=true;$('#panelBag').hidden=true;$('#panelBuild').hidden=true;}
-function toggleDock(id){for(const b of document.querySelectorAll('.dock .btn')) b.setAttribute('aria-pressed','false');document.getElementById(id).setAttribute('aria-pressed','true');}
-$('#modeExplore').onclick=()=>{State.mode='explore';toggleDock('modeExplore');hidePanels();cancelBuild();};
-$('#modeBuild').onclick=()=>{State.mode='build';toggleDock('modeBuild');$('#panelBuild').hidden=false;};
-$('#modeCraft').onclick=()=>{State.mode='craft';toggleDock('modeCraft');$('#panelCraft').hidden=false;};
-$('#modeBag').onclick=()=>{State.mode='bag';toggleDock('modeBag');$('#panelBag').hidden=false;};
-$('#modeShop').onclick=()=>{toggleShop();};
-$('#modePhoto').onclick=()=>{QuestState._photoTaken=true;checkQuests();toast('찰칵! (가상의 스샷)');};
-$('#btnReset').onclick=()=>{if(confirm('모든 진행도가 초기화됩니다. 계속?')){localStorage.removeItem(STORAGE_KEY);location.reload();}};
-$('#btnHelp').onclick=()=>{openHelp();};
-$('#btnWeather').onclick=()=>{Weather.toggle();};
-$('#btnExport').onclick=()=>{const data=btoa(unescape(encodeURIComponent(JSON.stringify({State,QuestState,AchState}))));navigator.clipboard.writeText(data).then(()=>toast('클립보드에 저장됨'));};
-$('#btnImport').onclick=()=>{const s=prompt('세이브 문자열 붙여넣기');if(!s)return;try{const obj=JSON.parse(decodeURIComponent(escape(atob(s))));Object.assign(State,obj.State||{});Object.assign(QuestState,obj.QuestState||{});Object.assign(AchState,obj.AchState||{});save();location.reload();}catch(e){alert('불러오기 실패');}};
-$('#btnShot').onclick=()=>saveScreenshot(renderer);
+    function gauss(){
+      // Box-Muller
+      let u=0,v=0; while(u===0) u=Math.random(); while(v===0) v=Math.random();
+      return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+    }
 
-/* ========= 대화 ========= */
-const dialogEl=$('#dialog'), dialogSpeaker=$('#dialogSpeaker'), dialogText=$('#dialogText');
-function talk(n){dialogEl.style.display='block';dialogSpeaker.textContent=n.name;dialogText.textContent=n.lines[n.idx% n.lines.length];n.idx++;if(n===elder)State.flags.talkedElder=true;if(n===merchant)State.flags.metMerchant=true;if(n===owl)State.flags.metOwl=true;if(n===kid)State.flags.metKid=true;checkQuests();save();setTimeout(()=>{dialogEl.style.display='none';},2200);}
-function hideDialog(){dialogEl.style.display='none';}
+    function stepPlant(){
+      const {Ld,Lq,Rs,psi_f,Ts,omega_e} = params;
+      // reference currents
+      const id_star = params.id_ref;
+      const iq_star = params.iq_ref;
 
-/* ========= 저장 ========= */
-function save(){localStorage.setItem(STORAGE_KEY, JSON.stringify({State,QuestState,AchState}));}
-function load(){const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;try{const obj=JSON.parse(raw);Object.assign(State,obj.State||{});Object.assign(QuestState,obj.QuestState||{});Object.assign(AchState,obj.AchState||{});}catch(e){console.warn('Load failed',e);}}
+      // simple PI current control (FOC backbone)
+      const err_d = id_star - state.id;
+      const err_q = iq_star - state.iq;
+      ctrl.id_i += ctrl.Ki * err_d * Ts;
+      ctrl.iq_i += ctrl.Ki * err_q * Ts;
+      let vd_cmd = ctrl.Kp*err_d + ctrl.id_i + Rs*state.id - omega_e*Lq*state.iq;
+      let vq_cmd = ctrl.Kp*err_q + ctrl.iq_i + Rs*state.iq + omega_e*(Ld*state.id + psi_f);
 
-/* ========= Raycast & Minimap ========= */
-const raycaster=new THREE.Raycaster(); const mouse=new THREE.Vector2();
-renderer.domElement.addEventListener('mousemove',e=>{const r=renderer.domElement.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;});
-renderer.domElement.addEventListener('mousedown',()=>{if(State.mode==='build'&&buildGhost){raycaster.setFromCamera(mouse,camera);const hits=raycaster.intersectObject(ground,false);if(hits.length){const p=hits[0].point;p.x=snap(p.x,0.5);p.z=snap(p.z,0.5);p.y=0;placeBuild(p);}}});
-const minimap=document.getElementById('minimap'); const mctx=minimap.getContext('2d');
-function drawMinimap(){const W=minimap.width,H=minimap.height;mctx.clearRect(0,0,W,H);mctx.fillStyle='#0e1420';mctx.fillRect(0,0,W,H);mctx.strokeStyle='#28364a';mctx.strokeRect(0.5,0.5,W-1,H-1);const scale=1.5,ox=W/2,oy=H/2;mctx.beginPath();mctx.arc(ox,oy,95/scale,0,Math.PI*2);mctx.strokeStyle='#203040';mctx.stroke();mctx.fillStyle='#88aaff';for(const p of placables){const x=ox+p.mesh.position.x/scale;const y=oy+p.mesh.position.z/scale;mctx.fillRect(x-2,y-2,4,4);}mctx.fillStyle='#5de0a1';mctx.beginPath();mctx.arc(ox+player.position.x/scale,oy+player.position.z/scale,4,0,Math.PI*2);mctx.fill();}
+      // EKF-based compensation (add estimated disturbance)
+      let vcomp_d = 0, vcomp_q = 0;
+      if(params.compMode==='ekf'){
+        vcomp_d = state.x[2];
+        vcomp_q = state.x[3];
+      }
 
-/* ========= 날씨 ========= */
-let rainParticles=null; const rainCount=450; const rainGeo=new THREE.BufferGeometry(); const rainMat=new THREE.PointsMaterial({color:0x9fb0d3,size:0.07,transparent:true,opacity:0.7});
-function makeRain(){const positions=new Float32Array(rainCount*3);for(let i=0;i<rainCount;i++){positions[i*3+0]=rand(-35,35);positions[i*3+1]=rand(2,14);positions[i*3+2]=rand(-35,35);}rainGeo.setAttribute('position', new THREE.BufferAttribute(positions,3));rainParticles=new THREE.Points(rainGeo,rainMat);rainParticles.visible=false;scene.add(rainParticles);}
-function updateRain(dt){if(!rainParticles||!rainParticles.visible) return;const pos=rainGeo.attributes.position;for(let i=0;i<rainCount;i++){let y=pos.getY(i)-dt*8;if(y<0){y=rand(6,14);pos.setX(i,rand(-35,35));pos.setZ(i,rand(-35,35));}pos.setY(i,y);}pos.needsUpdate=true;}
-const Weather={timerMin:0,set(mode){if(State.weather===mode)return;State.weather=mode;if(mode==='rain'||mode==='storm'){if(!rainParticles) makeRain();rainParticles.visible=true;toast(mode==='storm'?'⛈️ 폭풍!':'🌦️ 비가 시작');this.timerMin=randi(40,120);}else{if(rainParticles) rainParticles.visible=false;toast('☀️ 맑음');this.timerMin=randi(120,360);}},toggle(){this.set(State.weather==='clear'?'rain':'clear');},force(mode){this.set(mode);this.timerMin=1;},step(dt){const dtMin=dt*3;this.timerMin-=dtMin;if(this.timerMin<=0){if(State.weather==='clear'){if(Math.random()<0.25)this.set('rain');else this.set('clear');}else if(State.weather==='rain'){if(Math.random()<0.2)this.set('storm');else this.set('clear');}else{this.set('clear');}}if(State.weather==='storm'){if(Math.random()<0.02){flash.intensity=3;setTimeout(()=>flash.intensity=0,120+Math.random()*180);}}}};
+      // limit
+      [vd_cmd, vq_cmd] = voltageLimit(vd_cmd + vcomp_d, vq_cmd + vcomp_q);
 
-/* ========= 루프 ========= */
-let last=performance.now();
-function tick(now){
-  const dt=Math.min(0.05,(now-last)/1000); last=now;
-  State.time+=dt*3; if(State.time>=1440) State.time-=1440;
-  const t=State.time/1440; const day=Math.cos((t-0.75)*Math.PI*2)*0.5+0.5; const over=(State.weather==='rain')?0.7:(State.weather==='storm')?0.6:1.0;
-  hemi.intensity=lerp(0.15,0.8,day)*over; sun.intensity=lerp(0.1,1.0,day)*over; scene.background.setHSL(0.58,0.5,lerp(0.06,0.16,day*over)); sun.position.set(20*Math.cos(t*Math.PI*2),18*day+2,20*Math.sin(t*Math.PI*2));
-  let nearCamp=false; for(const p of placables){ if(p.type==='campfire' && p.mesh.position.distanceTo(player.position)<2.5){ nearCamp=true; break; } }
-  const regen=(day>0.3?2.2:1.2)*(nearCamp?1.8:1); if(State.stamina<State.maxStamina) State.stamina=Math.min(State.maxStamina, State.stamina+dt*regen);
+      // true disturbance from abc current signs
+      const [ial, ibe] = dq_to_albe(state.id, state.iq, state.theta);
+      const [ia,ib,ic] = albe_to_abc(ial, ibe);
+      const [dva,dvb,dvc] = computeDisturbanceABC(ia,ib,ic);
+      const [dv_al, dv_be] = abc_to_albe(dva,dvb,dvc);
+      const [dv_d, dv_q] = albe_to_dq(dv_al, dv_be, state.theta);
 
-  const forward=new THREE.Vector3(); camera.getWorldDirection(forward); forward.y=0; forward.normalize(); const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).multiplyScalar(-1);
-  const dir=new THREE.Vector3(); if(move.f) dir.add(forward); if(move.b) dir.sub(forward); if(move.r) dir.add(right); if(move.l) dir.sub(right); if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(moveSpeed()*dt); player.position.add(dir); if(controls.target) controls.target.copy(player.position); }
-  if(controls.update) controls.update();
+      // plant dynamics (Euler)
+      const did = (vd_cmd - Rs*state.id + omega_e*Lq*state.iq - dv_d) / Ld;
+      const diq = (vq_cmd - Rs*state.iq - omega_e*(Ld*state.id + psi_f) - dv_q) / Lq;
+      state.id += did * Ts;
+      state.iq += diq * Ts;
 
-  if(State.mode==='build'&&buildGhost){ raycaster.setFromCamera(mouse,camera); const hit=raycaster.intersectObject(ground,false)[0]; if(hit){ buildGhost.position.copy(hit.point); buildGhost.position.set(snap(buildGhost.position.x,0.5),0,snap(buildGhost.position.z,0.5)); buildGhost.rotation.y=buildRot; } }
-  scene.traverse(o=>{ if(o.userData&&o.userData.fade){ o.userData.fade-=dt*0.7; if(o.material) o.material.opacity=Math.max(0,o.userData.fade); if(o.userData.fade<=0){ if(o.parent) o.parent.remove(o); if(o.material) o.material.transparent=o.userData._orig; o.userData.fade=0; } } });
+      // update angle
+      state.theta += omega_e * Ts; if(state.theta>Math.PI*2) state.theta-=Math.PI*2;
 
-  for(const n of npcs){ n.wanderTimer-=dt; if(n.wanderTimer<=0){ n.wanderTimer=rand(2,6); if(!n.dir) n.dir=new THREE.Vector3(); n.dir.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(rand(0.2,0.8)); } if(n.dir) n.mesh.position.addScaledVector(n.dir,dt); if(n.mesh.position.length()>7) n.dir&&n.dir.multiplyScalar(-1); }
-  Weather.step(dt); updateRain(dt); stepFishing(dt); updateFarms(dt); refreshTopBarFast(); drawMinimap(); renderer.render(scene,camera); requestAnimationFrame(tick);
-}
-function moveSpeed(){ let s=3.2*(sprint?1.6:1); if((move.f||move.b||move.l||move.r)&&sprint){ State.stamina=Math.max(0,State.stamina-0.02); } return s; }
-function refreshTopBarFast(){ elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time|0); elRep.textContent=repLetter(State.repScore); elPine.textContent=State.pine|0; elCoord.textContent=`${player.position.x.toFixed(1)},${player.position.z.toFixed(1)}`; }
+      // noisy measurement for EKF
+      const measId = state.id + gauss()*Math.sqrt(params.rMeas);
+      const measIq = state.iq + gauss()*Math.sqrt(params.rMeas);
 
-/* ========= 부팅 ========= */
-function restorePlaced(){ for(const p of State.placed){ if(!BuildPrefabs[p.type]) continue; const o=BuildPrefabs[p.type](); o.position.set(p.x,p.y,p.z); o.rotation.y=p.rot||0; o.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }}); scene.add(o); placables.push({mesh:o,type:p.type,score:(BuildDefs[p.type]?.score)||0}); } }
-load(); refreshUI(); refreshQuests(); renderAchievements(); restorePlaced(); makeRain(); if(State.weather!=='clear') rainParticles.visible=true; Weather.timerMin=(State.weather==='rain'||State.weather==='storm')?randi(40,120):randi(120,360); requestAnimationFrame(tick);
+      // EKF update with measurement z=[id, iq]
+      ekfUpdate(vd_cmd, vq_cmd, omega_e, [measId, measIq]);
 
-/* ========= 잡다 ========= */
-const tEl=$('#toast'); let tTimer=null; function toast(msg){ tEl.textContent=msg; tEl.classList.add('show'); clearTimeout(tTimer); tTimer=setTimeout(()=>tEl.classList.remove('show'),1500); }
-window.addEventListener('contextmenu',e=>e.preventDefault());
-window.addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
-setTimeout(()=>toast('WASD 이동, E 상호작용/대화/수확, B 건설, C 제작, I 가방, M 상점, R 회전, P 포토, G 심기, F 낚시'),500);
-function openHelp(){alert('조작: WASD 이동, Shift 달리기, E 상호작용/대화/수확, B 건설, C 제작, I 가방, M 상점, R 회전, P 포토, G 씨앗 심기, F 낚시, Esc 취소');}
-function hideDialog(){}
+      // compute outputs
+      const torque = 1.5 * params.p * (params.psi_f*state.iq + (params.Ld-params.Lq)*state.id*state.iq);
 
-} // initGame
+      // metrics buffers
+      meters.torque.push(torque); if(meters.torque.length>meterMax) meters.torque.shift();
+      meters.iq.push(state.iq); if(meters.iq.length>meterMax) meters.iq.shift();
+      meters.ia.push(ia); if(meters.ia.length>meterMax) meters.ia.shift();
+
+      // arrows (scale for view)
+      const s=1/50;
+      arrowCmd.position.set(0,0,0); arrowDist.position.set(0,0,0); arrowComp.position.set(0,0,0);
+      arrowCmd.rotation.z = Math.atan2(vq_cmd, vd_cmd); arrowCmd.scale.set(1,1,Math.hypot(vd_cmd,vq_cmd)*s);
+      arrowDist.rotation.z = Math.atan2(dv_q, dv_d); arrowDist.scale.set(1,1,Math.hypot(dv_d,dv_q)*s);
+      arrowComp.rotation.z = Math.atan2(vcomp_q, vcomp_d); arrowComp.scale.set(1,1,Math.hypot(vcomp_d,vcomp_q)*s);
+
+      // flux trail point
+      const psi_d = params.Ld*state.id + params.psi_f;
+      const psi_q = params.Lq*state.iq;
+      const [psial, psibe] = dq_to_albe(psi_d, psi_q, state.theta);
+      // push into circular buffer
+      for(let i=0;i<trailN-1;i++){
+        trailPos[i*3+0] = trailPos[(i+1)*3+0];
+        trailPos[i*3+1] = trailPos[(i+1)*3+1];
+        trailPos[i*3+2] = trailPos[(i+1)*3+2];
+      }
+      trailPos[(trailN-1)*3+0] = psial*.15;
+      trailPos[(trailN-1)*3+1] = 0.02;
+      trailPos[(trailN-1)*3+2] = psibe*.15;
+      trailGeom.attributes.position.needsUpdate = true;
+
+      // update KPIs & charts occasionally
+      updateKPIs();
+      if(frameCount%6===0) drawCharts();
+    }
+
+    // ---------- EKF ----------
+    function ekfUpdate(vd_cmd, vq_cmd, omega_e, z){
+      const {Ld,Lq,Rs,Ts} = params;
+      // state x=[id, iq, vdd, vdq], P 4x4
+      const x = state.x; const P = state.P;
+      const id=x[0], iq=x[1], vdd=x[2], vdq=x[3];
+
+      // f(x)
+      const f1 = (vd_cmd - Rs*id + omega_e*Lq*iq - vdd)/Ld;
+      const f2 = (vq_cmd - Rs*iq - omega_e*(Ld*id + params.psi_f) - vdq)/Lq;
+
+      // Jacobian (continuous) F_c
+      const a11 = -Rs/Ld;
+      const a12 = omega_e*Lq/Ld;
+      const a13 = -1/Ld;
+      const a14 = 0;
+      const a21 = -omega_e*Ld/Lq;
+      const a22 = -Rs/Lq;
+      const a23 = 0;
+      const a24 = -1/Lq;
+
+      // Discretize: F = I + Ts*F_c
+      const F = [
+        1+Ts*a11, Ts*a12, Ts*a13, Ts*a14,
+        Ts*a21, 1+Ts*a22, Ts*a23, Ts*a24,
+        0,0,1,0,
+        0,0,0,1
+      ];
+
+      // Predict
+      const xpred = new Float64Array(4);
+      xpred[0] = id + Ts*f1;
+      xpred[1] = iq + Ts*f2;
+      xpred[2] = vdd;
+      xpred[3] = vdq;
+
+      // Ppred = F P F^T + Q
+      const Ppred = mat4add(mat4mul(mat4mul(F, P), transpose4(F)), Qd());
+
+      // Update
+      const H = [1,0,0,0, 0,1,0,0];
+      const HP = [
+        Ppred[0], Ppred[1], Ppred[2], Ppred[3],
+        Ppred[4], Ppred[5], Ppred[6], Ppred[7]
+      ];
+      const HPHt = [
+        HP[0], HP[4],
+        HP[1], HP[5]
+      ]; // 2x2
+      // add R
+      const R11 = params.rMeas; const R22 = params.rMeas;
+      const S11 = HPHt[0]+R11; const S12 = HPHt[2]; const S21 = HPHt[1]; const S22 = HPHt[3]+R22;
+      const detS = S11*S22 - S12*S21; const invS = [ S22/detS, -S12/detS, -S21/detS, S11/detS ];
+
+      // K = Ppred H^T S^-1  (4x2)
+      const PHt = [
+        Ppred[0], Ppred[4],
+        Ppred[1], Ppred[5],
+        Ppred[2], Ppred[6],
+        Ppred[3], Ppred[7]
+      ];
+      const K = [
+        PHt[0]*invS[0] + PHt[1]*invS[2], PHt[0]*invS[1] + PHt[1]*invS[3],
+        PHt[2]*invS[0] + PHt[3]*invS[2], PHt[2]*invS[1] + PHt[3]*invS[3],
+        PHt[4]*invS[0] + PHt[5]*invS[2], PHt[4]*invS[1] + PHt[5]*invS[3],
+        PHt[6]*invS[0] + PHt[7]*invS[2], PHt[6]*invS[1] + PHt[7]*invS[3],
+      ];
+
+      // y = z - H xpred
+      const y1 = z[0] - xpred[0];
+      const y2 = z[1] - xpred[1];
+
+      // x = xpred + K y
+      x[0] = xpred[0] + K[0]*y1 + K[1]*y2;
+      x[1] = xpred[1] + K[2]*y1 + K[3]*y2;
+      x[2] = xpred[2] + K[4]*y1 + K[5]*y2;
+      x[3] = xpred[3] + K[6]*y1 + K[7]*y2;
+
+      // P = (I - K H) Ppred
+      const KH = [
+        K[0], K[1], 0, 0,
+        K[2], K[3], 0, 0,
+        K[4], K[5], 0, 0,
+        K[6], K[7], 0, 0,
+      ];
+      const I4 = identity4();
+      const IminusKH = mat4sub(I4, KH);
+      const Pnew = mat4mul(IminusKH, Ppred);
+      for(let i=0;i<16;i++) P[i]=Pnew[i];
+    }
+
+    function identity4(){ const I=new Float64Array(16); for(let i=0;i<4;i++) I[i*4+i]=1; return I; }
+    function transpose4(M){
+      return [ M[0],M[4],M[8], M[12], M[1],M[5],M[9],M[13], M[2],M[6],M[10],M[14], M[3],M[7],M[11],M[15] ];
+    }
+    function mat4mul(A,B){
+      const C=new Float64Array(16);
+      for(let r=0;r<4;r++) for(let c=0;c<4;c++){
+        C[r*4+c]=A[r*4+0]*B[0*4+c]+A[r*4+1]*B[1*4+c]+A[r*4+2]*B[2*4+c]+A[r*4+3]*B[3*4+c];
+      }
+      return C;
+    }
+    function mat4add(A,B){ const C=new Float64Array(16); for(let i=0;i<16;i++) C[i]=A[i]+B[i]; return C; }
+    function mat4sub(A,B){ const C=new Float64Array(16); for(let i=0;i<16;i++) C[i]=A[i]-B[i]; return C; }
+    function Qd(){
+      // process noise for [id,iq,vdd,vdq]; give more weight to vdist random walk
+      const qd = new Float64Array(16);
+      const q = 1e-6; const qdist = params.qScale*1e-2; // slider in 1e-2 units
+      qd[0]=q; qd[5]=q; qd[10]=qdist; qd[15]=qdist; return qd;
+    }
+
+    // ---------- KPIs & CHARTS ----------
+    function rms(arr){
+      let m=0; for(const x of arr) m+=x; m/=arr.length||1;
+      let s=0; for(const x of arr) s+=(x-m)*(x-m); s/=arr.length||1; return {m, rms: Math.sqrt(s)};
+    }
+
+    function computeTHDandSpectrum(sig, fs, f1, H=10){
+      const N = sig.length;
+      if(N<64 || f1<=0) return {thd:0, mags:[], freqs:[]};
+      const mags=[]; const freqs=[];
+      let A1rms = 0; let totalRMS = rms(sig).rms;
+      for(let h=1; h<=H; h++){
+        const fh = h*f1; if(fh>fs/2) { mags.push(0); freqs.push(fh); continue; }
+        const k = Math.round(fh*N/fs); const mag = goertzelMag(sig, k, N);
+        const Apeak = (2*mag)/N; // DFT peak
+        const Arms = Apeak/Math.SQRT2; mags.push(Arms); freqs.push(fh); if(h===1) A1rms = Arms;
+      }
+      const noiseHarm = Math.max(0, Math.hypot(...mags.slice(1)));
+      const thd = A1rms>1e-9 ? (noiseHarm / A1rms)*100 : 0;
+      return {thd, mags, freqs};
+    }
+
+    function goertzelMag(sig, k, N){
+      const w = 2*Math.PI*k/N; const cw = Math.cos(w); const sw = Math.sin(w);
+      let s0=0,s1=0,s2=0; const coeff = 2*cw;
+      for(let n=0;n<N;n++){ s0 = sig[n] + coeff*s1 - s2; s2=s1; s1=s0; }
+      const real = s1 - s2*cw; const imag = s2*sw; return Math.hypot(real, imag);
+    }
+
+    function updateKPIs(){
+      const {m:Tm, rms:Tr} = rms(meters.torque);
+      const {rms:iqr} = rms(meters.iq);
+      document.getElementById('torqueAvg').textContent = Tm.toFixed(2);
+      const ripplePct = (Math.abs(Tm)>1e-6)? (Tr/Math.abs(Tm)*100): 0;
+      document.getElementById('torqueRipple').textContent = ripplePct.toFixed(2);
+      document.getElementById('iqRipple').textContent = iqr.toFixed(2);
+      // THD from i_a
+      const fs = 1/params.Ts; const f1 = params.omega_e/(2*Math.PI);
+      const N = Math.min(meters.ia.length, 1024);
+      const win = meters.ia.slice(-N);
+      const {thd} = computeTHDandSpectrum(win, fs, f1, 10);
+      document.getElementById('thd').textContent = isFinite(thd)? thd.toFixed(2) : '—';
+    }
+
+    // --- drawing helpers ---
+    const torquePlot = document.getElementById('torquePlot');
+    const iqPlot = document.getElementById('iqPlot');
+    const iaPlot = document.getElementById('iaPlot');
+    const specPlot = document.getElementById('specPlot');
+
+    function drawGrid(ctx){
+      const w=ctx.canvas.width, h=ctx.canvas.height; ctx.save();
+      ctx.strokeStyle= 'rgba(255,255,255,.08)'; ctx.lineWidth=1;
+      ctx.beginPath(); for(let y=0;y<=h;y+=Math.floor(h/4)) { ctx.moveTo(0,y); ctx.lineTo(w,y); }
+      for(let x=0;x<=w;x+=Math.floor(w/8)) { ctx.moveTo(x,0); ctx.lineTo(x,h); }
+      ctx.stroke(); ctx.restore();
+    }
+
+    function drawLine(ctx, data, color, ymin=null, ymax=null){
+      const w=ctx.canvas.width, h=ctx.canvas.height; ctx.clearRect(0,0,w,h); drawGrid(ctx);
+      if(data.length<2) return;
+      const N=Math.min(data.length, w);
+      const arr=data.slice(-N);
+      let min=Infinity,max=-Infinity; if(ymin==null||ymax==null){ for(const v of arr){ if(v<min)min=v; if(v>max)max=v; } if(min===max){min-=1;max+=1;} } else {min=ymin;max=ymax}
+      const sx=w/(N-1); const sy=(h-8)/(max-min); ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.moveTo(0, h-4 - (arr[0]-min)*sy);
+      for(let i=1;i<N;i++){ const x=i*sx; const y=h-4 - (arr[i]-min)*sy; ctx.lineTo(x,y);} ctx.stroke();
+    }
+
+    function drawBars(ctx, mags){
+      const w=ctx.canvas.width, h=ctx.canvas.height; ctx.clearRect(0,0,w,h); drawGrid(ctx);
+      const H=mags.length; if(H===0) return; const bw = (w-20)/H;
+      const max=Math.max(1e-9, ...mags);
+      for(let i=0;i<H;i++){
+        const m=mags[i]; const bh = (m/max)*(h-10);
+        ctx.fillStyle='rgba(96,165,250,.9)'; ctx.fillRect(10+i*bw, h-5-bh, bw*0.7, bh);
+      }
+    }
+
+    function drawCharts(){
+      const tctx = torquePlot.getContext('2d'); drawLine(tctx, meters.torque, '#7dd3fc');
+      const iqctx = iqPlot.getContext('2d'); drawLine(iqctx, meters.iq, '#86efac');
+      const iactx = iaPlot.getContext('2d'); drawLine(iactx, meters.ia, '#fca5a5');
+      // spectrum
+      const fs = 1/params.Ts; const f1 = params.omega_e/(2*Math.PI);
+      const N = Math.min(meters.ia.length, 1024); const win = meters.ia.slice(-N);
+      const {mags} = computeTHDandSpectrum(win, fs, f1, 10);
+      const sctx = specPlot.getContext('2d'); drawBars(sctx, mags);
+    }
+
+    // ---------- 3D MAP (Torque Ripple vs ω & t_dead) ----------
+    function clearMap(){ mapGroup.clear(); }
+
+    async function generateMap(){
+      clearMap();
+      const N = parseInt(document.getElementById('mapN').value,10);
+      const wMin=10, wMax=1200; const tdMin=50e-9, tdMax=3e-6;
+
+      const geomOff = new THREE.PlaneGeometry(24, 24, N-1, N-1);
+      const geomOn  = new THREE.PlaneGeometry(24, 24, N-1, N-1);
+      geomOff.rotateX(-Math.PI/2); geomOn.rotateX(-Math.PI/2);
+
+      const posOff = geomOff.attributes.position; const posOn = geomOn.attributes.position;
+
+      // run coarse sims across grid
+      const Zoff = [], Zon=[];
+      for(let iy=0; iy<N; iy++){
+        const td = tdMin + (tdMax-tdMin)*(iy/(N-1));
+        for(let ix=0; ix<N; ix++){
+          const w = wMin + (wMax-wMin)*(ix/(N-1));
+          const off = mapSample(w, td, false);
+          const on  = mapSample(w, td, true);
+          Zoff.push(off); Zon.push(on);
+        }
+      }
+
+      const zOffMax = Math.max(...Zoff); const zOnMax = Math.max(...Zon); const zMax = Math.max(zOffMax, zOnMax, 1e-6);
+      // update vertices height (normalize to 0..6)
+      for(let i=0;i<posOff.count;i++){
+        posOff.setY(i, 6 * (Zoff[i]/zMax));
+        posOn.setY(i, 6 * (Zon[i]/zMax));
+      }
+      posOff.needsUpdate=true; posOn.needsUpdate=true;
+
+      const matOff = new THREE.MeshStandardMaterial({color:0xbd0026, wireframe:false, transparent:true, opacity:.60});
+      const matOn  = new THREE.MeshStandardMaterial({color:0x00b34a, wireframe:false, transparent:true, opacity:.60});
+
+      const meshOff = new THREE.Mesh(geomOff, matOff); meshOff.position.set(-14, 0, 0);
+      const meshOn  = new THREE.Mesh(geomOn,  matOn);  meshOn.position.set( 14, 0, 0);
+
+      const labelOff = textSprite('OFF: 토크 리플(정규화)', '#ff7880'); labelOff.position.set(-14, 4.5, 12.5);
+      const labelOn  = textSprite('EKF ON: 토크 리플(정규화)', '#7dffb3'); labelOn.position.set(14, 4.5, 12.5);
+
+      mapGroup.add(meshOff, meshOn, labelOff, labelOn);
+    }
+
+    function mapSample(omega_e, tdead, comp){
+      // clone small sim; run for ~2 electrical periods; return torque RMS percentage
+      const backup = { ...params };
+      params.omega_e = omega_e; params.tdead_ns = tdead*1e9; params.compMode = comp? 'ekf':'off';
+
+      const s = { id:0, iq:0, theta:0, x:new Float64Array([0,0,0,0]), P:(function(){const I=new Float64Array(16); for(let i=0;i<4;i++) I[i*4+i]=0.1; return I;})() };
+      // small locals copy of step, without touching globals
+      const Ld=params.Ld, Lq=params.Lq, Rs=params.Rs, Ts=params.Ts, psi_f=params.psi_f;
+      let id_i=0, iq_i=0; const Kp=2.5, Ki=800; const arr=[];
+      const steps = Math.max(200, Math.floor( (2*2*Math.PI/omega_e)/Ts )); // 2 periods
+      for(let k=0;k<steps;k++){
+        const err_d = params.id_ref - s.id; const err_q = params.iq_ref - s.iq;
+        id_i += Ki*err_d*Ts; iq_i += Ki*err_q*Ts;
+        let vd_cmd = Kp*err_d + id_i + Rs*s.id - omega_e*Lq*s.iq;
+        let vq_cmd = Kp*err_q + iq_i + Rs*s.iq + omega_e*(Ld*s.id + psi_f);
+        let vcomp_d = comp? s.x[2] : 0; let vcomp_q = comp? s.x[3] : 0;
+        const vmax = params.Vdc/sqrt3; const mag = Math.hypot(vd_cmd+vcomp_d, vq_cmd+vcomp_q); if(mag>vmax){ const sc=vmax/mag; vd_cmd*=sc; vq_cmd*=sc; vcomp_d*=sc; vcomp_q*=sc; }
+        const [ial,ibe] = dq_to_albe(s.id, s.iq, s.theta);
+        const [ia,ib,ic]=albe_to_abc(ial,ibe);
+        const [dva,dvb,dvc]=computeDisturbanceABC(ia,ib,ic);
+        const [dv_al,dv_be]=abc_to_albe(dva,dvb,dvc);
+        const [dv_d,dv_q]=albe_to_dq(dv_al,dv_be,s.theta);
+        const did = (vd_cmd+vcomp_d - Rs*s.id + omega_e*Lq*s.iq - dv_d)/Ld;
+        const diq = (vq_cmd+vcomp_q - Rs*s.iq - omega_e*(Ld*s.id + psi_f) - dv_q)/Lq;
+        s.id += did*Ts; s.iq += diq*Ts; s.theta += omega_e*Ts; if(s.theta>2*Math.PI) s.theta-=2*Math.PI;
+        // simple EKF predict-update
+        const x=s.x; const P=s.P; const id=x[0], iq=x[1], vdd=x[2], vdq=x[3];
+        const f1=(vd_cmd - Rs*id + omega_e*Lq*iq - vdd)/Ld; const f2=(vq_cmd - Rs*iq - omega_e*(Ld*id + psi_f) - vdq)/Lq;
+        const a11=-Rs/Ld, a12=omega_e*Lq/Ld, a13=-1/Ld, a14=0, a21=-omega_e*Ld/Lq, a22=-Rs/Lq, a23=0, a24=-1/Lq;
+        const F=[1+Ts*a11,Ts*a12,Ts*a13,Ts*a14, Ts*a21,1+Ts*a22,Ts*a23,Ts*a24, 0,0,1,0, 0,0,0,1];
+        const xpred=new Float64Array([id+Ts*f1, iq+Ts*f2, vdd, vdq]);
+        const Ppred = mat4add(mat4mul(mat4mul(F,P), transpose4(F)), Qd());
+        const HP=[Ppred[0],Ppred[1],Ppred[2],Ppred[3], Ppred[4],Ppred[5],Ppred[6],Ppred[7]];
+        const S11=HP[0]+params.rMeas, S22=HP[5]+params.rMeas, S12=HP[2], S21=HP[1];
+        const det=S11*S22 - S12*S21; const invS=[S22/det, -S12/det, -S21/det, S11/det];
+        const PHt=[Ppred[0],Ppred[4], Ppred[1],Ppred[5], Ppred[2],Ppred[6], Ppred[3],Ppred[7]];
+        const K=[ PHt[0]*invS[0]+PHt[1]*invS[2], PHt[0]*invS[1]+PHt[1]*invS[3], PHt[2]*invS[0]+PHt[3]*invS[2], PHt[2]*invS[1]+PHt[3]*invS[3], PHt[4]*invS[0]+PHt[5]*invS[2], PHt[4]*invS[1]+PHt[5]*invS[3], PHt[6]*invS[0]+PHt[7]*invS[2], PHt[6]*invS[1]+PHt[7]*invS[3] ];
+        const y1=s.id - xpred[0]; const y2=s.iq - xpred[1];
+        x[0]=xpred[0]+K[0]*y1+K[1]*y2; x[1]=xpred[1]+K[2]*y1+K[3]*y2; x[2]=xpred[2]+K[4]*y1+K[5]*y2; x[3]=xpred[3]+K[6]*y1+K[7]*y2;
+        const KH=[K[0],K[1],0,0, K[2],K[3],0,0, K[4],K[5],0,0, K[6],K[7],0,0];
+        const I4=identity4(); const IminusKH=mat4sub(I4,KH); s.P = mat4mul(IminusKH,Ppred);
+        const T = 1.5*params.p*(params.psi_f*s.iq + (params.Ld-params.Lq)*s.id*s.iq); arr.push(T);
+      }
+      // metric
+      let m=0; for(const x of arr) m+=x; m/=arr.length||1; let s2=0; for(const x of arr) s2+=(x-m)*(x-m); s2/=arr.length||1; const rms=Math.sqrt(s2);
+      // restore
+      Object.assign(params, backup);
+      return (Math.abs(m)>1e-6)? (rms/Math.abs(m)) : rms;
+    }
+
+    function textSprite(text, color='#cbd5e1'){
+      const cvs=document.createElement('canvas'); cvs.width=1024; cvs.height=256; const ctx=cvs.getContext('2d');
+      ctx.clearRect(0,0,cvs.width,cvs.height);
+      ctx.fillStyle='rgba(0,0,0,0)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+      ctx.fillStyle=color; ctx.font='bold 90px Inter, ui-sans-serif, system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(text, cvs.width/2, cvs.height/2);
+      const tex=new THREE.CanvasTexture(cvs); tex.anisotropy=8; tex.encoding=THREE.sRGBEncoding;
+      const mat=new THREE.SpriteMaterial({map:tex, transparent:true}); const sp=new THREE.Sprite(mat); sp.scale.set(14,3.5,1); return sp;
+    }
+
+    // ---------- WIRING UI ----------
+    const $ = (id)=>document.getElementById(id);
+    const BIND = [
+      ['omega','omegaVal',v=>params.omega_e=parseFloat(v), v=>v],
+      ['vdc','vdcVal',v=>params.Vdc=parseFloat(v), v=>v],
+      ['tdead','tdeadVal',v=>params.tdead_ns=parseFloat(v), v=>v],
+      ['ts','tsVal',v=>params.Ts=parseFloat(v)*1e-6, v=>v],
+      ['rs','rsVal',v=>params.Rs=parseFloat(v), v=>Number(v).toFixed(2)],
+      ['ld','ldVal',v=>{params.Ld=params.Lq=parseFloat(v)*1e-3}, v=>v],
+      ['psif','psifVal',v=>params.psi_f=parseFloat(v), v=>Number(v).toFixed(2)],
+      ['idref','idrefVal',v=>params.id_ref=parseFloat(v), v=>v],
+      ['iqref','iqrefVal',v=>params.iq_ref=parseFloat(v), v=>v],
+      ['qscale','qscaleVal',v=>params.qScale=parseFloat(v)/100, v=> (parseFloat(v)/100).toFixed(2)],
+      ['rmeas','rmeasVal',v=>params.rMeas=parseFloat(v), v=> Number(v).toFixed(4)],
+      ['mapN','mapNVal',v=>null, v=>`${v}×${v}`],
+    ];
+    for(const [id,valId,setter,fmt] of BIND){
+      const el=$(id); const val=$(valId); const update=()=>{ setter(el.value); val.textContent=fmt(el.value) };
+      el.addEventListener('input', update); update();
+    }
+    $('pp').addEventListener('change', e=>params.p=parseInt(e.target.value,10));
+    $('device').addEventListener('change', e=>params.device=e.target.value);
+    $('compMode').addEventListener('change', e=>params.compMode=e.target.value);
+    $('backbone').addEventListener('change', e=>params.backbone=e.target.value);
+
+    // presets
+    $('presetCreep').onclick = ()=>{ $('omega').value=30; $('tdead').value=1200; $('iqref').value=20; $('compMode').value='ekf';
+      ['omega','tdead','iqref'].forEach(id=>$(id).dispatchEvent(new Event('input'))); $('compMode').dispatchEvent(new Event('change')); };
+    $('presetCruise').onclick = ()=>{ $('omega').value=450; $('tdead').value=600; $('iqref').value=80; $('compMode').value='off';
+      ['omega','tdead','iqref'].forEach(id=>$(id).dispatchEvent(new Event('input'))); $('compMode').dispatchEvent(new Event('change')); };
+    $('presetFW').onclick = ()=>{ $('omega').value=1000; $('tdead').value=800; $('iqref').value=120; $('vdc').value=300; $('idref').value=-20; $('compMode').value='ekf';
+      ['omega','tdead','iqref','vdc','idref'].forEach(id=>$(id).dispatchEvent(new Event('input'))); $('compMode').dispatchEvent(new Event('change')); };
+
+    let running = true, frameCount=0;
+    $('toggle').onclick = ()=>{ running=!running; $('toggle').textContent = running? '⏸︎ 일시정지':'▶ 재생'; };
+    $('reset').onclick = ()=>{ state.theta=0; state.id=0; state.iq=0; state.x.set([0,0,0,0]); meters.torque.length=0; meters.iq.length=0; meters.ia.length=0; };
+    $('genMap').onclick = ()=>{ generateMap(); };
+    $('mode').addEventListener('change', e=>{
+      if(e.target.value==='map') generateMap(); else clearMap();
+    });
+
+    // ---------- TESTS ----------
+    function appendTest(outEl, name, pass, details=''){
+      const div=document.createElement('div');
+      div.innerHTML = `<span class="${pass?'test-pass':'test-fail'}">${pass?'✔':'✖'}</span> ${name}${details?` — <span class="mono">${details}</span>`:''}`;
+      outEl.appendChild(div);
+    }
+    function runTests(){
+      const out = document.getElementById('testOut'); out.innerHTML='';
+      // 1) THREE loaded
+      appendTest(out, 'THREE 로딩', typeof THREE.WebGLRenderer==='function');
+      // 2) OrbitControls available
+      appendTest(out, 'OrbitControls 로딩', typeof OrbitControls==='function');
+      // 3) Disturbance sign matches current sign
+      const dvp = computeDisturbanceABC(1,0,0)[0];
+      const dvn = computeDisturbanceABC(-1,0,0)[0];
+      appendTest(out, '데드타임/다이오드 전압 부호', (dvp>0 && dvn<0), `+I→${dvp.toFixed(3)}V, -I→${dvn.toFixed(3)}V`);
+      // 4) mapSample returns finite numbers (on/off)
+      const mOff = mapSample(100, 1e-6, false);
+      const mOn  = mapSample(100, 1e-6, true);
+      appendTest(out, 'mapSample 유효 값(OFF)', Number.isFinite(mOff));
+      appendTest(out, 'mapSample 유효 값(ON)',  Number.isFinite(mOn));
+      // 5) One safe render
+      let ok=true; try{ renderer.render(scene,camera); }catch(e){ ok=false; }
+      appendTest(out, '렌더 1프레임', ok);
+      // 6) THD test: pure sine → THD < 1%
+      const fs=5000, f1=50, N=512; const sig=new Array(N).fill(0).map((_,n)=>Math.sin(2*Math.PI*f1*n/fs));
+      const {thd:thdTest} = computeTHDandSpectrum(sig, fs, f1, 10);
+      appendTest(out, 'THD(순정 사인) < 1%', thdTest < 1.0, `THD=${thdTest.toFixed(2)}%`);
+    }
+    document.getElementById('runTests').addEventListener('click', runTests);
+
+    // ---------- MAIN LOOP ----------
+    function loop(){
+      requestAnimationFrame(loop); frameCount++;
+      if(running && $('mode').value==='realtime'){
+        // run several plant steps per frame for stability
+        const steps = 4; for(let i=0;i<steps;i++) stepPlant();
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    loop();
+
+    // ---------- RESIZE ----------
+    addEventListener('resize', ()=>{
+      camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
   </script>
 </body>
 </html>
