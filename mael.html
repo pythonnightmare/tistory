@@ -3,19 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>여우마을 3D — 가벼운 RPG & 데코 (안전 빌드)</title>
-  <!--
-    ✅ 문제 해결 요약
-      - THREE 전역 보장: UMD 빌드(three.min.js)와 OrbitControls를 <head>에서 먼저 로드
-      - OrbitControls가 막혀도 카메라 작동: MinimalOrbitControls 내장
-      - “클릭 불가/빈 화면”: 과거에 코드가 중간에서 끊겨 파싱 실패 → 전체 파일 끝까지 마감
-      - 랜덤 날씨 스케줄러 + 수동 토글 버튼
-      - Self-test(자가 점검)로 핵심 기능 정상 동작 확인
-  -->
-  <!-- Vendor 먼저 로드: THREE 전역 보장 -->
-  <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
-  <!-- OrbitControls가 차단될 수 있어도 동작하도록 내부 대체 컨트롤 제공 -->
-  <script src="https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js"></script>
+  <title>여우마을 3D — 가벼운 RPG & 데코 (CDN 폴백/오프라인 우선)</title>
   <style>
     :root{
       --bg:#0e1013; --panel:#171a1f; --panel-2:#1f2430; --text:#e9efff; --muted:#9fb0d3; --accent:#ffa63d; --accent-2:#ffd39b; --good:#49d27d; --warn:#ffd93d; --bad:#ff5c6a;
@@ -25,143 +13,199 @@
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif}
     #app{position:relative;height:100vh;overflow:hidden}
     canvas{display:block;outline:none}
-
     .hud{position:absolute;inset:0;pointer-events:none}
     .topbar{position:absolute;left:12px;top:12px;display:flex;gap:8px;align-items:center;pointer-events:auto}
     .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid #202532;border-radius:14px;box-shadow:var(--shadow);padding:10px 12px}
     .stat{display:flex;align-items:center;gap:6px;font-weight:700}
     .pill{padding:4px 8px;border-radius:999px;background:#111826;border:1px solid #273244;color:var(--muted);font-size:12px}
-
     .bar{width:160px;height:10px;background:#0b0f14;border-radius:99px;border:1px solid #2a3242;overflow:hidden}
-    .bar > span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
-
+    .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));}
     .right{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:10px;min-width:260px;pointer-events:auto}
     .title{font-weight:800;letter-spacing:.2px;margin-bottom:6px}
     .small{font-size:12px;color:var(--muted)}
     .quest-list{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto}
     .quest{padding:8px;border-radius:10px;border:1px dashed #334055;background:#131821}
     .quest.done{opacity:.65;border-style:solid}
-
     .bottom{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;pointer-events:none}
     .dock{pointer-events:auto;display:flex;gap:10px;padding:10px;margin-bottom:12px;background:linear-gradient(180deg,#121821,#0e131b);border:1px solid #253045;border-radius:16px;box-shadow:var(--shadow)}
     .dock .btn{cursor:pointer;user-select:none;padding:10px 12px;border-radius:12px;border:1px solid #2b374b;background:#121720;color:#d6e3ff;font-weight:700}
-    .dock .btn[aria-pressed="true"]{outline:2px solid var(--accent);}
+    .dock .btn[aria-pressed="true"]{outline:2px solid var(--accent)}
     .dock .btn:hover{filter:brightness(1.05)}
-
     .panel{position:absolute;left:12px;bottom:12px;display:flex;gap:10px;pointer-events:auto}
     .pane{min-width:260px}
     .list{display:grid;grid-template-columns:1fr auto;gap:6px}
     .row{display:contents}
-    .row > div{padding:6px 8px;border-radius:8px;background:#10151c;border:1px solid #273046}
+    .row>div{padding:6px 8px;border-radius:8px;background:#10151c;border:1px solid #273046}
     .row .cta{cursor:pointer;background:#131b25;border:1px solid #334054}
     .row .cta:hover{filter:brightness(1.08)}
-
     .toast{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);background:#10151c;border:1px solid #2c384d;color:#d6e3ff;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);display:none}
     .toast.show{display:block;animation:pop .2s ease-out}
     @keyframes pop{from{transform:translateX(-50%) scale(.96);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
-
     .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid #2b384f;background:#10151c;color:#bcd1ff;font-size:12px}
     .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid #2b384f;background:#0a0f15;color:#cfe0ff}
-
     .corner{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;align-items:center}
     .corner button{cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid #2c394f;background:#10161e;color:#cfe3ff}
     .corner button:hover{filter:brightness(1.08)}
-
     .dialog{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:min(680px,90vw);pointer-events:auto;display:none}
     .dialog .bubble{background:linear-gradient(180deg,#141a24,#0f141c);border:1px solid #2a3650;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
     .dialog .speaker{font-weight:800;margin-bottom:6px;color:#ffc37a}
-
     .shop{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:300px;display:none;pointer-events:auto}
     .shop .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
     .shop .grid{display:grid;grid-template-columns:1fr auto;gap:6px}
-
     .minimap{position:absolute;right:12px;bottom:92px;width:168px;height:168px;border-radius:12px;border:1px solid #253045;background:#0a0f15;box-shadow:var(--shadow);pointer-events:none}
+    .hardfail{position:fixed;inset:0;background:#0c1117;display:none;place-items:center}
+    .hardfail .panel{pointer-events:auto;max-width:760px;border-radius:16px;border:1px solid #2a3549;background:#0f1622;padding:16px;box-shadow:var(--shadow)}
+    .hardfail h2{margin:0 0 8px 0;color:#ffd39b}
+    .hardfail code{background:#0a0f15;border:1px solid #243047;border-radius:8px;padding:4px 6px;display:inline-block}
   </style>
+
+  <!-- 런타임 로더: 로컬 → CDN(jsDelivr → UNPKG) 순으로 THREE/OrbitControls 로드 -->
+  <script>
+    (function(){
+      const CANDIDATES_THREE = [
+        './three.min.js',
+        './libs/three.min.js',
+        'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.min.js',
+        'https://unpkg.com/three@0.164.1/build/three.min.js'
+      ];
+      const CANDIDATES_CTRL = [
+        './OrbitControls.js',
+        './libs/OrbitControls.js',
+        'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/js/controls/OrbitControls.js',
+        'https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js'
+      ];
+      function loadScript(src){
+        return new Promise((resolve,reject)=>{
+          const s=document.createElement('script');
+          s.src=src; s.defer=true; s.crossOrigin='anonymous'; s.referrerPolicy='no-referrer';
+          s.onload=()=>resolve(src);
+          s.onerror=()=>reject(new Error('fail '+src));
+          document.head.appendChild(s);
+        });
+      }
+      async function ensureThree(){
+        if(window.THREE && THREE.WebGLRenderer) return 'present';
+        let lastErr=null;
+        for(const u of CANDIDATES_THREE){
+          try{ await loadScript(u); if(window.THREE && THREE.WebGLRenderer){ lastErr=null; break; } }catch(e){ lastErr=e; }
+        }
+        if(!(window.THREE && THREE.WebGLRenderer)) throw lastErr || new Error('THREE not loaded');
+        // Controls는 실패해도 내부 대체 컨트롤 사용
+        for(const u of CANDIDATES_CTRL){
+          try{ await loadScript(u); break; }catch(e){}
+        }
+      }
+      function showHardFail(err){
+        const wrap=document.createElement('div');
+        wrap.className='hardfail';
+        wrap.innerHTML = `
+          <div class="panel">
+            <h2>three.js 로드 실패</h2>
+            <div class="small" style="margin-bottom:10px">네트워크/보안 정책으로 외부 스크립트를 불러오지 못했습니다.</div>
+            <ol class="small" style="line-height:1.6">
+              <li><b>오프라인 우선</b>: 이 파일과 같은 폴더에 <code>three.min.js</code>, <code>OrbitControls.js</code>를 넣고 다시 열기.</li>
+              <li><b>Tistory</b>: 포스트 본문이 스크립트를 제거할 수 있어요. 스킨 편집(HTML/CSS)이나 위젯 HTML에 넣거나, GitHub Pages를 <code>&lt;iframe&gt;</code>으로 임베드하세요.</li>
+              <li><b>CDN 허용</b>: 사내망/브라우저 확장 프로그램이 CDN을 차단하는지 확인.</li>
+            </ol>
+            <div class="small" style="margin-top:6px">에러: ${err && err.message ? err.message : 'unknown'}</div>
+          </div>`;
+        document.body.appendChild(wrap);
+        wrap.style.display='grid';
+      }
+      window.__bootFoxVillage = async function(init){
+        try{ await ensureThree(); init(); }
+        catch(e){ console.error(e); showHardFail(e); }
+      };
+    })();
+  </script>
 </head>
 <body>
-<div id="app"></div>
-<div class="hud">
-  <div class="topbar card">
-    <div class="stat"><span class="pill">솔방울</span><span id="pine">0</span></div>
-    <div class="stat"><span class="pill">스태미나</span>
-      <div class="bar"><span id="staminaBar" style="width:100%"></span></div>
-      <span class="small" id="staminaText">100/100</span>
+  <div id="app"></div>
+  <div class="hud">
+    <div class="topbar card">
+      <div class="stat"><span class="pill">솔방울</span><span id="pine">0</span></div>
+      <div class="stat"><span class="pill">스태미나</span>
+        <div class="bar"><span id="staminaBar" style="width:100%"></span></div>
+        <span class="small" id="staminaText">100/100</span>
+      </div>
+      <div class="stat"><span class="pill">시간</span><span id="clock">18:00</span></div>
+      <div class="stat"><span class="pill">평판</span><span id="reputation">D</span></div>
+      <div class="stat"><span class="pill">날씨</span><span id="weatherText">맑음</span></div>
     </div>
-    <div class="stat"><span class="pill">시간</span><span id="clock">18:00</span></div>
-    <div class="stat"><span class="pill">평판</span><span id="reputation">D</span></div>
-    <div class="stat"><span class="pill">날씨</span><span id="weatherText">맑음</span></div>
+
+    <div class="right">
+      <div class="card">
+        <div class="title">퀘스트</div>
+        <div class="quest-list" id="questList"></div>
+        <div class="small">가까이 다가가서 <span class="kbd">E</span> 채집/대화, <span class="kbd">B</span> 건설, <span class="kbd">M</span> 상점</div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="dock" role="toolbar" aria-label="모드 선택">
+        <button class="btn" id="modeExplore" aria-pressed="true">탐험</button>
+        <button class="btn" id="modeBuild">건설</button>
+        <button class="btn" id="modeCraft">제작</button>
+        <button class="btn" id="modeBag">가방</button>
+        <button class="btn" id="modeShop">상점</button>
+        <button class="btn" id="modePhoto">포토</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="card pane" id="panelCraft" hidden>
+        <div class="title">제작</div>
+        <div class="list" id="craftList"></div>
+        <div class="small" style="margin-top:6px">제작은 스태미나를 소모합니다. 일부 레시피는 해금이 필요합니다.</div>
+      </div>
+      <div class="card pane" id="panelBag" hidden>
+        <div class="title">가방</div>
+        <div class="list" id="bagList"></div>
+        <div class="small" style="margin-top:6px">소지품. 건설 모드에서 배치 가능(가구/장식).</div>
+      </div>
+      <div class="card pane" id="panelBuild" hidden>
+        <div class="title">건설</div>
+        <div class="small" style="margin-bottom:6px">땅을 클릭해 배치. <span class="kbd">R</span> 회전, <span class="kbd">Esc</span> 취소.</div>
+        <div class="list" id="buildList"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="corner">
+      <span class="badge">저장: 자동</span>
+      <button id="btnWeather">날씨</button>
+      <button id="btnReset">새 시작</button>
+      <button id="btnHelp">도움말</button>
+    </div>
+
+    <div class="dialog" id="dialog">
+      <div class="bubble">
+        <div class="speaker" id="dialogSpeaker">???</div>
+        <div class="small" id="dialogText">...</div>
+      </div>
+    </div>
+
+    <div class="shop card" id="shopPanel">
+      <div class="head">
+        <div class="title">너구리 상점</div>
+        <button class="btn" id="shopClose" style="padding:6px 10px">닫기</button>
+      </div>
+      <div class="grid" id="shopList"></div>
+      <div class="small" style="margin-top:6px">솔방울로 재료/설계도를 구매하세요.</div>
+    </div>
+
+    <canvas id="minimap" class="minimap" width="168" height="168"></canvas>
   </div>
 
-  <div class="right">
-    <div class="card">
-      <div class="title">퀘스트</div>
-      <div class="quest-list" id="questList"></div>
-      <div class="small">가까이 다가가서 <span class="kbd">E</span> 채집/대화, <span class="kbd">B</span> 건설, <span class="kbd">M</span> 상점</div>
-    </div>
-  </div>
+  <script>
+    // 메인 게임 초기화: 로더가 THREE 준비되면 호출
+    window.addEventListener('DOMContentLoaded', ()=>{
+      window.__bootFoxVillage(initGame);
+    });
 
-  <div class="bottom">
-    <div class="dock" role="toolbar" aria-label="모드 선택">
-      <button class="btn" id="modeExplore" aria-pressed="true">탐험</button>
-      <button class="btn" id="modeBuild">건설</button>
-      <button class="btn" id="modeCraft">제작</button>
-      <button class="btn" id="modeBag">가방</button>
-      <button class="btn" id="modeShop">상점</button>
-      <button class="btn" id="modePhoto">포토</button>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="card pane" id="panelCraft" hidden>
-      <div class="title">제작</div>
-      <div class="list" id="craftList"></div>
-      <div class="small" style="margin-top:6px">제작은 스태미나를 소모합니다. 일부 레시피는 해금이 필요합니다.</div>
-    </div>
-    <div class="card pane" id="panelBag" hidden>
-      <div class="title">가방</div>
-      <div class="list" id="bagList"></div>
-      <div class="small" style="margin-top:6px">소지품. 건설 모드에서 배치 가능(가구/장식).</div>
-    </div>
-    <div class="card pane" id="panelBuild" hidden>
-      <div class="title">건설</div>
-      <div class="small" style="margin-bottom:6px">땅을 클릭해 배치. <span class="kbd">R</span> 회전, <span class="kbd">Esc</span> 취소.</div>
-      <div class="list" id="buildList"></div>
-    </div>
-  </div>
-
-  <div class="toast" id="toast"></div>
-
-  <div class="corner">
-    <span class="badge">저장: 자동</span>
-    <button id="btnWeather">날씨</button>
-    <button id="btnReset">새 시작</button>
-    <button id="btnHelp">도움말</button>
-  </div>
-
-  <div class="dialog" id="dialog">
-    <div class="bubble">
-      <div class="speaker" id="dialogSpeaker">???</div>
-      <div class="small" id="dialogText">...</div>
-    </div>
-  </div>
-
-  <div class="shop card" id="shopPanel">
-    <div class="head">
-      <div class="title">너구리 상점</div>
-      <button class="btn" id="shopClose" style="padding:6px 10px">닫기</button>
-    </div>
-    <div class="grid" id="shopList"></div>
-    <div class="small" style="margin-top:6px">솔방울로 재료/설계도를 구매하세요.</div>
-  </div>
-
-  <canvas id="minimap" class="minimap" width="168" height="168"></canvas>
-</div>
-
-<script>
-window.addEventListener('DOMContentLoaded', ()=>{
+    function initGame(){
 'use strict';
-
-try{
 /********************** Utils & State ************************/
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -170,14 +214,7 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const snap=(v,g)=>Math.round(v/g)*g;
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
-
-const STORAGE_KEY='fox_village_save_safe_v3';
-
-if(!(window.THREE&&THREE.WebGLRenderer)){
-  alert('Three.js 로드 실패 (THREE is not defined). 네트워크/CSP를 확인하세요.');
-  console.error('THREE not loaded');
-  return;
-}
+const STORAGE_KEY='fox_village_save_safe_v4';
 
 const State={
   pine:0,
@@ -190,7 +227,6 @@ const State={
   mode:'explore', buildSelection:null,
   weather:'clear', flags:{talkedElder:false,metMerchant:false}
 };
-
 const repLetter=s=>s>=400?'S':s>=250?'A':s>=140?'B':s>=60?'C':'D';
 
 /********************** Three Setup ***************************/
@@ -207,36 +243,21 @@ scene.background=new THREE.Color(0x0b1117);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,1000);
 camera.position.set(12,10,12);
 
-/** Fallback OrbitControls (if CDN blocked) **/
+/** Fallback OrbitControls (if external controls fail) **/
 function MinimalOrbitControls(cam,dom){
   this.camera=cam; this.target=new THREE.Vector3(); this.enableDamping=true; this.dampingFactor=0.12;
   this.spherical=new THREE.Spherical(12,Math.PI/3,Math.PI/4);
   let down=false, lx=0,ly=0;
   dom.addEventListener('mousedown',e=>{down=true;lx=e.clientX;ly=e.clientY;});
   window.addEventListener('mouseup',()=>down=false);
-  window.addEventListener('mousemove',e=>{
-    if(!down) return;
-    const dx=(e.clientX-lx)/200; const dy=(e.clientY-ly)/200;
-    lx=e.clientX; ly=e.clientY;
-    this.spherical.theta-=dx;
-    this.spherical.phi=clamp(this.spherical.phi+dy,0.1,Math.PI*0.495);
-  });
-  dom.addEventListener('wheel',e=>{
-    e.preventDefault();
-    this.spherical.radius=clamp(this.spherical.radius+e.deltaY*0.003,6,28);
-  },{passive:false});
-  this.update=()=>{
-    const s=this.spherical;
-    const pos=new THREE.Vector3().setFromSpherical(s).add(this.target);
-    cam.position.lerp(pos,this.enableDamping?this.dampingFactor:1);
-    cam.lookAt(this.target);
-  };
+  window.addEventListener('mousemove',e=>{ if(!down) return; const dx=(e.clientX-lx)/200; const dy=(e.clientY-ly)/200; lx=e.clientX; ly=e.clientY; this.spherical.theta-=dx; this.spherical.phi=clamp(this.spherical.phi+dy,0.1,Math.PI*0.495); });
+  dom.addEventListener('wheel',e=>{ e.preventDefault(); this.spherical.radius=clamp(this.spherical.radius+e.deltaY*0.003,6,28); },{passive:false});
+  this.update=()=>{ const s=this.spherical; const pos=new THREE.Vector3().setFromSpherical(s).add(this.target); cam.position.lerp(pos,this.enableDamping?this.dampingFactor:1); cam.lookAt(this.target); };
 }
-
 const controls = (THREE.OrbitControls)? new THREE.OrbitControls(camera, renderer.domElement)
                                        : new MinimalOrbitControls(camera, renderer.domElement);
 if(controls.target) controls.target.set(0,0,0);
-controls.maxPolarAngle = Math.PI*0.495; // respected by fallback via clamp
+controls.maxPolarAngle = Math.PI*0.495;
 
 const hemi=new THREE.HemisphereLight(0xb0c7ff,0x334455,0.7); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffd9b0,0.9); sun.position.set(10,20,5);
@@ -264,8 +285,7 @@ const player=new THREE.Group();
   head.position.set(0,1.2,0);
   const earMat=new THREE.MeshStandardMaterial({color:0x8a3a00});
   const earGeom=new THREE.ConeGeometry(0.12,0.22,8);
-  const earL=new THREE.Mesh(earGeom,earMat);
-  earL.position.set(-0.16,1.42,-0.03); earL.rotation.x=-0.2; earL.castShadow=true;
+  const earL=new THREE.Mesh(earGeom,earMat); earL.position.set(-0.16,1.42,-0.03); earL.rotation.x=-0.2; earL.castShadow=true;
   const earR=earL.clone(); earR.position.x=0.16;
   const tail=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.6,10),new THREE.MeshStandardMaterial({color:0xffa35a}));
   tail.position.set(0,-0.05,-0.45); tail.rotation.x=Math.PI*0.9; tail.castShadow=true;
@@ -275,50 +295,25 @@ player.position.set(0,0,0); scene.add(player);
 
 /********************** World Gen *****************************/
 const interactables=[]; const placables=[]; const npcs=[]; const tmpV=new THREE.Vector3();
-
-function addTree(x,z){
-  const g=new THREE.Group(); g.position.set(x,0,z);
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.24,1.3,8),new THREE.MeshStandardMaterial({color:0x6a402e,roughness:1}));
-  trunk.position.y=0.65; trunk.castShadow=true; g.add(trunk);
+function addTree(x,z){ const g=new THREE.Group(); g.position.set(x,0,z);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.24,1.3,8),new THREE.MeshStandardMaterial({color:0x6a402e,roughness:1})); trunk.position.y=0.65; trunk.castShadow=true; g.add(trunk);
   const crown=new THREE.Mesh(new THREE.SphereGeometry(rand(0.7,0.95),10,10),new THREE.MeshStandardMaterial({color:0x2a6a4a,roughness:0.9}));
   crown.position.y=1.5; crown.castShadow=true; g.add(crown);
-  scene.add(g);
-  interactables.push({mesh:g,type:'tree',harvested:false});
-}
-function addRock(x,z){
-  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(0.25,0.5)),new THREE.MeshStandardMaterial({color:0x56606a,roughness:1}));
-  m.position.set(x,0.25,z); m.castShadow=true; scene.add(m);
-  interactables.push({mesh:m,type:'rock',harvested:false});
-}
-function addHerb(x,z){
-  const g=new THREE.Group(); g.position.set(x,0,z);
-  for(let i=0;i<3;i++){
-    const b=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.24,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));
-    b.position.set(rand(-0.08,0.08),0.12,rand(-0.08,0.08)); b.rotation.x=rand(-0.2,0.2); b.castShadow=true; g.add(b);
-  }
-  scene.add(g);
-  interactables.push({mesh:g,type:'herb',harvested:false});
-}
-function addBerry(x,z){
-  const b=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({color:0xaa2244,roughness:0.7}));
-  b.position.set(x,0.12,z); b.castShadow=true; scene.add(b);
-  interactables.push({mesh:b,type:'berry',harvested:false});
-}
-function addOre(x,z){
-  const o=new THREE.Mesh(new THREE.TetrahedronGeometry(rand(0.2,0.35)),new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.3}));
-  o.position.set(x,0.2,z); o.castShadow=true; scene.add(o);
-  interactables.push({mesh:o,type:'ore',harvested:false});
-}
-(function populate(){
-  for(let i=0;i<60;i++){
-    const x=rand(-45,45), z=rand(-45,45);
-    if(Math.hypot(x,z)<7){ i--; continue; }
-    (Math.random()<0.55)?addTree(x,z):addRock(x,z);
-    if(Math.random()<0.25) addHerb(x+rand(-1.2,1.2),z+rand(-1.2,1.2));
-    if(Math.random()<0.12) addBerry(x+rand(-1.5,1.5),z+rand(-1.5,1.5));
-    if(Math.random()<0.10) addOre(x+rand(-2,2),z+rand(-2,2));
-  }
-})();
+  scene.add(g); interactables.push({mesh:g,type:'tree',harvested:false}); }
+function addRock(x,z){ const m=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(0.25,0.5)),new THREE.MeshStandardMaterial({color:0x56606a,roughness:1}));
+  m.position.set(x,0.25,z); m.castShadow=true; scene.add(m); interactables.push({mesh:m,type:'rock',harvested:false}); }
+function addHerb(x,z){ const g=new THREE.Group(); g.position.set(x,0,z);
+  for(let i=0;i<3;i++){ const b=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.24,6),new THREE.MeshStandardMaterial({color:0x7bd67a,roughness:1}));
+    b.position.set(rand(-0.08,0.08),0.12,rand(-0.08,0.08)); b.rotation.x=rand(-0.2,0.2); b.castShadow=true; g.add(b);} scene.add(g); interactables.push({mesh:g,type:'herb',harvested:false}); }
+function addBerry(x,z){ const b=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),new THREE.MeshStandardMaterial({color:0xaa2244,roughness:0.7}));
+  b.position.set(x,0.12,z); b.castShadow=true; scene.add(b); interactables.push({mesh:b,type:'berry',harvested:false}); }
+function addOre(x,z){ const o=new THREE.Mesh(new THREE.TetrahedronGeometry(rand(0.2,0.35)),new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.3}));
+  o.position.set(x,0.2,z); o.castShadow=true; scene.add(o); interactables.push({mesh:o,type:'ore',harvested:false}); }
+(function populate(){ for(let i=0;i<60;i++){ const x=rand(-45,45), z=rand(-45,45);
+  if(Math.hypot(x,z)<7){ i--; continue; } (Math.random()<0.55)?addTree(x,z):addRock(x,z);
+  if(Math.random()<0.25) addHerb(x+rand(-1.2,1.2),z+rand(-1.2,1.2));
+  if(Math.random()<0.12) addBerry(x+rand(-1.5,1.5),z+rand(-1.5,1.5));
+  if(Math.random()<0.10) addOre(x+rand(-2,2),z+rand(-2,2)); } })();
 
 /********************** Buildables ***************************/
 const BuildPrefabs={
@@ -374,7 +369,6 @@ const BuildPrefabs={
     const light=new THREE.PointLight(0xffd59a,2.2,5,2); light.position.copy(bulb.position); g.add(light);
     return g; }
 };
-
 const BuildDefs={
   bench:{name:'여우벤치',score:12,cost:{plank:4,cloth:1}},
   lantern:{name:'등롱',score:10,cost:{plank:2,herb:1}},
@@ -386,7 +380,6 @@ const BuildDefs={
   bridge:{name:'다리',score:20,cost:{plank:8,rope:2}},
   treelamp:{name:'나무등롱',score:12,cost:{wood:4,herb:1}}
 };
-
 const Recipes={
   plank:{name:'판재',cost:{wood:2},stamina:4,make:()=>State.bag.plank++},
   cloth:{name:'천',cost:{herb:3},stamina:6,make:()=>State.bag.cloth++},
@@ -405,131 +398,32 @@ const Recipes={
 };
 
 /********************** NPCs & Dialog ************************/
-class NPC{
-  constructor(name,color,lines){
-    this.name=name; this.lines=lines; this.idx=0;
-    const g=new THREE.Group();
-    const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.32,0.5,6,12),new THREE.MeshStandardMaterial({color,roughness:0.8}));
-    body.position.y=0.6; body.castShadow=true; g.add(body);
-    const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,12,12),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9}));
-    head.position.y=1.2; head.castShadow=true; g.add(head);
-    this.mesh=g; this.talkRadius=1.8; this.wanderTimer=rand(3,8); this.dir=new THREE.Vector3();
-  }
-}
-function addNPC(name,color,lines,x,z){
-  const n=new NPC(name,color,lines); n.mesh.position.set(x,0,z); scene.add(n.mesh); npcs.push(n); return n;
-}
-const elder=addNPC('마을장 할배여우',0xffa050,[
-  '여우마을에 온 걸 환영한다네! 채집은 E, 제작은 C, 건설은 B라네.',
-  '광장에 벤치 하나만 있어도 분위기가 달라진다네.',
-  '밤에는 등롱이 빛을 내지. 장식 점수도 오르고!'
-],-2.8,-1.5);
-const merchant=addNPC('너구리 상인',0x9c6b3a,[
-  '솔방울로 재료를 팔지! M으로 상점 열어봐.',
-  '가끔 희귀 설계도도 가져오지. 눈여겨봐!'
-],2.4,1.8);
+class NPC{ constructor(name,color,lines){ this.name=name; this.lines=lines; this.idx=0;
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.32,0.5,6,12),new THREE.MeshStandardMaterial({color,roughness:0.8})); body.position.y=0.6; body.castShadow=true; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,12,12),new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9})); head.position.y=1.2; head.castShadow=true; g.add(head);
+  this.mesh=g; this.talkRadius=1.8; this.wanderTimer=rand(3,8); this.dir=new THREE.Vector3(); } }
+function addNPC(name,color,lines,x,z){ const n=new NPC(name,color,lines); n.mesh.position.set(x,0,z); scene.add(n.mesh); npcs.push(n); return n; }
+const elder=addNPC('마을장 할배여우',0xffa050,[ '여우마을에 온 걸 환영한다네! 채집은 E, 제작은 C, 건설은 B라네.', '광장에 벤치 하나만 있어도 분위기가 달라진다네.', '밤에는 등롱이 빛을 내지. 장식 점수도 오르고!' ],-2.8,-1.5);
+const merchant=addNPC('너구리 상인',0x9c6b3a,[ '솔방울로 재료를 팔지! M으로 상점 열어봐.', '가끔 희귀 설계도도 가져오지. 눈여겨봐!' ],2.4,1.8);
 
 /********************** Interactions *************************/
-function nearestInteractable(maxDist=2.0){
-  let best=null,d=1e9;
-  for(const it of interactables){
-    if(it.harvested) continue;
-    const pos=it.mesh.position||tmpV.setFromMatrixPosition(it.mesh.matrixWorld);
-    const dd=player.position.distanceTo(pos);
-    if(dd<maxDist && dd<d){ d=dd; best=it; }
-  }
-  return best;
-}
-function nearestNPC(maxDist=2.0){
-  let best=null,d=1e9;
-  for(const n of npcs){
-    const dd=player.position.distanceTo(n.mesh.position);
-    if(dd<maxDist && dd<d){ d=dd; best=n; }
-  }
-  return best;
-}
-function harvest(it){
-  if(State.stamina<6) return toast('스태미나가 부족합니다');
-  it.harvested=true; State.stamina-=6; State.pine+=2; addXP(4); QuestState._staminaSpend++;
-  const loot=(it.type==='tree')?{wood:randi(2,4)}:(it.type==='rock')?{stone:randi(1,3)}:(it.type==='ore')?{ore:randi(1,2)}:(it.type==='berry')?{berry:randi(1,2)}:{herb:randi(2,3)};
-  for(const k in loot) State.bag[k]+=loot[k];
-  toast(`${lootText(loot)} 획득! (+솔방울2)`);
-  it.mesh.traverse(n=>{ if(n.isMesh) fadeAndRemove(n); });
-  checkQuests(); save(); refreshUI();
-}
-function fadeAndRemove(mesh){
-  const m=mesh.material; if(!m) return;
-  mesh.userData.fade=1; mesh.userData._orig=m.transparent; m.transparent=true;
-}
+function nearestInteractable(maxDist=2.0){ let best=null,d=1e9; for(const it of interactables){ if(it.harvested) continue; const pos=it.mesh.position||tmpV.setFromMatrixPosition(it.mesh.matrixWorld); const dd=player.position.distanceTo(pos); if(dd<maxDist && dd<d){ d=dd; best=it; } } return best; }
+function nearestNPC(maxDist=2.0){ let best=null,d=1e9; for(const n of npcs){ const dd=player.position.distanceTo(n.mesh.position); if(dd<maxDist && dd<d){ d=dd; best=n; } } return best; }
+function harvest(it){ if(State.stamina<6) return toast('스태미나가 부족합니다'); it.harvested=true; State.stamina-=6; State.pine+=2; addXP(4); QuestState._staminaSpend++; const loot=(it.type==='tree')?{wood:randi(2,4)}:(it.type==='rock')?{stone:randi(1,3)}:(it.type==='ore')?{ore:randi(1,2)}:(it.type==='berry')?{berry:randi(1,2)}:{herb:randi(2,3)}; for(const k in loot) State.bag[k]+=loot[k]; toast(`${lootText(loot)} 획득! (+솔방울2)`); it.mesh.traverse(n=>{ if(n.isMesh) fadeAndRemove(n); }); checkQuests(); save(); refreshUI(); }
+function fadeAndRemove(mesh){ const m=mesh.material; if(!m) return; mesh.userData.fade=1; mesh.userData._orig=m.transparent; m.transparent=true; }
 
 /********************** Build *******************************/
 let buildGhost=null, buildRot=0, currentBuildKey=null;
-function enterBuild(key){
-  State.mode='build'; currentBuildKey=key||currentBuildKey; toggleDock('modeBuild');
-  $('#panelBuild').hidden=false; $('#panelCraft').hidden=true; $('#panelBag').hidden=true;
-  if(buildGhost){ scene.remove(buildGhost); buildGhost=null; }
-  if(!currentBuildKey) return;
-  const prefab=BuildPrefabs[currentBuildKey]();
-  prefab.traverse(n=>{ if(n.isMesh){ n.material=n.material.clone(); n.material.transparent=true; n.material.opacity=0.6; }});
-  prefab.userData.isGhost=true; buildGhost=prefab; scene.add(buildGhost);
-}
-function placeBuild(pos){
-  if(!currentBuildKey) return;
-  const key=currentBuildKey;
-  if((State.bag[key]|0)<=0) return toast('제작된 아이템이 없습니다. 먼저 제작하세요.');
-  State.bag[key]--;
-  const prefab=BuildPrefabs[key](); prefab.position.copy(pos); prefab.rotation.y=buildRot;
-  prefab.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }});
-  scene.add(prefab);
-  const score=BuildDefs[key].score||0; placables.push({mesh:prefab,type:key,score});
-  State.repScore+=score; addXP(6);
-  if(key!=='lantern'&&key!=='treelamp'){
-    for(const p of placables){
-      if((p.type==='lantern'||p.type==='treelamp') && p.mesh.position.distanceTo(prefab.position)<2.8){
-        State.repScore+=Math.round(score*0.05);
-      }
-    }
-  }
-  QuestState._placed[key]=(QuestState._placed[key]||0)+1;
-  State.placed.push({type:key,x:pos.x,y:pos.y,z:pos.z,rot:buildRot});
-  save(); refreshUI(); checkQuests();
-}
+function enterBuild(key){ State.mode='build'; currentBuildKey=key||currentBuildKey; toggleDock('modeBuild'); $('#panelBuild').hidden=false; $('#panelCraft').hidden=true; $('#panelBag').hidden=true; if(buildGhost){ scene.remove(buildGhost); buildGhost=null; } if(!currentBuildKey) return; const prefab=BuildPrefabs[currentBuildKey](); prefab.traverse(n=>{ if(n.isMesh){ n.material=n.material.clone(); n.material.transparent=true; n.material.opacity=0.6; }}); prefab.userData.isGhost=true; buildGhost=prefab; scene.add(buildGhost); }
+function placeBuild(pos){ if(!currentBuildKey) return; const key=currentBuildKey; if((State.bag[key]|0)<=0) return toast('제작된 아이템이 없습니다. 먼저 제작하세요.'); State.bag[key]--; const prefab=BuildPrefabs[key](); prefab.position.copy(pos); prefab.rotation.y=buildRot; prefab.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }}); scene.add(prefab); const score=BuildDefs[key].score||0; placables.push({mesh:prefab,type:key,score}); State.repScore+=score; addXP(6); if(key!=='lantern'&&key!=='treelamp'){ for(const p of placables){ if((p.type==='lantern'||p.type==='treelamp') && p.mesh.position.distanceTo(prefab.position)<2.8){ State.repScore+=Math.round(score*0.05); } } } QuestState._placed[key]=(QuestState._placed[key]||0)+1; State.placed.push({type:key,x:pos.x,y:pos.y,z:pos.z,rot:buildRot}); save(); refreshUI(); checkQuests(); }
 function cancelBuild(){ if(buildGhost){ scene.remove(buildGhost); buildGhost=null; } currentBuildKey=null; buildRot=0; }
 
 /********************** Shop *******************************/
-const shopItems=[
-  {id:'wood5',name:'나무 ×5',cost:5,give:{wood:5}},
-  {id:'stone5',name:'돌 ×5',cost:5,give:{stone:5}},
-  {id:'herb5',name:'허브 ×5',cost:6,give:{herb:5}},
-  {id:'ore3',name:'광석 ×3',cost:8,give:{ore:3}},
-  {id:'blue_fence',name:'설계도: 울타리',cost:20,unlock:'fence'},
-  {id:'blue_bridge',name:'설계도: 다리',cost:24,unlock:'bridge'},
-  {id:'blue_stall',name:'설계도: 노점상',cost:20,unlock:'stall'}
-];
-function renderShop(){
-  const root=$('#shopList'); root.innerHTML='';
-  for(const it of shopItems){
-    const row=document.createElement('div'); row.className='row';
-    const left=document.createElement('div');
-    left.innerHTML=`<b>${it.name}</b><br><span class="small">가격: ${it.cost} 솔방울</span>`;
-    const right=document.createElement('div'); right.className='cta'; right.textContent='구매';
-    right.onclick=()=>buyShop(it);
-    row.append(left,right); root.append(row);
-  }
-}
-function buyShop(it){
-  if(State.pine<it.cost) return toast('솔방울이 부족합니다');
-  State.pine-=it.cost;
-  if(it.give){ for(const [k,v] of Object.entries(it.give)) State.bag[k]=(State.bag[k]||0)+v; }
-  if(it.unlock){ State.recipesUnlocked[it.unlock]=true; toast(`${it.name} 해금!`); }
-  else { toast(`${it.name} 구매 완료`); }
-  save(); refreshUI();
-}
-function toggleShop(){
-  const el=$('#shopPanel'); if(!el) return;
-  const vis=getComputedStyle(el).display!=='none';
-  if(vis) closeShop(); else openShop();
-}
+const shopItems=[ {id:'wood5',name:'나무 ×5',cost:5,give:{wood:5}}, {id:'stone5',name:'돌 ×5',cost:5,give:{stone:5}}, {id:'herb5',name:'허브 ×5',cost:6,give:{herb:5}}, {id:'ore3',name:'광석 ×3',cost:8,give:{ore:3}}, {id:'blue_fence',name:'설계도: 울타리',cost:20,unlock:'fence'}, {id:'blue_bridge',name:'설계도: 다리',cost:24,unlock:'bridge'}, {id:'blue_stall',name:'설계도: 노점상',cost:20,unlock:'stall'} ];
+function renderShop(){ const root=$('#shopList'); root.innerHTML=''; for(const it of shopItems){ const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${it.name}</b><br><span class="small">가격: ${it.cost} 솔방울</span>`; const right=document.createElement('div'); right.className='cta'; right.textContent='구매'; right.onclick=()=>buyShop(it); row.append(left,right); root.append(row); } }
+function buyShop(it){ if(State.pine<it.cost) return toast('솔방울이 부족합니다'); State.pine-=it.cost; if(it.give){ for(const [k,v] of Object.entries(it.give)) State.bag[k]=(State.bag[k]||0)+v; } if(it.unlock){ State.recipesUnlocked[it.unlock]=true; toast(`${it.name} 해금!`); } else { toast(`${it.name} 구매 완료`); } save(); refreshUI(); }
+function toggleShop(){ const el=$('#shopPanel'); if(!el) return; const vis=getComputedStyle(el).display!=='none'; if(vis) closeShop(); else openShop(); }
 function openShop(){ const el=$('#shopPanel'); el.style.display='block'; State.mode='shop'; toggleDock('modeShop'); renderShop(); }
 function closeShop(){ const el=$('#shopPanel'); el.style.display='none'; if(State.mode==='shop'){ State.mode='explore'; toggleDock('modeExplore'); } }
 $('#shopClose').onclick=()=>closeShop();
@@ -552,82 +446,17 @@ const QuestDefs=[
   {id:'q14',title:'노점상 꾸미기',desc:'노점상 1개 배치',test:s=>(QuestState._placed.stall||0)>=1,reward:()=>{State.repScore+=12;addXP(12);}},
   {id:'q15',title:'다리 건설',desc:'다리 1개 배치',test:s=>(QuestState._placed.bridge||0)>=1,reward:()=>{State.repScore+=20;addXP(16);}}
 ];
-const QuestState={
-  done:{}, _harvestCount:0, _craftCount:0,
-  _placed:{bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0},
-  _crafted:{plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,rope:0,metal:0,brick:0},
-  _photoTaken:false, _staminaSpend:0
-};
-function checkQuests(){
-  for(const q of QuestDefs){
-    if(QuestState.done[q.id]) continue;
-    if(q.test(QuestState)){ QuestState.done[q.id]=true; q.reward(); toast(`퀘스트 완료: ${q.title}`); save(); }
-  }
-  refreshQuests(); refreshUI();
-}
+const QuestState={done:{},_harvestCount:0,_craftCount:0,_placed:{bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0},_crafted:{plank:0,cloth:0,bench:0,lantern:0,flowerbed:0,fence:0,arch:0,sign:0,stall:0,bridge:0,treelamp:0,rope:0,metal:0,brick:0},_photoTaken:false,_staminaSpend:0};
+function checkQuests(){ for(const q of QuestDefs){ if(QuestState.done[q.id]) continue; if(q.test(QuestState)){ QuestState.done[q.id]=true; q.reward(); toast(`퀘스트 완료: ${q.title}`); save(); } } refreshQuests(); refreshUI(); }
 
 /********************** UI & Lists ***************************/
-const elPine=$('#pine'), elStBar=$('#staminaBar'), elStText=$('#staminaText'),
-      elClock=$('#clock'), elRep=$('#reputation'), elQuestList=$('#questList'),
-      elWeatherText=$('#weatherText');
-
-function refreshUI(){
-  elPine.textContent=State.pine|0;
-  elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`;
-  elStText.textContent=`${State.stamina|0}/${State.maxStamina}`;
-  elClock.textContent=fmtTime(State.time);
-  elRep.textContent=repLetter(State.repScore);
-  elWeatherText.textContent=(State.weather==='rain')?'비':'맑음';
-  renderCraftList(); renderBagList(); renderBuildList();
-}
-function renderCraftList(){
-  const root=$('#craftList'); root.innerHTML='';
-  for(const key of Object.keys(Recipes)){
-    if(!State.recipesUnlocked[key]) continue;
-    const r=Recipes[key];
-    const row=document.createElement('div'); row.className='row';
-    const left=document.createElement('div');
-    left.innerHTML=`<b>${r.name}</b><br><span class="small">${costText(r.cost)} · 스태미나 ${r.stamina}</span>`;
-    const right=document.createElement('div'); right.className='cta'; right.textContent='제작';
-    right.onclick=()=>craft(key);
-    row.append(left,right); root.append(row);
-  }
-}
-function renderBagList(){
-  const root=$('#bagList'); root.innerHTML='';
-  for(const [k,v] of Object.entries(State.bag)){
-    const row=document.createElement('div'); row.className='row';
-    const left=document.createElement('div'); left.innerHTML=`<b>${label(k)}</b>`;
-    const right=document.createElement('div'); right.textContent=v|0;
-    row.append(left,right); root.append(row);
-  }
-}
-function renderBuildList(){
-  const root=$('#buildList'); root.innerHTML='';
-  for(const k of Object.keys(BuildDefs)){
-    const def=BuildDefs[k];
-    const row=document.createElement('div'); row.className='row';
-    const left=document.createElement('div');
-    left.innerHTML=`<b>${def.name}</b><br><span class="small">점수 ${def.score} · 필요: ${costText(def.cost)}</span>`;
-    const right=document.createElement('div'); right.className='cta'; right.innerHTML=`배치 (${State.bag[k]|0})`;
-    right.onclick=()=>{ if(State.bag[k]>0) enterBuild(k); else toast('해당 아이템이 없습니다. 먼저 제작해 주세요.'); };
-    row.append(left,right); root.append(row);
-  }
-}
-function refreshQuests(){
-  elQuestList.innerHTML='';
-  for(const q of QuestDefs){
-    const d=document.createElement('div'); d.className='quest card';
-    if(QuestState.done[q.id]) d.classList.add('done');
-    d.innerHTML=`<div class="title">${q.title}</div><div class="small">${q.desc}</div>`;
-    elQuestList.append(d);
-  }
-}
-function label(k){
-  const m={wood:'나무',stone:'돌',herb:'허브',fish:'물고기',berry:'열매',ore:'광석',metal:'금속괴',brick:'벽돌',rope:'밧줄',plank:'판재',cloth:'천',
-           bench:'여우벤치',lantern:'등롱',flowerbed:'화단',fence:'울타리',arch:'아치',sign:'표지판',stall:'노점상',bridge:'다리',treelamp:'나무등롱'};
-  return m[k]||k;
-}
+const elPine=$('#pine'), elStBar=$('#staminaBar'), elStText=$('#staminaText'), elClock=$('#clock'), elRep=$('#reputation'), elQuestList=$('#questList'), elWeatherText=$('#weatherText');
+function refreshUI(){ elPine.textContent=State.pine|0; elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time); elRep.textContent=repLetter(State.repScore); elWeatherText.textContent=(State.weather==='rain')?'비':'맑음'; renderCraftList(); renderBagList(); renderBuildList(); }
+function renderCraftList(){ const root=$('#craftList'); root.innerHTML=''; for(const key of Object.keys(Recipes)){ if(!State.recipesUnlocked[key]) continue; const r=Recipes[key]; const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${r.name}</b><br><span class="small">${costText(r.cost)} · 스태미나 ${r.stamina}</span>`; const right=document.createElement('div'); right.className='cta'; right.textContent='제작'; right.onclick=()=>craft(key); row.append(left,right); root.append(row); } }
+function renderBagList(){ const root=$('#bagList'); root.innerHTML=''; for(const [k,v] of Object.entries(State.bag)){ const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${label(k)}</b>`; const right=document.createElement('div'); right.textContent=v|0; row.append(left,right); root.append(row); } }
+function renderBuildList(){ const root=$('#buildList'); root.innerHTML=''; for(const k of Object.keys(BuildDefs)){ const def=BuildDefs[k]; const row=document.createElement('div'); row.className='row'; const left=document.createElement('div'); left.innerHTML=`<b>${def.name}</b><br><span class="small">점수 ${def.score} · 필요: ${costText(def.cost)}</span>`; const right=document.createElement('div'); right.className='cta'; right.innerHTML=`배치 (${State.bag[k]|0})`; right.onclick=()=>{ if(State.bag[k]>0) enterBuild(k); else toast('해당 아이템이 없습니다. 먼저 제작해 주세요.'); }; row.append(left,right); root.append(row); } }
+function refreshQuests(){ elQuestList.innerHTML=''; for(const q of QuestDefs){ const d=document.createElement('div'); d.className='quest card'; if(QuestState.done[q.id]) d.classList.add('done'); d.innerHTML=`<div class="title">${q.title}</div><div class="small">${q.desc}</div>`; elQuestList.append(d); } }
+function label(k){ const m={wood:'나무',stone:'돌',herb:'허브',fish:'물고기',berry:'열매',ore:'광석',metal:'금속괴',brick:'벽돌',rope:'밧줄',plank:'판재',cloth:'천',bench:'여우벤치',lantern:'등롱',flowerbed:'화단',fence:'울타리',arch:'아치',sign:'표지판',stall:'노점상',bridge:'다리',treelamp:'나무등롱'}; return m[k]||k; }
 function costText(cost){ return Object.entries(cost).map(([k,v])=>`${label(k)}×${v}`).join(', '); }
 function lootText(loot){ return Object.entries(loot).map(([k,v])=>`${label(k)}×${v|0}`).join(', '); }
 function fmtTime(min){ const h=Math.floor(min/60)%24,m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
@@ -635,44 +464,13 @@ function fmtTime(min){ const h=Math.floor(min/60)%24,m=min%60; return `${String(
 /********************** Craft/XP *****************************/
 function canPay(cost){ for(const [k,v] of Object.entries(cost)) if((State.bag[k]|0)<v) return false; return true; }
 function pay(cost){ for(const [k,v] of Object.entries(cost)) State.bag[k]-=v; }
-function craft(key){
-  const r=Recipes[key];
-  if(!canPay(r.cost)) return toast('재료가 부족합니다');
-  if(State.stamina<(r.stamina||0)) return toast('스태미나가 부족합니다');
-  pay(r.cost); State.stamina-=r.stamina||0; QuestState._staminaSpend++;
-  r.make(); QuestState._craftCount++; QuestState._crafted[key]=(QuestState._crafted[key]||0)+1;
-  addXP(5); State.pine+=1; toast(`${r.name} 제작 완료!`);
-  checkQuests(); save(); refreshUI();
-}
-function addXP(x){
-  State.xp+=x;
-  while(State.xp>=20){
-    State.xp-=20; State.level++;
-    toast(`레벨 업! Lv.${State.level}`);
-    State.maxStamina+=5; State.stamina=State.maxStamina;
-  }
-}
+function craft(key){ const r=Recipes[key]; if(!canPay(r.cost)) return toast('재료가 부족합니다'); if(State.stamina<(r.stamina||0)) return toast('스태미나가 부족합니다'); pay(r.cost); State.stamina-=r.stamina||0; QuestState._staminaSpend++; r.make(); QuestState._craftCount++; QuestState._crafted[key]=(QuestState._crafted[key]||0)+1; addXP(5); State.pine+=1; toast(`${r.name} 제작 완료!`); checkQuests(); save(); refreshUI(); }
+function addXP(x){ State.xp+=x; while(State.xp>=20){ State.xp-=20; State.level++; toast(`레벨 업! Lv.${State.level}`); State.maxStamina+=5; State.stamina=State.maxStamina; } }
 
 /********************** Input *******************************/
 const move={f:0,b:0,l:0,r:0}; let sprint=false;
-window.addEventListener('keydown',e=>{
-  if(e.repeat) return;
-  if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1; if(e.code==='ShiftLeft') sprint=true;
-  if(e.code==='KeyB'){ State.mode=(State.mode==='build'?'explore':'build'); toggleDock(State.mode==='build'?'modeBuild':'modeExplore'); $('#panelBuild').hidden=(State.mode!=='build'); if(State.mode!=='build') cancelBuild(); }
-  if(e.code==='KeyM'){ toggleShop(); }
-  if(e.code==='KeyE'){
-    const n=nearestNPC(1.9); if(n){ talk(n); return; }
-    const it=nearestInteractable(2.0); if(it){ harvest(it); QuestState._harvestCount++; }
-  }
-  if(e.code==='KeyC'){ togglePanel('panelCraft'); }
-  if(e.code==='KeyI'){ togglePanel('panelBag'); }
-  if(e.code==='KeyP'){ QuestState._photoTaken=true; checkQuests(); toast('찰칵! (가상의 스샷)'); }
-  if(e.code==='KeyR'){ buildRot=(buildRot+Math.PI/2)%(Math.PI*2); }
-  if(e.code==='Escape'){ cancelBuild(); State.mode='explore'; toggleDock('modeExplore'); hidePanels(); closeShop(); hideDialog(); }
-});
-window.addEventListener('keyup',e=>{
-  if(e.code==='KeyW') move.f=0; if(e.code==='KeyS') move.b=0; if(e.code==='KeyA') move.l=0; if(e.code==='KeyD') move.r=0; if(e.code==='ShiftLeft') sprint=false;
-});
+window.addEventListener('keydown',e=>{ if(e.repeat) return; if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1; if(e.code==='ShiftLeft') sprint=true; if(e.code==='KeyB'){ State.mode=(State.mode==='build'?'explore':'build'); toggleDock(State.mode==='build'?'modeBuild':'modeExplore'); $('#panelBuild').hidden=(State.mode!=='build'); if(State.mode!=='build') cancelBuild(); } if(e.code==='KeyM'){ toggleShop(); } if(e.code==='KeyE'){ const n=nearestNPC(1.9); if(n){ talk(n); return; } const it=nearestInteractable(2.0); if(it){ harvest(it); QuestState._harvestCount++; } } if(e.code==='KeyC'){ togglePanel('panelCraft'); } if(e.code==='KeyI'){ togglePanel('panelBag'); } if(e.code==='KeyP'){ QuestState._photoTaken=true; checkQuests(); toast('찰칵! (가상의 스샷)'); } if(e.code==='KeyR'){ buildRot=(buildRot+Math.PI/2)%(Math.PI*2); } if(e.code==='Escape'){ cancelBuild(); State.mode='explore'; toggleDock('modeExplore'); hidePanels(); closeShop(); hideDialog(); } });
+window.addEventListener('keyup',e=>{ if(e.code==='KeyW') move.f=0; if(e.code==='KeyS') move.b=0; if(e.code==='KeyA') move.l=0; if(e.code==='KeyD') move.r=0; if(e.code==='ShiftLeft') sprint=false; });
 function togglePanel(id){ const el=document.getElementById(id); el.hidden=!el.hidden; }
 function hidePanels(){ $('#panelCraft').hidden=true; $('#panelBag').hidden=true; $('#panelBuild').hidden=true; }
 function toggleDock(id){ for(const b of document.querySelectorAll('.dock .btn')) b.setAttribute('aria-pressed','false'); document.getElementById(id).setAttribute('aria-pressed','true'); }
@@ -690,247 +488,67 @@ $('#btnWeather').onclick  = ()=>{ Weather.set(State.weather==='rain'?'clear':'ra
 
 /********************** Dialog ******************************/
 const dialogEl=$('#dialog'), dialogSpeaker=$('#dialogSpeaker'), dialogText=$('#dialogText');
-function talk(n){
-  dialogEl.style.display='block';
-  dialogSpeaker.textContent=n.name;
-  dialogText.textContent=n.lines[n.idx% n.lines.length];
-  n.idx++;
-  if(n===elder) State.flags.talkedElder=true;
-  if(n===merchant) State.flags.metMerchant=true;
-  checkQuests(); save();
-  setTimeout(()=>{ dialogEl.style.display='none'; },2200);
-}
+function talk(n){ dialogEl.style.display='block'; dialogSpeaker.textContent=n.name; dialogText.textContent=n.lines[n.idx% n.lines.length]; n.idx++; if(n===elder) State.flags.talkedElder=true; if(n===merchant) State.flags.metMerchant=true; checkQuests(); save(); setTimeout(()=>{ dialogEl.style.display='none'; },2200); }
 function hideDialog(){ dialogEl.style.display='none'; }
 
 /********************** Save/Load ***************************/
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({State,QuestState})); }
-function load(){
-  const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return;
-  try{ const obj=JSON.parse(raw); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); }
-  catch(e){ console.warn('Load failed',e); }
-}
+function load(){ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return; try{ const obj=JSON.parse(raw); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); }catch(e){ console.warn('Load failed',e); } }
 
 /********************** Raycast & Mouse **********************/
 const raycaster=new THREE.Raycaster();
 const mouse=new THREE.Vector2();
-renderer.domElement.addEventListener('mousemove',e=>{
-  const r=renderer.domElement.getBoundingClientRect();
-  mouse.x=((e.clientX-r.left)/r.width)*2-1;
-  mouse.y=-((e.clientY-r.top)/r.height)*2+1;
-});
-renderer.domElement.addEventListener('mousedown',()=>{
-  if(State.mode==='build'&&buildGhost){
-    raycaster.setFromCamera(mouse,camera);
-    const hits=raycaster.intersectObject(ground,false);
-    if(hits.length){
-      const p=hits[0].point; p.x=snap(p.x,0.5); p.z=snap(p.z,0.5); p.y=0;
-      placeBuild(p);
-    }
-  }
-});
+renderer.domElement.addEventListener('mousemove',e=>{ const r=renderer.domElement.getBoundingClientRect(); mouse.x=((e.clientX-r.left)/r.width)*2-1; mouse.y=-((e.clientY-r.top)/r.height)*2+1; });
+renderer.domElement.addEventListener('mousedown',()=>{ if(State.mode==='build'&&buildGhost){ raycaster.setFromCamera(mouse,camera); const hits=raycaster.intersectObject(ground,false); if(hits.length){ const p=hits[0].point; p.x=snap(p.x,0.5); p.z=snap(p.z,0.5); p.y=0; placeBuild(p); } } });
 
 /********************** Minimap ******************************/
 const minimap=document.getElementById('minimap'); const mctx=minimap.getContext('2d');
-function drawMinimap(){
-  const W=minimap.width,H=minimap.height;
-  mctx.clearRect(0,0,W,H);
-  mctx.fillStyle='#0e1420'; mctx.fillRect(0,0,W,H);
-  mctx.strokeStyle='#28364a'; mctx.strokeRect(0.5,0.5,W-1,H-1);
-  const scale=1.5, ox=W/2, oy=H/2;
-  mctx.beginPath(); mctx.arc(ox,oy,90/scale,0,Math.PI*2); mctx.strokeStyle='#203040'; mctx.stroke();
-  mctx.fillStyle='#88aaff';
-  for(const p of placables){ const x=ox+p.mesh.position.x/scale; const y=oy+p.mesh.position.z/scale; mctx.fillRect(x-2,y-2,4,4); }
-  mctx.fillStyle='#5de0a1'; mctx.beginPath(); mctx.arc(ox,oy,4,0,Math.PI*2); mctx.fill();
-}
+function drawMinimap(){ const W=minimap.width,H=minimap.height; mctx.clearRect(0,0,W,H); mctx.fillStyle='#0e1420'; mctx.fillRect(0,0,W,H); mctx.strokeStyle='#28364a'; mctx.strokeRect(0.5,0.5,W-1,H-1); const scale=1.5, ox=W/2, oy=H/2; mctx.beginPath(); mctx.arc(ox,oy,90/scale,0,Math.PI*2); mctx.strokeStyle='#203040'; mctx.stroke(); mctx.fillStyle='#88aaff'; for(const p of placables){ const x=ox+p.mesh.position.x/scale; const y=oy+p.mesh.position.z/scale; mctx.fillRect(x-2,y-2,4,4); } mctx.fillStyle='#5de0a1'; mctx.beginPath(); mctx.arc(ox,oy,4,0,Math.PI*2); mctx.fill(); }
 
 /********************** Weather ******************************/
-let rainParticles=null; const rainCount=400;
-const rainGeo=new THREE.BufferGeometry();
-const rainMat=new THREE.PointsMaterial({color:0x9fb0d3,size:0.07,transparent:true,opacity:0.7});
-function makeRain(){
-  const positions=new Float32Array(rainCount*3);
-  for(let i=0;i<rainCount;i++){
-    positions[i*3+0]=rand(-30,30);
-    positions[i*3+1]=rand(2,14);
-    positions[i*3+2]=rand(-30,30);
-  }
-  rainGeo.setAttribute('position', new THREE.BufferAttribute(positions,3));
-  rainParticles=new THREE.Points(rainGeo,rainMat); rainParticles.visible=false; scene.add(rainParticles);
-}
-function updateRain(dt){
-  if(!rainParticles||!rainParticles.visible) return;
-  const pos=rainGeo.attributes.position;
-  for(let i=0;i<rainCount;i++){
-    let y=pos.getY(i)-dt*8;
-    if(y<0){ y=rand(6,14); pos.setX(i,rand(-30,30)); pos.setZ(i,rand(-30,30)); }
-    pos.setY(i,y);
-  }
-  pos.needsUpdate=true;
-}
-const Weather={
-  timerMin:0,
-  set(mode){
-    if(State.weather===mode) return;
-    State.weather=mode;
-    if(mode==='rain'){
-      if(!rainParticles) makeRain();
-      rainParticles.visible=true;
-      toast('🌦️ 비가 내리기 시작했어요!');
-      this.timerMin=randi(40,120); // 40~120분 뒤 종료
-    } else {
-      if(rainParticles) rainParticles.visible=false;
-      toast('☀️ 날이 갰어요.');
-      this.timerMin=randi(120,360); // 2~6시간 뒤 비 시작 시도
-    }
-  },
-  force(mode){ this.set(mode); this.timerMin=1; },
-  step(dt){
-    const dtMin=dt*3; // 1초=3분
-    this.timerMin-=dtMin;
-    if(this.timerMin<=0){
-      if(State.weather==='clear'){
-        if(Math.random()<0.35) this.set('rain'); else this.set('clear');
-      } else {
-        this.set('clear');
-      }
-    }
-  }
-};
+let rainParticles=null; const rainCount=400; const rainGeo=new THREE.BufferGeometry(); const rainMat=new THREE.PointsMaterial({color:0x9fb0d3,size:0.07,transparent:true,opacity:0.7});
+function makeRain(){ const positions=new Float32Array(rainCount*3); for(let i=0;i<rainCount;i++){ positions[i*3+0]=rand(-30,30); positions[i*3+1]=rand(2,14); positions[i*3+2]=rand(-30,30); } rainGeo.setAttribute('position', new THREE.BufferAttribute(positions,3)); rainParticles=new THREE.Points(rainGeo,rainMat); rainParticles.visible=false; scene.add(rainParticles); }
+function updateRain(dt){ if(!rainParticles||!rainParticles.visible) return; const pos=rainGeo.attributes.position; for(let i=0;i<rainCount;i++){ let y=pos.getY(i)-dt*8; if(y<0){ y=rand(6,14); pos.setX(i,rand(-30,30)); pos.setZ(i,rand(-30,30)); } pos.setY(i,y); } pos.needsUpdate=true; }
+const Weather={ timerMin:0, set(mode){ if(State.weather===mode) return; State.weather=mode; if(mode==='rain'){ if(!rainParticles) makeRain(); rainParticles.visible=true; toast('🌦️ 비가 내리기 시작했어요!'); this.timerMin=randi(40,120); } else { if(rainParticles) rainParticles.visible=false; toast('☀️ 날이 갰어요.'); this.timerMin=randi(120,360); } }, force(mode){ this.set(mode); this.timerMin=1; }, step(dt){ const dtMin=dt*3; this.timerMin-=dtMin; if(this.timerMin<=0){ if(State.weather==='clear'){ if(Math.random()<0.35) this.set('rain'); else this.set('clear'); } else { this.set('clear'); } } } };
 
 /********************** Game Loop ****************************/
 let last=performance.now();
 function tick(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
-
-  // Day/Night
   State.time+=dt*3; if(State.time>=1440) State.time-=1440;
-  const t=State.time/1440;
-  const day=Math.cos((t-0.75)*Math.PI*2)*0.5+0.5; // 18:00 시작 기준
-  const over=(State.weather==='rain')?0.7:1.0;
-  hemi.intensity=lerp(0.15,0.8,day)*over;
-  sun.intensity=lerp(0.1,1.0,day)*over;
-  scene.background.setHSL(0.58,0.5,lerp(0.06,0.16,day*over));
-  sun.position.set(20*Math.cos(t*Math.PI*2),18*day+2,20*Math.sin(t*Math.PI*2));
-
+  const t=State.time/1440; const day=Math.cos((t-0.75)*Math.PI*2)*0.5+0.5; const over=(State.weather==='rain')?0.7:1.0;
+  hemi.intensity=lerp(0.15,0.8,day)*over; sun.intensity=lerp(0.1,1.0,day)*over; scene.background.setHSL(0.58,0.5,lerp(0.06,0.16,day*over)); sun.position.set(20*Math.cos(t*Math.PI*2),18*day+2,20*Math.sin(t*Math.PI*2));
   if(State.stamina<State.maxStamina) State.stamina+=dt*(day>0.3?2.2:1.2);
-
-  // Move relative to camera
-  const forward=new THREE.Vector3(); camera.getWorldDirection(forward); forward.y=0; forward.normalize();
-  const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).multiplyScalar(-1);
-  const dir=new THREE.Vector3();
-  if(move.f) dir.add(forward); if(move.b) dir.sub(forward); if(move.r) dir.add(right); if(move.l) dir.sub(right);
-  if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(moveSpeed()*dt); player.position.add(dir); if(controls.target) controls.target.copy(player.position); }
+  const forward=new THREE.Vector3(); camera.getWorldDirection(forward); forward.y=0; forward.normalize(); const right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).multiplyScalar(-1);
+  const dir=new THREE.Vector3(); if(move.f) dir.add(forward); if(move.b) dir.sub(forward); if(move.r) dir.add(right); if(move.l) dir.sub(right); if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(moveSpeed()*dt); player.position.add(dir); if(controls.target) controls.target.copy(player.position); }
   if(controls.update) controls.update();
-
-  // Build ghost follow ground
-  if(State.mode==='build'&&buildGhost){
-    raycaster.setFromCamera(mouse,camera);
-    const hit=raycaster.intersectObject(ground,false)[0];
-    if(hit){
-      buildGhost.position.copy(hit.point);
-      buildGhost.position.set(snap(buildGhost.position.x,0.5),0,snap(buildGhost.position.z,0.5));
-      buildGhost.rotation.y=buildRot;
-    }
-  }
-
-  // Fade harvested objects
-  scene.traverse(o=>{
-    if(o.userData&&o.userData.fade){
-      o.userData.fade-=dt*0.7;
-      if(o.material) o.material.opacity=Math.max(0,o.userData.fade);
-      if(o.userData.fade<=0){
-        if(o.parent) o.parent.remove(o);
-        if(o.material) o.material.transparent=o.userData._orig;
-        o.userData.fade=0;
-      }
-    }
-  });
-
-  // NPC wander
-  for(const n of npcs){
-    n.wanderTimer-=dt;
-    if(n.wanderTimer<=0){
-      n.wanderTimer=rand(2,6);
-      if(!n.dir) n.dir=new THREE.Vector3();
-      n.dir.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(rand(0.2,0.8));
-    }
-    if(n.dir) n.mesh.position.addScaledVector(n.dir,dt);
-    if(n.mesh.position.length()>6) n.dir && n.dir.multiplyScalar(-1);
-  }
-
-  // Weather
-  Weather.step(dt);
-  updateRain(dt);
-
-  // UI & map
-  refreshTopBarFast();
-  drawMinimap();
-
+  if(State.mode==='build'&&buildGhost){ raycaster.setFromCamera(mouse,camera); const hit=raycaster.intersectObject(ground,false)[0]; if(hit){ buildGhost.position.copy(hit.point); buildGhost.position.set(snap(buildGhost.position.x,0.5),0,snap(buildGhost.position.z,0.5)); buildGhost.rotation.y=buildRot; } }
+  scene.traverse(o=>{ if(o.userData&&o.userData.fade){ o.userData.fade-=dt*0.7; if(o.material) o.material.opacity=Math.max(0,o.userData.fade); if(o.userData.fade<=0){ if(o.parent) o.parent.remove(o); if(o.material) o.material.transparent=o.userData._orig; o.userData.fade=0; } } });
+  for(const n of npcs){ n.wanderTimer-=dt; if(n.wanderTimer<=0){ n.wanderTimer=rand(2,6); if(!n.dir) n.dir=new THREE.Vector3(); n.dir.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(rand(0.2,0.8)); } if(n.dir) n.mesh.position.addScaledVector(n.dir,dt); if(n.mesh.position.length()>6) n.dir&&n.dir.multiplyScalar(-1); }
+  Weather.step(dt); updateRain(dt);
+  refreshTopBarFast(); drawMinimap();
   renderer.render(scene,camera);
   requestAnimationFrame(tick);
 }
-function moveSpeed(){
-  let s=3.2*(sprint?1.6:1);
-  if((move.f||move.b||move.l||move.r)&&sprint) State.stamina=Math.max(0,State.stamina-0.02);
-  return s;
-}
-function refreshTopBarFast(){
-  elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`;
-  elStText.textContent=`${State.stamina|0}/${State.maxStamina}`;
-  elClock.textContent=fmtTime(State.time|0);
-  elRep.textContent=repLetter(State.repScore);
-  elPine.textContent=State.pine|0;
-}
+function moveSpeed(){ let s=3.2*(sprint?1.6:1); if((move.f||move.b||move.l||move.r)&&sprint){ State.stamina=Math.max(0,State.stamina-0.02); } return s; }
+function refreshTopBarFast(){ elStBar.style.width=`${(State.stamina/State.maxStamina)*100}%`; elStText.textContent=`${State.stamina|0}/${State.maxStamina}`; elClock.textContent=fmtTime(State.time|0); elRep.textContent=repLetter(State.repScore); elPine.textContent=State.pine|0; }
 
 /********************** Boot ******************************/
-function restorePlaced(){
-  for(const p of State.placed){
-    if(!BuildPrefabs[p.type]) continue;
-    const o=BuildPrefabs[p.type]();
-    o.position.set(p.x,p.y,p.z); o.rotation.y=p.rot||0;
-    o.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }});
-    scene.add(o);
-    placables.push({mesh:o,type:p.type,score:(BuildDefs[p.type]?.score)||0});
-  }
-}
-load(); refreshUI(); refreshQuests(); restorePlaced();
-makeRain(); if(State.weather==='rain') rainParticles.visible=true;
-Weather.timerMin=(State.weather==='rain')?randi(40,120):randi(120,360);
-requestAnimationFrame(tick);
+function restorePlaced(){ for(const p of State.placed){ if(!BuildPrefabs[p.type]) continue; const o=BuildPrefabs[p.type](); o.position.set(p.x,p.y,p.z); o.rotation.y=p.rot||0; o.traverse(n=>{ if(n.isMesh){ n.castShadow=true; n.receiveShadow=true; }}); scene.add(o); placables.push({mesh:o,type:p.type,score:(BuildDefs[p.type]?.score)||0}); } }
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({State,QuestState})); }
+function load(){ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return; try{ const obj=JSON.parse(raw); Object.assign(State,obj.State||{}); Object.assign(QuestState,obj.QuestState||{}); }catch(e){} }
+load(); refreshUI(); refreshQuests(); restorePlaced(); makeRain(); if(State.weather==='rain') rainParticles.visible=true; Weather.timerMin=(State.weather==='rain')?randi(40,120):randi(120,360); requestAnimationFrame(tick);
 
 /********************** Toast & Resize **********************/
-const tEl=$('#toast'); let tTimer=null;
-function toast(msg){ tEl.textContent=msg; tEl.classList.add('show'); clearTimeout(tTimer); tTimer=setTimeout(()=>tEl.classList.remove('show'),1400); }
+const tEl=$('#toast'); let tTimer=null; function toast(msg){ tEl.textContent=msg; tEl.classList.add('show'); clearTimeout(tTimer); tTimer=setTimeout(()=>tEl.classList.remove('show'),1400); }
 window.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
 setTimeout(()=>toast('WASD 이동, E 상호작용/대화, B 건설, C 제작, I 가방, M 상점'),500);
 
 /********************** Self Tests ***************************/
-(function selfTest(){
-  const tests=[]; const ok=(n,c)=>tests.push({n,pass:!!c});
-  try{
-    ok('THREE 전역', typeof THREE==='object'&&!!THREE.WebGLRenderer);
-    ok('컨트롤러 존재', !!THREE.OrbitControls || typeof MinimalOrbitControls==='function');
-    ok('repLetter', repLetter(0)==='D'&&repLetter(60)==='C'&&repLetter(250)==='A'&&repLetter(500)==='S');
-    ok('fmtTime', (function(min){const h=Math.floor(min/60)%24,m=min%60;return (String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'));})(18*60)==='18:00');
-    ok('Prefab bench', (function(){const o=BuildPrefabs.bench();return o&&o.isObject3D;})());
-    ok('Recipe plank cost', Recipes.plank.cost.wood===2);
-    (function(){ const bak=State.bag.wood; State.bag.wood=2; ok('canPay wood2', canPay({wood:2})===true); pay({wood:2}); ok('pay->0', State.bag.wood===0); State.bag.wood=bak; })();
-    ok('QuestDefs len', Array.isArray(QuestDefs)&&QuestDefs.length>=10);
-    ok('BuildDefs 필수', !!BuildDefs.fence&&!!BuildDefs.stall&&!!BuildDefs.bridge);
-    Weather.force('rain'); ok('Weather rain', State.weather==='rain');
-    Weather.force('clear'); ok('Weather clear', State.weather==='clear');
-    ok('Minimap DOM', !!document.getElementById('minimap'));
-  }catch(e){ console.warn('SelfTest error',e); }
-  const pass=tests.filter(t=>t.pass).length,total=tests.length;
-  if(pass!==total){ console.warn('SelfTests',tests); toast(`테스트 실패 ${pass}/${total} — 콘솔 확인`); }
-  else { console.log('SelfTests OK',tests); toast(`Self-test OK ${pass}/${total}`); }
-})();
-}catch(err){
-  console.error(err);
-  alert('초기화 중 오류: '+err.message+'\n개발자 도구 콘솔을 확인하세요.');
-}
-}); // DOMContentLoaded
-</script>
+(function selfTest(){ const tests=[]; const ok=(n,c)=>tests.push({n,pass:!!c}); try{ ok('THREE 전역', typeof THREE==='object'&&!!THREE.WebGLRenderer); ok('컨트롤러 존재', !!THREE.OrbitControls || typeof MinimalOrbitControls==='function'); ok('repLetter', repLetter(0)==='D'&&repLetter(60)==='C'&&repLetter(250)==='A'&&repLetter(500)==='S'); ok('Prefab bench', (function(){const o=BuildPrefabs.bench();return o&&o.isObject3D;})()); ok('Recipe plank cost', Recipes.plank.cost.wood===2); (function(){ const bak=State.bag.wood; State.bag.wood=2; ok('canPay wood2', canPay({wood:2})===true); pay({wood:2}); ok('pay->0', State.bag.wood===0); State.bag.wood=bak; })(); ok('QuestDefs len', Array.isArray(QuestDefs)&&QuestDefs.length>=10); ok('BuildDefs 필수', !!BuildDefs.fence&&!!BuildDefs.stall&&!!BuildDefs.bridge); Weather.force('rain'); ok('Weather rain', State.weather==='rain'); Weather.force('clear'); ok('Weather clear', State.weather==='clear'); ok('Minimap DOM', !!document.getElementById('minimap')); }catch(e){ console.warn('SelfTest error',e); } const pass=tests.filter(t=>t.pass).length,total=tests.length; if(pass!==total){ console.warn('SelfTests',tests); toast(`테스트 실패 ${pass}/${total} — 콘솔 확인`); } else { console.log('SelfTests OK',tests); toast(`Self-test OK ${pass}/${total}`); } })();
+
+} // initGame
+  </script>
 </body>
 </html>
