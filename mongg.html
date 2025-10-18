@@ -58,9 +58,9 @@
     .charts{display:grid; grid-template-rows:1fr 1fr 1fr; gap:16px; height:100%}
     .charts .card{min-height:220px}
 
-    /* 설정 서랍: 닫힘 상태일 때 아예 display:none (클릭 차단 이슈 방지) */
-    .drawer{position:fixed; inset:0; display:none; z-index:50}
-    .drawer.open{display:block}
+    /* 설정 서랍: 닫힘 상태일 때 클릭 차단 방지 (pointer-events) */
+    .drawer{position:fixed; inset:0; display:none; z-index:50; pointer-events:none;}
+    .drawer.open{display:block; pointer-events:auto;}
     .drawer .sheet{
       position:absolute; left:0; top:0; bottom:0; width:460px; transform:translateX(0);
       background:linear-gradient(180deg,#0f1624,#0e1522);
@@ -254,12 +254,6 @@
   }
 
   ready(function(){
-    // 라이브러리 존재 확인 (없으면 메시지)
-    if(typeof Chart === 'undefined' || typeof THREE === 'undefined'){
-      alert('필수 라이브러리를 불러오지 못했습니다. 네트워크를 확인하고 새로고침 해주세요.');
-      return;
-    }
-
     // ===== Elements =====
     const els = {
       drawer: document.getElementById('drawer'), drawerOverlay: document.getElementById('drawerOverlay'), btnSettings: document.getElementById('btnSettings'),
@@ -289,6 +283,19 @@
       btnCyclePlay: document.getElementById('btnCyclePlay'), cycleTNow: document.getElementById('cycleTNow')
     };
 
+    const HAS_CHART = (typeof Chart !== 'undefined');
+    const HAS_THREE = (typeof THREE !== 'undefined');
+
+    // 라이브러리가 없어도 UI는 계속 동작 — 안내 배지만 로그
+    if(!HAS_CHART || !HAS_THREE){
+      console.warn('Some libs missing:', { HAS_CHART, HAS_THREE });
+      const tag=document.createElement('div');
+      tag.textContent = `⚠ 일부 라이브러리 로드 실패 — Chart:${HAS_CHART?'OK':'X'}, THREE:${HAS_THREE?'OK':'X'}`;
+      tag.style.cssText='margin-left:8px;font-size:12px;color:#f59e0b';
+      document.querySelector('header .toolbar')?.appendChild(tag);
+    }
+
+    // ===== 바인딩 유틸 =====
     function bindRange(range,out,map=(x)=>x){ if(!range||!out) return; const f=()=> out.textContent=map(range.value); range.addEventListener('input',f); f(); }
     function bindY(el,out){ if(!el||!out) return; const f=()=> out.textContent=fmt(el.value,0); el.addEventListener('input',f); f(); }
 
@@ -308,7 +315,7 @@
     bindRange(els.timeWin, els.timeWinVal, v=> fmt(v,1)+'s');
     bindY(els.yv,els.yvVal); bindY(els.yi,els.yiVal); bindY(els.yT,els.yTVal);
 
-    // 설정 드로어 열기/닫기 (display:none 방식)
+    // 설정 드로어 토글
     if(els.btnSettings){
       els.btnSettings.addEventListener('click', ()=> { els.drawer.classList.add('open'); els.drawer.setAttribute('aria-hidden','false'); });
     }
@@ -345,7 +352,9 @@
     }
 
     // ===== 차트 =====
-    Chart.defaults.color='#c8d3e6'; Chart.defaults.font.size=11; Chart.defaults.animation=false;
+    if(HAS_CHART){
+      Chart.defaults.color='#c8d3e6'; Chart.defaults.font.size=11; Chart.defaults.animation=false;
+    }
     function mkChart(ctx,yLabel,type='line'){
       return new Chart(ctx,{
         type, data:{datasets:[]},
@@ -365,10 +374,12 @@
         }
       });
     }
+    function mkNoopChart(){ return { data:{datasets:[]}, options:{scales:{y:{},y2:{}}}, update:()=>{} }; }
+
     const COLORS={ va:'#ef4444', vb:'#22c55e', vc:'#3b82f6', ea:'#9ca3af', ia:'#ef4444', ib:'#22c55e', ic:'#3b82f6', te:'#f97316' };
-    const chVolts=mkChart(document.getElementById('volts'),'V');
-    const chI=mkChart(document.getElementById('currents'),'A');
-    const chFFT=new Chart(document.getElementById('fft'),{
+    const chVolts = HAS_CHART ? mkChart(document.getElementById('volts'),'V') : mkNoopChart();
+    const chI     = HAS_CHART ? mkChart(document.getElementById('currents'),'A') : mkNoopChart();
+    const chFFT   = HAS_CHART ? new Chart(document.getElementById('fft'),{
       type:'bar',
       data:{labels:[],datasets:[{label:'% of 1st',data:[],borderWidth:0,backgroundColor:'rgba(96,165,250,.85)',barThickness:10}]},
       options:{
@@ -378,8 +389,10 @@
           y:{grid:{color:'rgba(255,255,255,.08)'},type:'linear',suggestedMin:0,suggestedMax:120,ticks:{maxTicksLimit:6,callback:v=>fmt(v,0)+'%'}}
         },
         plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>`${ctx.label}차: ${fmt(ctx.parsed.y,1)}%`}}}
-    });
+    }) : null;
+
     function ensureDatasets(){
+      if(!HAS_CHART) return;
       if(chVolts.data.datasets.length===0){
         chVolts.data.datasets.push(
           {key:'va',label:'v_a',data:[],borderColor:COLORS.va},
@@ -414,8 +427,13 @@
       els.yi.addEventListener(ev,applyYScales);
       els.yT.addEventListener(ev,applyYScales);
     });
-    els.fftLog.addEventListener('change', ()=>{ chFFT.options.scales.y.type = els.fftLog.checked ? 'logarithmic' : 'linear'; chFFT.update(); });
+    els.fftLog.addEventListener('change', ()=>{
+      if(!HAS_CHART || !chFFT) return;
+      chFFT.options.scales.y.type = els.fftLog.checked ? 'logarithmic' : 'linear';
+      chFFT.update();
+    });
     function applyVisibility(){
+      if(!HAS_CHART) return;
       const V={va:els.chk_va.checked, vb:els.chk_vb.checked, vc:els.chk_vc.checked, ea:els.chk_ea.checked};
       const I={ia:els.chk_ia.checked, ib:els.chk_ib.checked, ic:els.chk_ic.checked, te:els.chk_te.checked};
       chVolts.data.datasets.forEach(ds=> ds.hidden=!V[ds.key]);
@@ -429,14 +447,6 @@
     const log={ t:[], va:[], vb:[], vc:[], ea:[], ia:[], ib:[], ic:[], Te:[], vab:[] };
 
     // ===== IPMSM & 제어 =====
-    function params(){
-      return {
-        Vdc:+els.vdc.value, p:+els.pp.value, Rs:+els.rs.value,
-        Ld:+els.ld.value/1000, Lq:+els.lq.value/1000, lf:+els.lambdaF.value,
-        G:+els.gear.value, Rw:+els.wheelR.value, mveh:+els.mass.value, CdA:+els.cda.value,
-        throttle:+els.throttle.value, ctrlMode:els.ctrlMode.value, mode:els.modeSel.value, m:+els.midx.value
-      };
-    }
     function updateModeBadge(mode){
       let zone='선형 영역', txt='기본';
       if(mode==='ovm'){ zone='과변조 (플랫탑)'; txt='과변조'; }
@@ -556,6 +566,7 @@
       return envTex;
     }
     function init3D(){
+      if(!HAS_THREE) return;
       const canvas=document.getElementById('car3d'); if(!canvas) return;
       let r;
       try{
@@ -633,7 +644,7 @@
       three.renderer.setSize(w/DPR,h/DPR,false); three.camera.aspect=(w/h)||1; three.camera.updateProjectionMatrix();
     }
     function animate3D(P,dt){
-      if(!three.renderer||!three.scene) return;
+      if(!HAS_THREE || !three.renderer||!three.scene) return;
       const omega_w = state.v / P.Rw;
       three.wheels.forEach(w=>{ w.rotation.x -= omega_w*dt; });
       if(three.road){
@@ -647,13 +658,16 @@
 
     // ===== Plot & FFT =====
     function pushPlot(ch,arr){
+      if(!HAS_CHART) return;
       const maxN=state.samples, t=state.t;
       for(let i=0;i<arr.length;i++){
-        const ds=ch.data.datasets[i]; ds.data.push({x:t,y:arr[i]});
+        const ds=ch.data.datasets[i]; if(!ds) continue;
+        ds.data.push({x:t,y:arr[i]});
         while(ds.data.length>maxN) ds.data.shift();
       }
     }
     function updateFFT(cycle){
+      if(!HAS_CHART || !chFFT) return;
       const H=FFT_HARM_MAX, N=cycle.length; if(N<96) return;
       function binMag(k){ let re=0,im=0; for(let n=0;n<N;n++){ const ang=-2*Math.PI*k*n/N; const x=cycle[n]; re+=x*Math.cos(ang); im+=x*Math.sin(ang);} return Math.sqrt(re*re+im*im)*2/N; }
       const a1=binMag(1)||1e-9; const mags=[]; for(let k=1;k<=H;k++) mags.push(binMag(k)/a1*100);
@@ -679,8 +693,6 @@
     }
 
     // ===== 메인 루프 =====
-    function params(){} // shadowed above; keep linter quiet
-
     function stepOnce(){
       const P={
         Vdc:+els.vdc.value, p:+els.pp.value, Rs:+els.rs.value,
@@ -735,7 +747,9 @@
       stepOnce();
       state.timeWindow=+els.timeWin.value;
       const frameDt=state.dt*state.substeps; state.samples=Math.max(60,Math.floor(state.timeWindow/frameDt));
-      applyYScales(); applyVisibility(); chVolts.update(); chI.update(); chFFT.update(); if(running) requestAnimationFrame(loop);
+      applyYScales(); applyVisibility();
+      if(HAS_CHART){ chVolts.update(); chI.update(); if(chFFT) chFFT.update(); }
+      if(running) requestAnimationFrame(loop);
     }
 
     window.addEventListener('keydown',e=>{
@@ -745,7 +759,7 @@
       if(e.key.toLowerCase()==='s'){ els.throttle.value=0; els.throttle.dispatchEvent(new Event('input')); state.v=0; }
     });
     els.harmMax.addEventListener('input',()=>{ FFT_HARM_MAX=+els.harmMax.value; });
-    els.fftLog.addEventListener('change', ()=> chFFT.update());
+    els.fftLog.addEventListener('change', ()=> { if(HAS_CHART && chFFT) chFFT.update(); });
 
     // ===== Self-tests 결과 표시 =====
     (function runTests(){
@@ -758,7 +772,10 @@
         okpush(Math.abs(dq.v_d-id)<1e-6 && Math.abs(dq.v_q-iq)<1e-6,'Park↔InvPark'); })();
       const ov=synthesizeVoltages(0.7,1.4,400,'ovm'); const within=Math.max(Math.abs(ov.va),Math.abs(ov.vb),Math.abs(ov.vc))<=200+1e-9; okpush(within,'OVM clip ±Vdc/2');
       okpush(si(1234)==='1.23k','SI 1.23k');
-      (function(){ const N=256,cyc=[]; for(let n=0;n<N;n++) cyc.push(Math.sign(Math.sin(2*Math.PI*n/N))); updateFFT(cyc); const nz=chFFT.data.datasets[0].data.some(x=>x>0.1); okpush(nz,'FFT non-zero'); })();
+      if(HAS_CHART){
+        (function(){ const N=256,cyc=[]; for(let n=0;n<N;n++) cyc.push(Math.sign(Math.sin(2*Math.PI*n/N))); updateFFT(cyc);
+          const nz=(chFFT && chFFT.data.datasets[0].data.some(x=>x>0.1)); okpush(nz,'FFT non-zero'); })();
+      }
       const ok=T.every(t=>t.ok);
       const div=document.getElementById('selfTests'); if(div){
         div.innerHTML=(ok?'✅ Self-tests PASS':'⚠️ Self-tests FAIL')+' · '+T.map(t=>`${t.ok?'✔':'✖'} ${t.name}${t.msg?('('+t.msg+')'):''}`).join(' | ');
@@ -767,7 +784,7 @@
     })();
 
     // ===== Boot =====
-    requestAnimationFrame(()=>{ init3D(); applyYScales(); applyVisibility(); loop(); });
+    requestAnimationFrame(()=>{ if(HAS_THREE) init3D(); applyYScales(); applyVisibility(); loop(); });
     console.log('%cIPMSM Drive Lab','padding:6px 10px; background:#124a63; color:#e8eef9; border-radius:6px;',
       ['MTPA→OVM→6-Step 자동전환 / 수동 모드 지원','오실로스코프: 축 Auto/수동, 신호 토글, FFT 로그 스케일','3D: 환경맵 + 소프트 섀도우 + 스카이돔',].join('\n')
     );
