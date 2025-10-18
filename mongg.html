@@ -6,42 +6,22 @@
   <title>EV Free Drive — IPMSM + 7-DOF Vehicle (ABS/TCS, Regen Blend, Combined-Slip Tire)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    :root{
-      --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9;
-      --accent:#4cc9f0; --accent2:#a0e9ff; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px
-    }
+    :root{ --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9; --accent:#4cc9f0; --accent2:#a0e9ff; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);
-      color:var(--text);
-      font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Apple SD Gothic Neo,Noto Sans KR,Arial
-    }
-    header{
-      display:flex;align-items:center;justify-content:space-between;padding:10px 14px;position:sticky;top:0;
-      backdrop-filter:blur(6px);z-index:50;border-bottom:1px solid rgba(255,255,255,.06);
-      background:linear-gradient(180deg,rgba(8,11,17,.86),rgba(8,11,17,.45))
-    }
+    body{margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Apple SD Gothic Neo,Noto Sans KR,Arial}
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;position:sticky;top:0;backdrop-filter:blur(6px);z-index:50;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,rgba(8,11,17,.86),rgba(8,11,17,.45))}
     header .left{display:flex;align-items:center;gap:10px}
     header h1{font-size:16px;margin:0;font-weight:800}
     header .sub{color:#9fb3cc;font-size:11px}
     .btnbar{display:flex;gap:6px;flex-wrap:wrap}
-    .btn{
-      background:linear-gradient(180deg,#1e2635,#141b27);border:1px solid rgba(255,255,255,.12);
-      color:#e8f3ff;padding:8px 10px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);font-size:12px
-    }
+    .btn{background:linear-gradient(180deg,#1e2635,#141b27);border:1px solid rgba(255,255,255,.12);color:#e8f3ff;padding:8px 10px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);font-size:12px}
     .btn.accent{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#06283b;border-color:rgba(76,201,240,.6)}
     .btn.warn{background:linear-gradient(180deg,#ffd76a,#f3b740);color:#2a1d00}
     .drawer{display:none}
     .drawer.open{display:block}
-    .card{
-      background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));
-      border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 14px
-    }
-    .card h2{
-      font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:var(--accent2);
-      margin:0;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)
-    }
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 14px}
+    .card h2{font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:var(--accent2);margin:0;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
     .tabs{display:grid;grid-template-columns: repeat(5,1fr);gap:6px;padding:8px}
     .tab{cursor:pointer;text-align:center;padding:8px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1522;font-size:12px}
     .tab.active{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#052531;border-color:rgba(76,201,240,.6);font-weight:800}
@@ -55,7 +35,7 @@
 
     /* ===== Layout tuned ===== */
     .app{display:grid;grid-template-columns: 1fr 520px;gap:10px;padding:8px 14px}
-    #three-wrap{height:clamp(460px, 58vh, 720px);border-radius:18px;overflow:hidden;outline:none}
+    #three-wrap{height:clamp(440px, 56vh, 680px);border-radius:18px;overflow:hidden;outline:none}
     .telemetry{display:grid;grid-template-columns: repeat(auto-fit, minmax(120px,1fr));gap:6px;padding:6px 0}
     .tile{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
     .tile .k{font-size:10px;color:#9fd3ff;text-transform:uppercase;letter-spacing:.35px}
@@ -215,8 +195,7 @@
 
     <div class="panel" id="panel-help">
       <div class="group"><div class="group-title">도움</div>
-        <div>이 버전은 7-DOF(차체 3자유도 + 4휠 회전), 결합 슬립 타이어, ABS/TCS, 회생제동 블렌딩과 함께,</div>
-        <div><b>입력 LPF/슬루 제한</b>, <b>전류 Slew/토크 지연</b>, <b>속도연동 FOV + 스프링 카메라</b>, <b>Gamepad</b>가 적용됐습니다.</div>
+        <div>전류 PI 컨트롤러를 추가해 정지 상태에서도 토크가 바로 형성됩니다. 출발 속도(≈3.6 km/h)까지 TCS는 비활성화되어 발진 토크를 깎지 않습니다.</div>
       </div>
     </div>
   </section>
@@ -252,7 +231,6 @@
         <canvas id="chartDQ"      class="chart"></canvas>
         <canvas id="chartTorque"  class="chart"></canvas>
       </div>
-      <!-- phasor card removed (now top-right in main) -->
     </aside>
   </main>
 
@@ -272,6 +250,9 @@
         const prev=m.has(k)?m.get(k):target; const a=1-Math.exp(-dtMs/Math.max(1,tauMs));
         const out=prev+a*(target-prev); m.set(k,out); return out; }
     };})();
+
+    // current PI gains (conservative)
+    const CUR_PI = { Kp: 6.0, Ki: 1200.0 }; // [V/A], [V/(A·s)]
 
     const $=id=>document.getElementById(id);
     const els={
@@ -431,8 +412,8 @@
       tcsGain:1,
       // input smoothing
       u:{ thr:0, brk:0, steer:0, thrTar:0, brkTar:0, steerTar:0 },
-      // current reference with slew
-      ref:{ id:0, iq:0, tqf:0 },
+      // current refs & PI integrators
+      ref:{ id:0, iq:0, tqf:0 }, ii:{ d:0, q:0 },
       // camera spring rig
       cam:{pos:new THREE.Vector3(-12,6,-12), vel:new THREE.Vector3(0,0,0)},
       // logs
@@ -440,7 +421,7 @@
     };
     let last=performance.now();
 
-    // ---------- Param access ----------
+    // ---------- Params ----------
     function P(){ return {
       // drive
       mode:els.mode.value, targetKmh:+els.targetKmh.value, Kps:+els.Kps.value, Kis:+els.Kis.value, taus:+els.taus.value,
@@ -464,17 +445,12 @@
     // ---------- Transforms ----------
     function dq_to_ab(d,q,th){ const c=Math.cos(th), s=Math.sin(th); return {a:c*d - s*q, b:s*d + c*q}; }
     function ab_to_dq(a,b,th){ const c=Math.cos(th), s=Math.sin(th); return {d:c*a + s*b, q:-s*a + c*b}; }
-    function ab_to_abc(a,b){
-      const va = a, vb = -0.5*a + (Math.sqrt(3)/2)*b, vc = -0.5*a - (Math.sqrt(3)/2)*b;
-      return {va,vb,vc};
-    }
+    function ab_to_abc(a,b){ const va=a, vb=-0.5*a + (Math.sqrt(3)/2)*b, vc=-0.5*a - (Math.sqrt(3)/2)*b; return {va,vb,vc}; }
     function abc_to_ab(va,vb,vc){ const a=(2/3)*(va-0.5*(vb+vc)); const b=(2/3)*((Math.sqrt(3)/2)*(vb-vc)); return {a,b}; }
 
     // ---------- IPMSM core ----------
     function torque_ipmsm(pp, psif, Ld, Lq, id, iq){ return 1.5*pp*( psif*iq + (Ld - Lq)*id*iq ); }
-    function voltage_dq(Rs, Ld, Lq, psif, id, iq, we){
-      return {vd: Rs*id - we*Lq*iq, vq: Rs*iq + we*(Ld*id + psif)};
-    }
+    function voltage_dq(Rs, Ld, Lq, psif, id, iq, we){ return {vd: Rs*id - we*Lq*iq, vq: Rs*iq + we*(Ld*id + psif)}; }
     function mtpa_idiq(Is, Ld, Lq, psif){
       const dlt=Ld-Lq; if(Math.abs(Is)<1e-9) return {id:0,iq:0};
       const num = -psif + Math.sqrt(psif*psif + 8*dlt*dlt*Is*Is);
@@ -534,10 +510,7 @@
       const map=[[1,1,0],[0,1,0],[0,1,1],[0,0,1],[1,0,1],[1,0,0]][sec];
       const pa=(map[0]?+Vdc/2:-Vdc/2), pb=(map[1]?+Vdc/2:-Vdc/2), pc=(map[2]?+Vdc/2:-Vdc/2); const avg=(pa+pb+pc)/3; return {va:pa-avg,vb:pb-avg,vc:pc-avg};
     }
-    function apply_deadtime(va,vb,vc, ia,ib,ic, Vdc, Td, Ts){
-      const Vdead=Vdc*(Td/Math.max(1e-9,Ts));
-      return {va:va - Vdead*Math.sign(ia||0), vb:vb - Vdead*Math.sign(ib||0), vc:vc - Vdead*Math.sign(ic||0)};
-    }
+    function apply_deadtime(va,vb,vc, ia,ib,ic, Vdc, Td, Ts){ const Vdead=Vdc*(Td/Math.max(1e-9,Ts)); return {va:va - Vdead*Math.sign(ia||0), vb:vb - Vdead*Math.sign(ib||0), vc:vc - Vdead*Math.sign(ic||0)}; }
     function applyModulation(vα_ref, vβ_ref, p, theta_e, ia,ib,ic){
       const Vlin=p.Vdc/Math.sqrt(3), Vref=Math.hypot(vα_ref,vβ_ref), m_ref=Vref/Vlin; let region=regionFromM(m_ref);
       if(p.ctrlMode==='foc') region='SVPWM'; if(p.ctrlMode==='six') region='6-Step';
@@ -564,7 +537,7 @@
       return {Fx:Fx0*G, Fy:Fy0*G};
     }
 
-    // ---------- Input handling (Keyboard + Gamepad) ----------
+    // ---------- Input (Keyboard + Gamepad) ----------
     const down=new Set();
     function ensurePedalMode(){ if(els.mode.value!=='pedal'){ els.mode.value='pedal'; els.mode.dispatchEvent(new Event('change')); } }
     window.addEventListener('keydown',e=>{
@@ -573,7 +546,6 @@
     }, {capture:true});
     window.addEventListener('keyup',e=>down.delete(e.code), {capture:true});
 
-    // simple gamepad read (use first gamepad)
     function readGamepad(){
       const gps = navigator.getGamepads?.(); if(!gps) return null;
       const gp = gps[0]; if(!gp) return null;
@@ -581,25 +553,18 @@
       return {thr: clamp(rt,0,1), brk: clamp(lt,0,1), steer: clamp(lsx, -1, 1)};
     }
 
-    function slewToward(target, current, rateUp, rateDown, dt){
-      const rate = (target>current)?rateUp:rateDown;
-      const delta = clamp(target-current, -rate*dt, rate*dt);
-      return current + delta;
-    }
-    function lpf(current, target, tau, dt){
-      if(tau<=1e-4) return target;
-      const a = 1 - Math.exp(-dt/tau);
-      return current + a*(target-current);
-    }
+    function slewToward(target, current, rateUp, rateDown, dt){ const rate=(target>current)?rateUp:rateDown; const delta=clamp(target-current, -rate*dt, rate*dt); return current+delta; }
+    function lpf(current, target, tau, dt){ if(tau<=1e-4) return target; const a=1 - Math.exp(-dt/tau); return current + a*(target-current); }
     function pedalMap(x){ const y = Math.pow(clamp(x,0,1), 1.6); return (y<0.7)? y*0.9 : 0.9 + (y-0.7)*0.7; }
 
     function applyKey(dt){
       const p=P();
 
-      // === FIX: if in cruise and any drive key is pressed, auto-switch to pedal ===
+      // cruise에서 아무 드라이브 키(or RT) 누르면 자동 Pedal 모드 + 자동 시작
       const driveKeyDown = down.has('KeyW')||down.has('ArrowUp')||down.has('KeyS')||down.has('ArrowDown')||down.has('KeyA')||down.has('ArrowLeft')||down.has('KeyD')||down.has('ArrowRight');
+      const gp = readGamepad();
       if(p.mode==='cruise'){
-        if(driveKeyDown){ ensurePedalMode(); setModeVis(); }
+        if(driveKeyDown || (gp && gp.thr>0.05)){ ensurePedalMode(); setModeVis(); if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop);} }
         else { if(down.has('Space')){ toggleRun(); } return; }
       }
 
@@ -609,23 +574,24 @@
       state.u.steerTar = (+els.steer.value||0)/30;
 
       // keyboard nudges
-      if(down.has('KeyW')||down.has('ArrowUp'))   state.u.thrTar += (p.keyRate/100)*dt;
-      if(down.has('KeyS')||down.has('ArrowDown')) state.u.brkTar += (p.keyRate/100)*dt;
-      if(down.has('KeyA')||down.has('ArrowLeft')) state.u.steerTar -= 1.8*dt;
-      if(down.has('KeyD')||down.has('ArrowRight'))state.u.steerTar += 1.8*dt;
-
+      if(driveKeyDown){
+        if(down.has('KeyW')||down.has('ArrowUp'))   state.u.thrTar += (p.keyRate/100)*dt;
+        if(down.has('KeyS')||down.has('ArrowDown')) state.u.brkTar += (p.keyRate/100)*dt;
+        if(down.has('KeyA')||down.has('ArrowLeft')) state.u.steerTar -= 1.8*dt;
+        if(down.has('KeyD')||down.has('ArrowRight'))state.u.steerTar += 1.8*dt;
+        if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop); }
+      }
       if(!(down.has('KeyW')||down.has('ArrowUp')))   state.u.thrTar -= (p.keyRate/100)*0.6*dt;
       if(!(down.has('KeyS')||down.has('ArrowDown'))) state.u.brkTar -= (p.keyRate/100)*0.8*dt;
 
-      // gamepad
-      const gp = readGamepad();
+      // gamepad blend
       if(gp){
         state.u.thrTar = Math.max(state.u.thrTar, gp.thr);
         state.u.brkTar = Math.max(state.u.brkTar, gp.brk);
         state.u.steerTar = Math.abs(gp.steer)>0.05 ? gp.steer : state.u.steerTar;
       }
 
-      // clamp + mutual exclusion
+      // clamp + exclusive
       state.u.thrTar = clamp(state.u.thrTar, 0, 1);
       state.u.brkTar = clamp(state.u.brkTar, 0, 1);
       state.u.steerTar = clamp(state.u.steerTar, -1, 1);
@@ -636,7 +602,7 @@
       state.u.brk = lpf(slewToward(state.u.brkTar, state.u.brk, 3.0, 4.0, dt), state.u.brkTar, 0.10, dt);
       state.u.steer = lpf(slewToward(state.u.steerTar, state.u.steer, 3.0, 6.0, dt), state.u.steerTar, 0.10, dt);
 
-      // reflect to UI
+      // reflect UI
       els.throttle.value = Math.round(100*state.u.thr);
       els.brake.value    = Math.round(100*state.u.brk);
       els.steer.value    = Math.round(30*state.u.steer);
@@ -648,21 +614,21 @@
     function toggleRun(){ state.running=!state.running; down.delete('Space'); if(state.running){ last=performance.now(); requestAnimationFrame(loop);} }
 
     // ---------- Simulation ----------
-    const DT_ELEC=0.0005;
-    const DT_VEH =0.001;
+    const DT_ELEC=0.0005;  // 전기 평균화 스텝
+    const DT_VEH =0.001;   // 차량/타이어 스텝
     let lastChart=0;
 
     function stepSim(dt){
       const p=P();
 
-      // steering w/ speed-dependent limit
+      // steering with speed-dependent limit
       const vmag_body = Math.hypot(state.vx, state.vy);
       const steerDegCmd = (p.mode==='cruise'?0:(+els.steer.value||0));
       const maxDeg = 30, minDeg=8, vmax=150/3.6;
       const allow = minDeg + (maxDeg-minDeg)*clamp(1 - vmag_body/vmax, 0, 1);
       const delta = clamp(steerDegCmd, -allow, allow) * Math.PI/180;
 
-      // torque command
+      // --- Torque command ---
       let Tm_cmd = 0;
       if(p.mode==='cruise'){
         const vref = clamp(p.targetKmh,0,220)/3.6;
@@ -676,7 +642,7 @@
         Tm_cmd = demand * Tcur;
       }
 
-      // braking & regen
+      // braking & regen blending
       const isBraking = (p.mode==='pedal' ? state.u.brk>0.02 : false);
       let Tm_cmd_brake = 0, T_fric_total = 0;
       const w_wheel_avg = (state.w.RL + state.w.RR)/2;
@@ -708,14 +674,41 @@
       const Treq = (Tm_cmd_brake || Tm_cmd);
       state.ref.tqf += (Treq - state.ref.tqf) * (dt/Math.max(1e-3,p.tauTq));
 
-      // current ref + slew
+      // --- Current ref with MTPA/MTPV ---
       let {id:id_ref_cmd, iq:iq_ref_cmd} = ref_with_MTPA_MTPV(state.ref.tqf, we, p);
+
+      // slew limit on refs
       const dImax = p.Islew * dt;
       state.ref.id = clamp(id_ref_cmd, state.ref.id - dImax, state.ref.id + dImax);
       state.ref.iq = clamp(iq_ref_cmd, state.ref.iq - dImax, state.ref.iq + dImax);
 
-      const vDQ_ff = voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,state.ref.id,state.ref.iq,we);
-      const vAB_ref = dq_to_ab( vDQ_ff.vd, vDQ_ff.vq, state.theta_e );
+      // --- Current PI controller (the missing piece) ---
+      const ed = state.ref.id - state.id;
+      const eq = state.ref.iq - state.iq;
+
+      // feedforward (decoupling) + PI
+      const vFF = voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,state.ref.id,state.ref.iq,we);
+      let vd_unsat = vFF.vd + CUR_PI.Kp*ed + state.ii.d;
+      let vq_unsat = vFF.vq + CUR_PI.Kp*eq + state.ii.q;
+
+      // saturate to available voltage (dq magnitude ~= αβ magnitude)
+      const Vlin = p.Vdc/Math.sqrt(3), Vhex = 2*p.Vdc/3;
+      const Vtarget = (p.ctrlMode==='foc') ? Vlin : Vhex;
+      const Vmag_unsat = Math.hypot(vd_unsat, vq_unsat);
+      let sat=false;
+      if(Vmag_unsat > Vtarget+1e-6){
+        const k = Vtarget / Vmag_unsat;
+        vd_unsat *= k; vq_unsat *= k; sat=true;
+      }
+
+      // integrator (anti-windup: update only if not saturated)
+      if(!sat){
+        state.ii.d += CUR_PI.Ki * ed * dt;
+        state.ii.q += CUR_PI.Ki * eq * dt;
+      }
+
+      // dq -> αβ -> modulation
+      const vAB_ref = dq_to_ab(vd_unsat, vq_unsat, state.theta_e);
 
       const iab = dq_to_ab(state.id, state.iq, state.theta_e);
       const iabc = ab_to_abc(iab.a, iab.b);
@@ -773,7 +766,7 @@
       const ay_dyn = (sumFy)/p.m - state.r*state.vx;
       const rr_dot = sumMz/p.Iz;
 
-      // ABS/TCS
+      // ABS
       let absActive=false, tcsActive=false;
       if(p.absOn && (p.mode==='pedal' && state.u.brk>0.02)){
         const kABS=p.kappaAbs;
@@ -784,10 +777,11 @@
         for(const w of wheels){ Tbrake[w] *= state.abs[w]; }
       }else{ for(const w of wheels){ state.abs[w] = Math.min(1.0, state.abs[w]+0.05); } }
 
-      if(p.tcsOn){
+      // TCS: 출발 속도까지는 비활성
+      if(p.tcsOn && (Math.hypot(state.vx,state.vy) > 1.0)){ // > ~3.6 km/h
         const kTCS=p.kappaTcs;
         const slipR = Math.max(kappa.RL, kappa.RR);
-        if(slipR>kTCS && Tm*p.gear*p.eta>0){ tcsActive=true; state.tcsGain = Math.max(0.2, state.tcsGain-0.05); }
+        if(slipR>kTCS && Tm*p.gear*p.eta>0){ tcsActive=true; state.tcsGain = Math.max(0.25, state.tcsGain-0.05); }
         else state.tcsGain = Math.min(1.0, state.tcsGain+0.03);
       } else state.tcsGain=1.0;
 
@@ -837,7 +831,7 @@
       if(now-lastChart>chartIntervalMs()){
         pushXY(cSpeed,[speedKmh,(p.mode==='cruise'?p.targetKmh:speedKmh)]);
         pushXY(cSlip,[kappa.FL,kappa.FR,kappa.RL,kappa.RR]);
-        const Vlin=p.Vdc/Math.sqrt(3); const mref=Math.hypot( ...Object.values(voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,state.ref.id,state.ref.iq,we)) )/Vlin;
+        const Vlin2=p.Vdc/Math.sqrt(3); const mref=Math.hypot( ...Object.values(voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,state.ref.id,state.ref.iq,we)) )/Vlin2;
         pushXY(cMod,[mod.Vmag,mref,Ebemf]);
         pushXY(cDQ,[state.id,state.iq,state.vd,state.vq]);
         const axleLimitNm = T_regen_trac*p.gear*Math.max(1e-6,p.eta);
@@ -894,7 +888,13 @@
     $('btnStart').addEventListener('click',()=>{ if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop);} });
     $('btnPause').addEventListener('click',()=> state.running=false);
     $('btnReset').addEventListener('click',()=>{ state.running=false;
-      Object.assign(state,{t:0, vx:0, vy:0, r:0, psi:0, x:0, y:0, w:{FL:0,FR:0,RL:0,RR:0}, id:0,iq:0,vd:0,vq:0,theta_e:0, abs:{FL:1,FR:1,RL:1,RR:1}, tcsGain:1, log:[], u:{thr:0,brk:0,steer:0,thrTar:0,brkTar:0,steerTar:0}, ref:{id:0,iq:0,tqf:0}});
+      Object.assign(state,{
+        t:0, vx:0, vy:0, r:0, psi:0, x:0, y:0,
+        w:{FL:0,FR:0,RL:0,RR:0}, id:0,iq:0,vd:0,vq:0,theta_e:0,
+        abs:{FL:1,FR:1,RL:1,RR:1}, tcsGain:1, log:[],
+        u:{thr:0,brk:0,steer:0,thrTar:0,brkTar:0,steerTar:0},
+        ref:{id:0,iq:0,tqf:0}, ii:{d:0,q:0}
+      });
       [cSpeed,cSlip,cMod,cDQ,cTorque].forEach(ch=>{ ch.data.datasets.forEach(ds=>ds.data=[]); ch.update(); });
       car.position.set(0,0,0); car.rotation.set(0,0,0); drawPhasor(0,0, +els.Vdc.value||400);
     });
@@ -902,10 +902,10 @@
       const rows=[["t(s)","speed(km/h)","id(A)","iq(A)","vd(V)","vq(V)","|V|(V)","m","torque(Nm)","E_bemf(V)"],
         ...state.log.map(d=>[d.t.toFixed(4),d.kmh.toFixed(3),d.id.toFixed(3),d.iq.toFixed(3),d.vd.toFixed(3),d.vq.toFixed(3),d.V.toFixed(3),d.m.toFixed(5),d.tq.toFixed(3),d.eb.toFixed(3)])];
       const csv=rows.map(r=>r.join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='ipmsm_7dof_abs_tcs_regen_compact.csv'; a.click(); URL.revokeObjectURL(url);
+      const a=document.createElement('a'); a.href=url; a.download='ipmsm_7dof_abs_tcs_regen_pi.csv'; a.click(); URL.revokeObjectURL(url);
     });
     $('btnFollow').addEventListener('click',()=>{ state.follow=!state.follow; $('btnFollow').textContent = state.follow?'🎥 Follow: ON':'🎥 Follow: OFF'; });
-    $('btnDisturb').addEventListener('click',()=>{ /* hook */ });
+    $('btnDisturb').addEventListener('click',()=>{ /* hook for torque disturbance */ });
     $('btnStep80').addEventListener('click',()=>{ els.mode.value='cruise'; setModeVis(); els.targetKmh.value=80; });
 
     // init phasor
