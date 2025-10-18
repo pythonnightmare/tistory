@@ -6,22 +6,42 @@
   <title>EV Free Drive — IPMSM + 7-DOF Vehicle (ABS/TCS, Regen Blend, Combined-Slip Tire)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    :root{ --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9; --accent:#4cc9f0; --accent2:#a0e9ff; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px }
+    :root{
+      --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9;
+      --accent:#4cc9f0; --accent2:#a0e9ff; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Apple SD Gothic Neo,Noto Sans KR,Arial}
-    header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;position:sticky;top:0;backdrop-filter:blur(6px);z-index:50;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,rgba(8,11,17,.86),rgba(8,11,17,.45))}
+    body{
+      margin:0;background:radial-gradient(1200px 800px at 80% -10%,#1a2330 0%,#0b0f14 55%);
+      color:var(--text);
+      font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Apple SD Gothic Neo,Noto Sans KR,Arial
+    }
+    header{
+      display:flex;align-items:center;justify-content:space-between;padding:10px 14px;position:sticky;top:0;
+      backdrop-filter:blur(6px);z-index:50;border-bottom:1px solid rgba(255,255,255,.06);
+      background:linear-gradient(180deg,rgba(8,11,17,.86),rgba(8,11,17,.45))
+    }
     header .left{display:flex;align-items:center;gap:10px}
     header h1{font-size:16px;margin:0;font-weight:800}
     header .sub{color:#9fb3cc;font-size:11px}
     .btnbar{display:flex;gap:6px;flex-wrap:wrap}
-    .btn{background:linear-gradient(180deg,#1e2635,#141b27);border:1px solid rgba(255,255,255,.12);color:#e8f3ff;padding:8px 10px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);font-size:12px}
+    .btn{
+      background:linear-gradient(180deg,#1e2635,#141b27);border:1px solid rgba(255,255,255,.12);
+      color:#e8f3ff;padding:8px 10px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);font-size:12px
+    }
     .btn.accent{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#06283b;border-color:rgba(76,201,240,.6)}
     .btn.warn{background:linear-gradient(180deg,#ffd76a,#f3b740);color:#2a1d00}
     .drawer{display:none}
     .drawer.open{display:block}
-    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 14px}
-    .card h2{font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:var(--accent2);margin:0;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .card{
+      background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));
+      border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 14px
+    }
+    .card h2{
+      font-size:12px;letter-spacing:.35px;text-transform:uppercase;color:var(--accent2);
+      margin:0;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)
+    }
     .tabs{display:grid;grid-template-columns: repeat(5,1fr);gap:6px;padding:8px}
     .tab{cursor:pointer;text-align:center;padding:8px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1522;font-size:12px}
     .tab.active{background:linear-gradient(180deg,#34d5ff,#1aaadb);color:#052531;border-color:rgba(76,201,240,.6);font-weight:800}
@@ -32,16 +52,17 @@
     .row{display:grid;grid-template-columns: 1fr auto;gap:8px;align-items:center;margin:6px 0}
     input[type=number],select{width:120px;background:#0d1320;color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 8px;font-size:12px}
     input[type=range]{width:100%}
-    .app{display:grid;grid-template-columns: 1fr 470px;gap:10px;padding:8px 14px}
-    #three-wrap{height:clamp(560px, 70vh, 880px);border-radius:18px;overflow:hidden;outline:none}
+    /* ===== Layout tuned for “all-at-once” visibility on 1080p ===== */
+    .app{display:grid;grid-template-columns: 1fr 540px;gap:10px;padding:8px 14px}
+    #three-wrap{height:clamp(520px, 68vh, 840px);border-radius:18px;overflow:hidden;outline:none}
     .telemetry{display:grid;grid-template-columns: repeat(auto-fit, minmax(120px,1fr));gap:6px;padding:6px 0}
     .tile{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
     .tile .k{font-size:10px;color:#9fd3ff;text-transform:uppercase;letter-spacing:.35px}
     .tile .v{font-size:16px;font-weight:800;margin-top:2px}
     .sidebar{display:flex;flex-direction:column;gap:10px;min-height:0}
-    canvas.chart{width:100%;height:150px}
-    #phasor{width:100%;height:200px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:14px}
-    @media (max-width: 1100px){ .app{grid-template-columns:1fr} }
+    canvas.chart{width:100%;height:130px}  /* compact charts */
+    #phasor{width:100%;height:180px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:14px}
+    @media (max-width: 1200px){ .app{grid-template-columns:1fr} }
     footer{color:#7d8aa3;font-size:11px;text-align:center;padding:8px}
     .flag{font-size:11px;font-weight:800;padding:2px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.15);display:inline-block}
   </style>
@@ -59,7 +80,7 @@
     <div class="left">
       <button id="btnControls" class="btn">☰ Controls</button>
       <h1>EV Free Drive — IPMSM + 7DOF Vehicle</h1>
-      <span class="sub">W/↑ 가속 · S/↓ 브레이크 · A/D 좌우 · Space 일시정지/재개</span>
+      <span class="sub">W/↑ 가속 · S/↓ 브레이크 · A/D 좌우 · Space 일시정지/재개 · 🎮 RT/LT/LS-X 지원</span>
     </div>
     <div class="btnbar">
       <button id="btnStart" class="btn accent">▶ 시작</button>
@@ -181,11 +202,16 @@
         <div class="row"><label>I<sub>regen</sub> (A)</label><input id="Iregen" type="number" value="400" step="10"></div>
         <div class="row"><label>P<sub>regen</sub> (kW)</label><input id="Pregen" type="number" value="120" step="5"></div>
       </div>
+      <div class="group"><div class="group-title">응답 튠</div>
+        <div class="row"><label>I Slew (A/s)</label><input id="Islew" type="number" value="5500" step="500"></div>
+        <div class="row"><label>토크 지연 τ (ms)</label><input id="tauTqMs" type="number" value="60" step="10"></div>
+      </div>
     </div>
 
     <div class="panel" id="panel-help">
       <div class="group"><div class="group-title">도움</div>
-        <div>이 버전은 7-DOF(차체 3자유도 + 4휠 회전), 결합 슬립 타이어, ABS/TCS, 회생제동 블렌딩이 들어갔습니다.</div>
+        <div>이 버전은 7-DOF(차체 3자유도 + 4휠 회전), 결합 슬립 타이어, ABS/TCS, 회생제동 블렌딩과 함께,</div>
+        <div><b>입력 LPF/슬루 제한</b>, <b>전류 Slew/토크 지연</b>, <b>속도연동 FOV + 스프링 카메라</b>, <b>Gamepad</b>가 적용됐습니다.</div>
       </div>
     </div>
   </section>
@@ -217,7 +243,7 @@
       </div>
       <div class="card" style="padding:10px">
         <div style="font-weight:800;color:#bfe3ff;margin:6px 2px">🧭 Phasor — dq 벡터 vs 원/헥사</div>
-        <canvas id="phasor" width="260" height="200"></canvas>
+        <canvas id="phasor" width="260" height="180"></canvas>
       </div>
     </aside>
   </main>
@@ -258,6 +284,7 @@
       Vdc:$('Vdc'), Imax:$('Imax'), ctrlMode:$('ctrlMode'), mtpaOn:$('mtpaOn'), Kfw:$('Kfw'),
       pp:$('pp'), Rs:$('Rs'), Ld:$('Ld'), Lq:$('Lq'), psif:$('psif'), J:$('J'), B:$('B'),
       fswKhz:$('fswKhz'), deadOn:$('deadOn'), deadUs:$('deadUs'), Iregen:$('Iregen'), Pregen:$('Pregen'),
+      Islew:$('Islew'), tauTqMs:$('tauTqMs'),
       // tiles
       v_kmh:$('v_kmh'), rpm:$('rpm'), idq:$('idq'), vdq:$('vdq'), Vmag:$('Vmag'), region:$('region'), ebemf:$('ebemf'), tq:$('tq'), absTcs:$('absTcs'),
       flagABS:$('flagABS'), flagTCS:$('flagTCS')
@@ -309,8 +336,8 @@
 
     const MAX_POINTS=6000;
     const pushXY=(chart, arr)=>{ const t=state.t; chart.data.datasets.forEach((ds,i)=>{ ds.data.push({x:t, y:arr[i]}); if(ds.data.length>MAX_POINTS) ds.data.shift(); const win=timeWindowSec(); while(ds.data.length && ds.data[0].x < t-win) ds.data.shift();}); chart.update('none'); };
-    function chartIntervalMs(){ return 120; }
-    function timeWindowSec(){ return 60; }
+    function chartIntervalMs(){ return 140; }
+    function timeWindowSec(){ return 70; }
 
     // ---------- 3D Scene ----------
     const wrap=$('three-wrap');
@@ -356,8 +383,7 @@
       const carAxes=new THREE.AxesHelper(1.2); carAxes.position.set(0, groundClear+0.4, 0); car.add(carAxes);
       car.userData.wheels = {wFL,wFR,wRL,wRR, pos:{
         FL:{x:xF, y: z}, FR:{x:xF, y:-z}, RL:{x:xR, y: z}, RR:{x:xR, y:-z}
-      }};
-      return car;
+      }}; return car;
     }
     const car = createSedan(); scene.add(car);
 
@@ -384,17 +410,23 @@
     // ---------- State ----------
     const state={
       running:false, follow:true, t:0,
-      // vehicle 7DOF: vx, vy, yaw rate r, yaw ψ, x,y + 4 wheels
+      // vehicle 7DOF
       vx:0, vy:0, r:0, psi:0, x:0, y:0,
-      w:{FL:0, FR:0, RL:0, RR:0}, // wheel angular speed (rad/s)
+      w:{FL:0, FR:0, RL:0, RR:0},
       // elec
       theta_e:0, id:0, iq:0, vd:0, vq:0, va:0, vb:0, vc:0,
       // controller
       evInt:0,
       // per-wheel ABS mod gain (0..1)
       abs:{FL:1, FR:1, RL:1, RR:1},
-      // TCS gain (0..1, global motor)
+      // TCS gain (0..1)
       tcsGain:1,
+      // input smoothing
+      u:{ thr:0, brk:0, steer:0, thrTar:0, brkTar:0, steerTar:0 },
+      // current reference with slew
+      ref:{ id:0, iq:0, tqf:0 },
+      // camera spring rig
+      cam:{pos:new THREE.Vector3(-12,6,-12), vel:new THREE.Vector3(0,0,0)},
       // logs
       log:[]
     };
@@ -416,7 +448,9 @@
       Vdc:+els.Vdc.value, Imax:+els.Imax.value, ctrlMode:els.ctrlMode.value, mtpa:(els.mtpaOn.value==='1'), Kfw:+els.Kfw.value,
       pp:+els.pp.value, Rs:+els.Rs.value, Ld:+els.Ld.value, Lq:+els.Lq.value, psif:+els.psif.value, Jm:+els.J.value, Bm:+els.B.value,
       fsw:(+els.fswKhz.value||10)*1000, deadOn:(els.deadOn.value==='1'), Td:+els.deadUs.value*1e-6,
-      Iregen:+els.Iregen.value, Pregen:+els.Pregen.value*1000
+      Iregen:+els.Iregen.value, Pregen:+els.Pregen.value*1000,
+      // response
+      Islew:+els.Islew.value, tauTq: Math.max(0.005, (+els.tauTqMs.value||60)/1000)
     };}
 
     // ---------- Transforms ----------
@@ -510,7 +544,7 @@
       return {va,vb,vc,Vmag,m:Math.min(M_HEX,m_ref),region,duties:{da,db,dc}};
     }
 
-    // ---------- Tire model (combined-slip Pacejka simplified) ----------
+    // ---------- Tire model ----------
     function pacejka_y(B,C,D,E, x){ return D*Math.sin(C*Math.atan(B*x - E*(B*x - Math.atan(B*x)))); }
     function tireForcesCombined(kappa, alpha, Fz, mu, prm){
       const Dlong = prm.Dk * mu * Fz;
@@ -522,7 +556,7 @@
       return {Fx:Fx0*G, Fy:Fy0*G};
     }
 
-    // ---------- Input handling ----------
+    // ---------- Input handling (Keyboard + Gamepad) ----------
     const down=new Set();
     function ensurePedalMode(){ if(els.mode.value!=='pedal'){ els.mode.value='pedal'; els.mode.dispatchEvent(new Event('change')); } }
     window.addEventListener('keydown',e=>{
@@ -531,27 +565,86 @@
     }, {capture:true});
     window.addEventListener('keyup',e=>down.delete(e.code), {capture:true});
 
+    // simple gamepad read (use first gamepad)
+    function readGamepad(){
+      const gps = navigator.getGamepads?.(); if(!gps) return null;
+      const gp = gps[0]; if(!gp) return null;
+      // Xbox/PS style: RT=buttons[7], LT=buttons[6], LS-X=axes[0]
+      const rt = gp.buttons?.[7]?.value ?? 0, lt = gp.buttons?.[6]?.value ?? 0, lsx = gp.axes?.[0] ?? 0;
+      return {thr: clamp(rt,0,1), brk: clamp(lt,0,1), steer: clamp(lsx, -1, 1)};
+    }
+
+    // input smoothing helpers
+    function slewToward(target, current, rateUp, rateDown, dt){
+      const rate = (target>current)?rateUp:rateDown;
+      const delta = clamp(target-current, -rate*dt, rate*dt);
+      return current + delta;
+    }
+    function lpf(current, target, tau, dt){
+      if(tau<=1e-4) return target;
+      const a = 1 - Math.exp(-dt/tau);
+      return current + a*(target-current);
+    }
+    function pedalMap(x){ // gentle around 0~0.3, more aggressive after 0.7
+      const y = Math.pow(clamp(x,0,1), 1.6);
+      return (y<0.7)? y*0.9 : 0.9 + (y-0.7)*0.7; // saturate near 1
+    }
+
     function applyKey(dt){
       const p=P();
       if(p.mode==='cruise'){ if(down.has('Space')){ toggleRun(); } return; }
-      let thr=+els.throttle.value, brk=+els.brake.value, steer=+els.steer.value;
-      if(down.has('KeyW')||down.has('ArrowUp')) thr += p.keyRate*dt;
-      if(down.has('KeyS')||down.has('ArrowDown')) brk += p.keyRate*dt;
-      if(!(down.has('KeyW')||down.has('ArrowUp'))) thr -= p.keyRate*0.6*dt;
-      if(!(down.has('KeyS')||down.has('ArrowDown'))) brk -= p.keyRate*0.8*dt;
-      thr=clamp(thr,0,100); brk=clamp(brk,0,100);
-      if(thr>0&&brk>0){ if(thr>brk) brk=0; else thr=0; }
-      const steerRate=120;
-      if(down.has('KeyA')||down.has('ArrowLeft'))  steer -= steerRate*dt;
-      if(down.has('KeyD')||down.has('ArrowRight')) steer += steerRate*dt;
-      if(!(down.has('KeyA')||down.has('KeyD')||down.has('ArrowLeft')||down.has('ArrowRight'))){
-        const backRate=160*dt; steer += (steer>0 ? -1:1)*Math.min(Math.abs(steer), backRate);
+
+      // base targets from keyboard sliders
+      state.u.thrTar = (+els.throttle.value||0)/100;
+      state.u.brkTar = (+els.brake.value||0)/100;
+      state.u.steerTar = (+els.steer.value||0)/30; // -1..1
+
+      // keyboard nudges
+      if(down.has('KeyW')||down.has('ArrowUp'))   state.u.thrTar += (p.keyRate/100)*dt;
+      if(down.has('KeyS')||down.has('ArrowDown')) state.u.brkTar += (p.keyRate/100)*dt;
+      if(down.has('KeyA')||down.has('ArrowLeft')) state.u.steerTar -= 1.8*dt;
+      if(down.has('KeyD')||down.has('ArrowRight'))state.u.steerTar += 1.8*dt;
+      // decay if not pressed
+      if(!(down.has('KeyW')||down.has('ArrowUp')))   state.u.thrTar -= (p.keyRate/100)*0.6*dt;
+      if(!(down.has('KeyS')||down.has('ArrowDown'))) state.u.brkTar -= (p.keyRate/100)*0.8*dt;
+
+      // gamepad override (if available)
+      const gp = readGamepad();
+      if(gp){
+        state.u.thrTar = Math.max(state.u.thrTar, gp.thr);
+        state.u.brkTar = Math.max(state.u.brkTar, gp.brk);
+        state.u.steerTar = Math.abs(gp.steer)>0.05 ? gp.steer : state.u.steerTar;
       }
-      steer = clamp(steer, -30, 30);
-      els.throttle.value=Math.round(thr); els.brake.value=Math.round(brk); els.steer.value=Math.round(steer);
+
+      // clamp targets
+      state.u.thrTar = clamp(state.u.thrTar, 0, 1);
+      state.u.brkTar = clamp(state.u.brkTar, 0, 1);
+      state.u.steerTar = clamp(state.u.steerTar, -1, 1);
+
+      // mutual exclusion
+      if(state.u.thrTar>0 && state.u.brkTar>0){
+        if(state.u.thrTar>state.u.brkTar) state.u.brkTar=0; else state.u.thrTar=0;
+      }
+
+      // slew limits (feels like pedal hydraulics)
+      state.u.thr = slewToward(state.u.thrTar, state.u.thr, 2.0, 3.0, dt); // up/down %/ms scaled: 2/s up, 3/s down
+      state.u.brk = slewToward(state.u.brkTar, state.u.brk, 3.0, 4.0, dt);
+      state.u.steer = slewToward(state.u.steerTar, state.u.steer, 3.0, 6.0, dt);
+
+      // low-pass pedals & steering (τ ≈ 100 ms)
+      state.u.thr = lpf(state.u.thr, state.u.thrTar, 0.10, dt);
+      state.u.brk = lpf(state.u.brk, state.u.brkTar, 0.10, dt);
+      state.u.steer = lpf(state.u.steer, state.u.steerTar, 0.10, dt);
+
+      // reflect to UI sliders smoothly
+      els.throttle.value = Math.round(100*state.u.thr);
+      els.brake.value    = Math.round(100*state.u.brk);
+      els.steer.value    = Math.round(30*state.u.steer);
+
       if(down.has('Space')){ toggleRun(); }
       ensurePedalMode();
     }
+
     function toggleRun(){ state.running=!state.running; down.delete('Space'); if(state.running){ last=performance.now(); requestAnimationFrame(loop);} }
 
     // ---------- Simulation ----------
@@ -561,60 +654,77 @@
 
     function stepSim(dt){
       const p=P();
-      // steer angle (front wheels)
-      const delta = (p.mode==='cruise'?0:(+els.steer.value||0)) * Math.PI/180;
 
-      // --- Speed controller → base torque command (Nm) ---
-      const vmag = Math.hypot(state.vx, state.vy);
-      const vref = (p.mode==='cruise') ? clamp(p.targetKmh,0,220)/3.6 : ( (p.thr - 0.9*p.brk)*3.0 );
-      const ev = vref - vmag;
-      const torqueCmd = p.Kps*ev + state.evInt*p.Kis; // "torque-like" cmd
-      const Kaw_s = 1/Math.max(0.1, p.taus); state.evInt += ( ev + Kaw_s*0 ) * dt;
-      let Tm_cmd = clamp(torqueCmd*400, -8000, 8000); // Nm motor side intent
+      // --- Steering angle scaling by speed (high-speed limit) ---
+      const vmag_body = Math.hypot(state.vx, state.vy);
+      const steerDegCmd = (p.mode==='cruise'?0:(+els.steer.value||0));
+      const maxDeg = 30, minDeg=8, vmax=150/3.6;
+      const allow = minDeg + (maxDeg-minDeg)*clamp(1 - vmag_body/vmax, 0, 1);
+      const delta = clamp(steerDegCmd, -allow, allow) * Math.PI/180;
 
-      // --- Driver brake override & regen blending limit ---
-      const isBraking = (p.mode==='pedal' ? p.brk>0.02 : false);
-      let Tm_cmd_brake = 0, T_fric_total = 0;
-      if(isBraking){
-        const demand = - (+p.brk) * (2*p.TbrkMax) * p.eta / p.gear; // target motor-side braking eqv
-        Tm_cmd = Math.min(Tm_cmd, demand);
+      // --- Driver torque command ---
+      let Tm_cmd = 0;
+      if(p.mode==='cruise'){
+        const vref = clamp(p.targetKmh,0,220)/3.6;
+        const ev = vref - vmag_body;
+        const torqueCmd = p.Kps*ev + state.evInt*p.Kis;
+        const Kaw_s = 1/Math.max(0.1, p.taus); state.evInt += ( ev + Kaw_s*0 ) * dt;
+        Tm_cmd = clamp(torqueCmd*400, -8000, 8000); // PI output to Nm-like
+      }else{
+        // pedal mode: direct torque with non-linear pedal map + brake blending
+        const demand = pedalMap(state.u.thr);
+        const Tcur = 1.5*p.pp*p.psif*p.Imax; // current-limited max (rough)
+        Tm_cmd = demand * Tcur;
       }
 
-      // infer motor/mech speed from driven axle (RWD)
+      // --- Brake override & regen blending limit ---
+      const isBraking = (p.mode==='pedal' ? state.u.brk>0.02 : false);
+      let Tm_cmd_brake = 0, T_fric_total = 0;
       const w_wheel_avg = (state.w.RL + state.w.RR)/2;
       const w_mech = w_wheel_avg * p.gear;  // rad/s
       const we = p.pp * w_mech;
 
-      // --- Regen electrical & traction limits (motor-side) ---
-      const T_elec_I = 1.5*p.pp*p.psif * Math.min(p.Iregen, p.Imax); // rough id=0
+      // Regen electrical & traction cap
+      const T_elec_I = 1.5*p.pp*p.psif * Math.min(p.Iregen, p.Imax);
       const T_elec_P = (Math.abs(w_mech)>1e-3) ? (p.Pregen/Math.abs(w_mech)) : 1e9;
-      const T_regen_elec = Math.min(T_elec_I, T_elec_P);
 
-      // estimate rear axle normal load (longitudinal transfer using last ax approx)
+      // rear axle normal load estimate (simple)
       const g=9.80665, L=p.Lf+p.Lr;
-      // approximate long accel from cmd (simple low-gain proxy)
       const ax_proxy = (Tm_cmd*p.gear*p.eta/p.Rw)/Math.max(1e-6,p.m);
-      const Fzf_total = p.m*g*(p.Lr/L) - p.m*ax_proxy*(p.hcg/L);
       const Fzr_total = p.m*g*(p.Lf/L) + p.m*ax_proxy*(p.hcg/L);
-      const FzR = Math.max(0.1, Fzr_total/2); // per rear wheel approx
+      const FzR = Math.max(0.1, Fzr_total/2);
       const FxR_trac = p.mu * (2*FzR);
       const T_regen_trac = (FxR_trac*p.Rw)/(p.gear*Math.max(1e-6,p.eta));
-      const Tm_regen_limit = Math.max(0, Math.min(T_regen_elec, T_regen_trac));
 
-      // brake blending: allocate motor regen up to limit, remainder as friction brakes
-      if(isBraking && Tm_cmd<0){
-        const Tm_req_motor = Math.max(-Tm_regen_limit, Tm_cmd);
-        Tm_cmd_brake = Tm_req_motor;
-        T_fric_total  = -(Tm_cmd - Tm_req_motor) * (p.gear/Math.max(1e-6,p.eta)); // convert to axle-side remaining (Nm)
+      const Tm_regen_limit = Math.max(0, Math.min(T_elec_I, T_elec_P, T_regen_trac));
+
+      if(isBraking){
+        const demandMotorSide = - (state.u.brk) * (2*p.TbrkMax) * p.eta / p.gear;
+        Tm_cmd = Math.min(Tm_cmd, demandMotorSide);
+        if(Tm_cmd<0){
+          const Tm_req_motor = Math.max(-Tm_regen_limit, Tm_cmd);
+          Tm_cmd_brake = Tm_req_motor;
+          T_fric_total  = -(Tm_cmd - Tm_req_motor) * (p.gear/Math.max(1e-6,p.eta));
+        }
       }
 
-      // --- TCS (limit slip on driven wheels) will adjust after slip computed ---
+      // --- Torque 1st-order lag (inverter/motor latency) ---
+      const Treq = (Tm_cmd_brake || Tm_cmd);
+      state.ref.tqf += (Treq - state.ref.tqf) * (dt/Math.max(1e-3,p.tauTq));
 
-      // --- Electrical refs from torque request (MTPA/MTPV) ---
-      const Tm_ref = Tm_cmd_brake || Tm_cmd;
-      let {id:id_ref, iq:iq_ref} = ref_with_MTPA_MTPV(Tm_ref, we, p);
-      const vAB_ref = dq_to_ab( ...Object.values(voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,id_ref,iq_ref,we)), state.theta_e); // vdq→αβ
-      // currents for deadtime sign (approx id/iq→abc)
+      // --- Current references from (lagged) torque with MTPA/MTPV ---
+      let {id:id_ref_cmd, iq:iq_ref_cmd} = ref_with_MTPA_MTPV(state.ref.tqf, we, p);
+
+      // --- Current slew limiter (A/s) ---
+      const dImax = p.Islew * dt;
+      state.ref.id = clamp(id_ref_cmd, state.ref.id - dImax, state.ref.id + dImax);
+      state.ref.iq = clamp(iq_ref_cmd, state.ref.iq - dImax, state.ref.iq + dImax);
+
+      // voltage reference for modulation
+      const vDQ_ff = voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,state.ref.id,state.ref.iq,we);
+      const vAB_ref = dq_to_ab( vDQ_ff.vd, vDQ_ff.vq, state.theta_e );
+
+      // currents for deadtime sign (approx)
       const iab = dq_to_ab(state.id, state.iq, state.theta_e);
       const iabc = ab_to_abc(iab.a, iab.b);
 
@@ -626,7 +736,7 @@
       const did = (state.vd - p.Rs*state.id + we*p.Lq*state.iq)/p.Ld;
       const diq = (state.vq - p.Rs*state.iq - we*(p.Ld*state.id + p.psif))/p.Lq;
       state.id += did*dt; state.iq += diq*dt;
-      const Tm = torque_ipmsm(p.pp,p.psif,p.Ld,p.Lq,state.id,state.iq); // actual motor torque
+      const Tm = torque_ipmsm(p.pp,p.psif,p.Ld,p.Lq,state.id,state.iq);
 
       // --- Vehicle dynamics (7DOF) ---
       const positions = car.userData.wheels.pos;
@@ -637,91 +747,63 @@
 
       let sumFx=0, sumFy=0, sumMz=0;
 
-      // Distribute motor torque to rear wheels (open diff)
-      let Tdrive = {FL:0, FR:0, RL:0, RR:0};
+      // Drive torque to rear wheels (open diff) + TCS scale will apply later
+      const T_axle = (Tm*p.gear*p.eta); // axle total
       let Tbrake = {FL:0, FR:0, RL:0, RR:0};
-
-      // TCS scaling (update later if slip too high)
-      let tcsScale=state.tcsGain;
-
-      // preliminary brake distribution (remaining friction)
       if(T_fric_total>0){
         const front = p.brkBiasF*T_fric_total, rear=(1-p.brkBiasF)*T_fric_total;
         Tbrake.FL += front/2; Tbrake.FR += front/2; Tbrake.RL += rear/2; Tbrake.RR += rear/2;
       }
 
-      // drive torque from motor to rear
-      const T_axle = (Tm*p.gear*p.eta); // axle total
-      Tdrive.RL += 0.5*T_axle; Tdrive.RR += 0.5*T_axle;
-
-      // Wheel-by-wheel forces
+      // Build slips to run ABS/TCS
       const mu = p.mu;
       const prm = {Bk:p.Bk,Ck:p.Ck,Dk:p.Dk,Ek:p.Ek, By:p.By,Cy:p.Cy,Dy:p.Dy,Ey:p.Ey};
-
-      // dynamic load transfer (long + simple lateral)
-      const ax = 0; // will be resolved by dynamics intrinsically; use 0 for load split baseline
-      const ay = 0;
       const Fzf_base = p.m*9.80665*(p.Lr/(p.Lf+p.Lr))/2;
       const Fzr_base = p.m*9.80665*(p.Lf/(p.Lf+p.Lr))/2;
 
       let kappa = {FL:0, FR:0, RL:0, RR:0};
-
       for(const w of wheels){
         const xi=pos[w].x, yi=pos[w].y;
-        // local hub velocities in body frame
         const vxi = state.vx - state.r*yi;
         const vyi = state.vy + state.r*xi;
-        // rotate into wheel frame
         const c=Math.cos(steer[w]), s=Math.sin(steer[w]);
-        const u =  c*vxi + s*vyi; // longitudinal speed at contact (wheel frame)
-        const v = -s*vxi + c*vyi; // lateral speed   "
-        // slip ratio κ = (Rw ω - u)/|u|
+        const u =  c*vxi + s*vyi;
+        const v = -s*vxi + c*vyi;
         const rw = p.Rw, eps=0.5;
         kappa[w] = (rw*state.w[w] - u) / (Math.max(Math.abs(u), eps));
-
-        // slip angle α = atan2(v, |u|)
-        const alpha = Math.atan2(v, Math.max(Math.abs(u), 0.1));
-
-        // normal load per tire (simple: static split; extension: add ΔFz long/lat)
+        // normal load (static split)
         const Fz = (w==='FL'||w==='FR') ? Fzf_base : Fzr_base;
-
-        // Tire forces in wheel frame
+        const alpha = Math.atan2(v, Math.max(Math.abs(u), 0.1));
         const {Fx:Fxw, Fy:Fyw} = tireForcesCombined(kappa[w], alpha, Fz, mu, prm);
-
-        // transform to body frame
         const Fx =  c*Fxw - s*Fyw;
         const Fy =  s*Fxw + c*Fyw;
-
         sumFx += Fx; sumFy += Fy; sumMz += xi*Fy - yi*Fx;
       }
 
-      // Aerodynamics / Rolling / Grade
-      const v_forward = state.vx; // body x
-      const F_drag = 0.5*p.rho*p.CdA*v_forward*Math.abs(v_forward);
-      const F_roll = p.m*9.80665*p.cr*sign0(v_forward);
+      // Aero/Roll/Grade
+      const F_drag = 0.5*p.rho*p.CdA*state.vx*Math.abs(state.vx);
+      const F_roll = p.m*9.80665*p.cr*sign0(state.vx);
       const F_grade = p.m*9.80665*Math.sin(p.grade);
 
-      // Longitudinal with resistances
       const ax_dyn = (sumFx - F_drag - F_roll - F_grade)/p.m + state.r*state.vy;
       const ay_dyn = (sumFy)/p.m - state.r*state.vx;
       const rr_dot = sumMz/p.Iz;
 
-      // ABS / TCS decisions after slips computed
+      // ABS / TCS actions
       let absActive=false, tcsActive=false;
-      // ABS: reduce friction brake torque at each wheel if |κ| beyond target (braking => κ<0)
+      // ABS
       const kABS = p.kappaAbs;
-      for(const w of wheels){
-        if(p.absOn && isBraking && kappa[w] < -kABS){
-          state.abs[w] = Math.max(0.3, state.abs[w]-0.08);
-          absActive = true;
-        }else{
-          state.abs[w] = Math.min(1.0, state.abs[w]+0.03);
+      if(p.absOn && isBraking){
+        for(const w of wheels){
+          if(kappa[w] < -kABS){ state.abs[w] = Math.max(0.3, state.abs[w]-0.08); absActive=true; }
+          else { state.abs[w] = Math.min(1.0, state.abs[w]+0.03); }
         }
+        for(const w of wheels){ Tbrake[w] *= state.abs[w]; }
+      }else{
+        for(const w of wheels){ state.abs[w] = Math.min(1.0, state.abs[w]+0.05); }
       }
-      // apply ABS to friction torques
-      for(const w of wheels){ Tbrake[w] *= state.abs[w]; }
 
-      // TCS: if driven wheel slip > target, reduce motor torque scale
+      // TCS
       if(p.tcsOn){
         const kTCS=p.kappaTcs;
         const slipR = Math.max(kappa.RL, kappa.RR);
@@ -729,31 +811,22 @@
         else state.tcsGain = Math.min(1.0, state.tcsGain+0.03);
       } else state.tcsGain=1.0;
 
-      tcsScale = state.tcsGain;
+      // Wheel dynamics with torques
+      const driveScaled = {FL:0, FR:0, RL:state.tcsGain*0.5*T_axle, RR:state.tcsGain*0.5*T_axle};
+      const Jw=p.Jw;
 
-      // Wheel rotational dynamics with torques (drive*scale − brake − tire)
-      const Tw_tire = {}; // tire resisting torque = Fxw*Rw (use wheel-frame Fx)
       for(const w of wheels){
+        // Tire resisting torque estimate (use Fx from previous pass again)
         const xi=pos[w].x, yi=pos[w].y;
         const vxi = state.vx - state.r*yi;
         const vyi = state.vy + state.r*xi;
         const c=Math.cos(steer[w]), s=Math.sin(steer[w]);
         const u =  c*vxi + s*vyi;
-        const alpha = 0; // not needed for torque
-        // recompute Fxw for accurate Tw (cheap reuse: invert body Fx to wheel frame by rotating back)
-        // Quick: use same tire model again to get Fxw
         const Fz = (w==='FL'||w==='FR') ? Fzf_base : Fzr_base;
-        const {Fx:Fxw} = tireForcesCombined(kappa[w], 0, Fz, mu, prm);
-        Tw_tire[w] = Fxw * p.Rw;
-      }
+        const {Fx:Fxw2} = tireForcesCombined(kappa[w], 0, Fz, mu, prm);
+        const Tw_tire = Fxw2 * p.Rw;
 
-      // Apply drive and brake
-      const Jw=p.Jw;
-      const driveScaled = {FL:0, FR:0, RL:tcsScale*0.5*T_axle, RR:tcsScale*0.5*T_axle};
-      const brakeT = Tbrake;
-
-      for(const w of wheels){
-        const Tnet = driveScaled[w] - brakeT[w] - Tw_tire[w];
+        const Tnet = driveScaled[w] - Tbrake[w] - Tw_tire;
         state.w[w] += (Tnet/Math.max(1e-6,Jw))*dt;
       }
 
@@ -790,7 +863,7 @@
       if(now-lastChart>chartIntervalMs()){
         pushXY(cSpeed,[speedKmh,(p.mode==='cruise'?p.targetKmh:speedKmh)]);
         pushXY(cSlip,[kappa.FL,kappa.FR,kappa.RL,kappa.RR]);
-        const Vlin=p.Vdc/Math.sqrt(3); const mref=Math.hypot( ...Object.values(voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,id_ref,iq_ref,we)) )/Vlin;
+        const Vlin=p.Vdc/Math.sqrt(3); const mref=Math.hypot( ...Object.values(voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,state.ref.id,state.ref.iq,we)) )/Vlin;
         pushXY(cMod,[mod.Vmag,mref,Ebemf]);
         pushXY(cDQ,[state.id,state.iq,state.vd,state.vq]);
         const axleLimitNm = T_regen_trac*p.gear*Math.max(1e-6,p.eta);
@@ -805,31 +878,42 @@
       const {wFL,wFR,wRL,wRR}=car.userData.wheels;
       [wFL,wFR,wRL,wRR].forEach((w,i)=>{ const key=['FL','FR','RL','RR'][i]; w.rotation.x -= state.w[key]*(1/60); });
 
+      // Camera spring-damper + FOV with speed
+      if(state.follow){
+        const speed = Math.hypot(Vxw,Vyw);
+        const fovTarget = 55 + (72-55)*(Math.tanh(speed/25)); // ~25 m/s scale
+        camera.fov += (fovTarget - camera.fov)*0.08;
+        camera.updateProjectionMatrix();
+        const backLocal = new THREE.Vector3(-10 - 0.06*speed, 6 + 0.01*speed, 0)
+          .applyAxisAngle(new THREE.Vector3(0,1,0), -state.psi);
+        const target = new THREE.Vector3(state.x,0,state.y).add(backLocal);
+        // spring (ζ≈0.8, ωn≈7 rad/s)
+        const zeta=0.8, wn=7;
+        const to = target.clone().sub(state.cam.pos);
+        const acc = to.multiplyScalar(wn*wn).add(state.cam.vel.clone().multiplyScalar(-2*zeta*wn));
+        state.cam.vel.add(acc.multiplyScalar(dt));
+        state.cam.pos.add(state.cam.vel.clone().multiplyScalar(dt));
+        camera.position.copy(state.cam.pos);
+        const look = new THREE.Vector3(state.x+4*Math.cos(-state.psi),1,state.y+4*Math.sin(-state.psi));
+        controls.target.lerp(look, .2); controls.update();
+      }
+
       // log
-      state.log.push({t:state.t, kmh:speedKmh, id:state.id, iq:state.iq, vd:state.vd, vq:state.vq, V:mod.Vmag, m:mod.m, tq:Tm, eb:Ebemf,
-        kFL:kappa.FL,kFR:kappa.FR,kRL:kappa.RL,kRR:kappa.RR});
+      state.log.push({t:state.t, kmh:speedKmh, id:state.id, iq:state.iq, vd:state.vd, vq:state.vq, V:mod.Vmag, m:mod.m, tq:Tm, eb:Ebemf});
       state.t += dt;
     }
 
     function loop(now){
       if(!state.running) return;
       const dt=Math.min(.02,(now-last)/1000); last=now;
-      // substeps for stability
       let rem=dt; while(rem>1e-9){ const h=Math.min(DT_VEH, rem);
         applyKey(h);
-        // run electrical faster inside
+        // electrical sub-steps
         let re=h; while(re>1e-9){ const he=Math.min(DT_ELEC,re); stepSim(he); re-=he; }
         rem-=h;
       }
       requestAnimationFrame(loop);
       renderer.render(scene,camera);
-      if(state.follow){
-        const back=new THREE.Vector3(-10,6,0).applyAxisAngle(new THREE.Vector3(0,1,0), -state.psi);
-        const camPos = new THREE.Vector3(state.x+back.x, 6, state.y+back.z);
-        camera.position.lerp(camPos, .12);
-        const look = new THREE.Vector3(state.x+4*Math.cos(-state.psi),1,state.y+4*Math.sin(-state.psi));
-        controls.target.lerp(look, .2); controls.update();
-      }
     }
 
     new ResizeObserver(()=>{ const w=wrap.clientWidth, h=wrap.clientHeight; renderer.setSize(w,h); camera.aspect=w/Math.max(1,h); camera.updateProjectionMatrix(); }).observe(wrap);
@@ -838,18 +922,18 @@
     $('btnStart').addEventListener('click',()=>{ if(!state.running){ state.running=true; last=performance.now(); requestAnimationFrame(loop);} });
     $('btnPause').addEventListener('click',()=> state.running=false);
     $('btnReset').addEventListener('click',()=>{ state.running=false;
-      Object.assign(state,{t:0, vx:0, vy:0, r:0, psi:0, x:0, y:0, w:{FL:0,FR:0,RL:0,RR:0}, id:0,iq:0,vd:0,vq:0,theta_e:0, abs:{FL:1,FR:1,RL:1,RR:1}, tcsGain:1, log:[]});
+      Object.assign(state,{t:0, vx:0, vy:0, r:0, psi:0, x:0, y:0, w:{FL:0,FR:0,RL:0,RR:0}, id:0,iq:0,vd:0,vq:0,theta_e:0, abs:{FL:1,FR:1,RL:1,RR:1}, tcsGain:1, log:[], u:{thr:0,brk:0,steer:0,thrTar:0,brkTar:0,steerTar:0}, ref:{id:0,iq:0,tqf:0}});
       [cSpeed,cSlip,cMod,cDQ,cTorque].forEach(ch=>{ ch.data.datasets.forEach(ds=>ds.data=[]); ch.update(); });
       car.position.set(0,0,0); car.rotation.set(0,0,0); drawPhasor(0,0, +els.Vdc.value||400);
     });
     $('btnCsv').addEventListener('click',()=>{ if(!state.log.length) return;
-      const rows=[["t(s)","speed(km/h)","id(A)","iq(A)","vd(V)","vq(V)","|V|(V)","m","torque(Nm)","E_bemf(V)","kFL","kFR","kRL","kRR"],
-        ...state.log.map(d=>[d.t.toFixed(4),d.kmh.toFixed(3),d.id.toFixed(3),d.iq.toFixed(3),d.vd.toFixed(3),d.vq.toFixed(3),d.V.toFixed(3),d.m.toFixed(5),d.tq.toFixed(3),d.eb.toFixed(3),d.kFL.toFixed(4),d.kFR.toFixed(4),d.kRL.toFixed(4),d.kRR.toFixed(4)])];
+      const rows=[["t(s)","speed(km/h)","id(A)","iq(A)","vd(V)","vq(V)","|V|(V)","m","torque(Nm)","E_bemf(V)"],
+        ...state.log.map(d=>[d.t.toFixed(4),d.kmh.toFixed(3),d.id.toFixed(3),d.iq.toFixed(3),d.vd.toFixed(3),d.vq.toFixed(3),d.V.toFixed(3),d.m.toFixed(5),d.tq.toFixed(3),d.eb.toFixed(3)])];
       const csv=rows.map(r=>r.join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='ipmsm_7dof_abs_tcs_regen.csv'; a.click(); URL.revokeObjectURL(url);
+      const a=document.createElement('a'); a.href=url; a.download='ipmsm_7dof_abs_tcs_regen_compact.csv'; a.click(); URL.revokeObjectURL(url);
     });
     $('btnFollow').addEventListener('click',()=>{ state.follow=!state.follow; $('btnFollow').textContent = state.follow?'🎥 Follow: ON':'🎥 Follow: OFF'; });
-    $('btnDisturb').addEventListener('click',()=>{ /* 외란 토크는 상단 로직에서 필요 시 추가 가능 */ });
+    $('btnDisturb').addEventListener('click',()=>{ /* 외란 토크 훅: 필요 시 추가 */ });
     $('btnStep80').addEventListener('click',()=>{ els.mode.value='cruise'; setModeVis(); els.targetKmh.value=80; });
 
     // init phasor
