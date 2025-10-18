@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EV Free Drive — IPMSM FOC→Overmod→6-Step (Sedan)</title>
+  <title>EV Free Drive — IPMSM FOC→Overmod→6-Step (+MTPA/MTPV, SVPWM, Deadtime, Phasor)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     :root{ --bg:#0b0f14; --panel:#111826; --muted:#7d8aa3; --text:#e8eef9; --accent:#4cc9f0; --accent2:#a0e9ff; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px }
@@ -32,14 +32,15 @@
     .row{display:grid;grid-template-columns: 1fr auto;gap:8px;align-items:center;margin:6px 0}
     input[type=number],select{width:120px;background:#0d1320;color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 8px;font-size:12px}
     input[type=range]{width:100%}
-    .app{display:grid;grid-template-columns: 1fr 430px;gap:10px;padding:8px 14px}
-    #three-wrap{height:clamp(620px, 78vh, 980px);border-radius:18px;overflow:hidden;outline:none}
+    .app{display:grid;grid-template-columns: 1fr 450px;gap:10px;padding:8px 14px}
+    #three-wrap{height:clamp(560px, 70vh, 880px);border-radius:18px;overflow:hidden;outline:none}
     .telemetry{display:grid;grid-template-columns: repeat(auto-fit, minmax(120px,1fr));gap:6px;padding:6px 0}
     .tile{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
     .tile .k{font-size:10px;color:#9fd3ff;text-transform:uppercase;letter-spacing:.35px}
     .tile .v{font-size:16px;font-weight:800;margin-top:2px}
     .sidebar{display:flex;flex-direction:column;gap:10px;min-height:0}
     canvas.chart{width:100%;height:160px}
+    #phasor{width:100%;height:220px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:14px}
     @media (max-width: 1100px){ .app{grid-template-columns:1fr} }
     footer{color:#7d8aa3;font-size:11px;text-align:center;padding:8px}
   </style>
@@ -144,6 +145,9 @@
           <select id="mtpaOn"><option value="1" selected>ON</option><option value="0">OFF (Id=0)</option></select>
         </div>
         <div class="row"><label>Flux Weakening 게인</label><input id="Kfw" type="number" value="1200" step="50"></div>
+        <div class="row"><label>PWM fsw (kHz)</label><input id="fswKhz" type="number" value="10" step="1"></div>
+        <div class="row"><label>Deadtime</label><select id="deadOn"><option value="1" selected>ON</option><option value="0">OFF</option></select></div>
+        <div class="row"><label>Td (µs)</label><input id="deadUs" type="number" value="1.0" step="0.1"></div>
       </div>
       <div class="group">
         <div class="group-title">IPMSM 파라미터</div>
@@ -163,11 +167,11 @@
         <div class="btnbar">
           <button id="btnAutoSpeed" class="btn">⚙️ 속도 PI 자동튜닝</button>
           <button id="btnStepChange" class="btn">⏱ 속도스텝 60→150</button>
-          <button id="btnForceOver" class="btn">🧪 과변조 유도(+Vdc)</button>
+          <button id="btnForceOver" class="btn">🧪 과변조 유도(+Vdc↓)</button>
         </div>
         <div style="font-size:12px;color:#9fb3cc;margin-top:6px">
-          선형 SVPWM 한계: V<sub>max,lin</sub>=Vdc/√3, 6-Step 능선: V<sub>hex</sub>=2Vdc/3, m=|V<sub>dq</sub>|/V<sub>max,lin</sub>.<br/>
-          m≤1: FOC(SVPWM), 1&lt;m&lt;1.1547: Overmod, ≥1.1547: 6-Step. 플럭스 위킹(Id↓)로 E<sub>bemf</sub> 대응.
+          선형 SVPWM 한계: V<sub>max,lin</sub>=Vdc/√3, 6-Step 능선: V<sub>hex</sub>=2Vdc/3, m=|V<sub>dq,ref</sub>|/V<sub>max,lin</sub>.<br/>
+          m≤1: FOC(SVPWM), 1&lt;m&lt;1.1547: Overmod(플랫탑), ≥1.1547: 6-Step. Deadtime은 위상 전압에 부호 기반 보정.
         </div>
       </div>
     </div>
@@ -175,7 +179,7 @@
     <div class="panel" id="panel-help">
       <div class="group"><div class="group-title">키보드</div>
         <div>W/↑ 가속 · S/↓ 브레이크 · ←(우회전) →(좌회전) · Space 재생/일시정지</div>
-        <div>이 페이지는 교육용 단순화 모델(연속시간 근사)을 사용합니다.</div>
+        <div>본 시뮬은 교육용 단순화 모델(평균 전압, 연속시간 근사)을 사용합니다.</div>
       </div>
     </div>
   </section>
@@ -204,10 +208,14 @@
         <canvas id="chartPhase"   class="chart"></canvas>
         <canvas id="chartTorque"  class="chart"></canvas>
       </div>
+      <div class="card" style="padding:10px">
+        <div style="font-weight:800;color:#bfe3ff;margin:6px 2px">🧭 Phasor — dq 벡터 vs 원/헥사</div>
+        <canvas id="phasor" width="260" height="220"></canvas>
+      </div>
     </aside>
   </main>
 
-  <footer>© EV Free Drive — IPMSM FOC/Overmod/6-Step 단일 HTML (Sedan).</footer>
+  <footer>© EV Free Drive — IPMSM FOC/Overmod/6-Step 단일 HTML (MTPA+MTPV, SVPWM, Deadtime, Phasor)</footer>
 
   <script type="module">
     import * as THREE from 'three';
@@ -216,7 +224,6 @@
     // ---------- Utils ----------
     const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
     const sign0=(x)=> Math.abs(x)<1e-9 ? 0 : (x>0?1:-1);
-    const tau_limit=(x, lim)=> clamp(x, -lim, lim);
 
     // EMA smoother for tiles
     const smoother=(()=>{ const m=new Map(); let last=performance.now(); return{
@@ -226,11 +233,12 @@
         const out=prev+a*(target-prev); m.set(k,out); return out; }
     };})();
 
+    // DOM
     const $=id=>document.getElementById(id);
     const els={
       btnControls:$('btnControls'), drawer:$('controlsDrawer'),
-      btnStart:$('btnStart'), btnPause:$('btnPause'), btnReset:$('btnReset'), btnCsv:$('btnCsv'), btnFollow:$('btnFollow'), btnDisturb:$('btnDisturb'),
-      btnAutoSpeed:$('btnAutoSpeed'), btnStepChange:$('btnStepChange'), btnStep80:$('btnStep80'), btnForceOver:$('btnForceOver'),
+      btnStart:$('btnStart'), btnPause:$('btnPause'), btnReset:$('btnReset'), btnCsv:$('btnCsv'), btnFollow:$('btnFollow'),
+      btnDisturb:$('btnDisturb'), btnAutoSpeed:$('btnAutoSpeed'), btnStepChange:$('btnStepChange'), btnStep80:$('btnStep80'), btnForceOver:$('btnForceOver'),
       tabs:[...document.querySelectorAll('.tab')], panels:{drive:$('panel-drive'), motor:$('panel-motor'), adv:$('panel-adv'), help:$('panel-help')},
       // drive
       mode:$('mode'), targetKmh:$('targetKmh'), Kps:$('Kps'), Kis:$('Kis'), taus:$('taus'),
@@ -241,6 +249,7 @@
       // inverter/motor
       Vdc:$('Vdc'), Imax:$('Imax'), ctrlMode:$('ctrlMode'), mtpaOn:$('mtpaOn'), Kfw:$('Kfw'),
       pp:$('pp'), Rs:$('Rs'), Ld:$('Ld'), Lq:$('Lq'), psif:$('psif'), J:$('J'), B:$('B'),
+      fswKhz:$('fswKhz'), deadOn:$('deadOn'), deadUs:$('deadUs'),
       // tiles
       v_kmh:$('v_kmh'), rpm:$('rpm'), idq:$('idq'), vdq:$('vdq'), Vmag:$('Vmag'), region:$('region'), ebemf:$('ebemf'), tq:$('tq')
     };
@@ -265,8 +274,8 @@
     ]},options:{animation:false, scales:{x:mkX(), y:mkY('km/h')}, plugins}});
 
     const cMod=new Chart($('chartMod'),{type:'line',data:{datasets:[
-      {label:'|Vdq| (V)', data:[], yAxisID:'y1', borderWidth:2, pointRadius:0, tension:.18},
-      {label:'m', data:[], yAxisID:'y2', borderWidth:2, pointRadius:0, tension:.18},
+      {label:'|Vdq,act| (V)', data:[], yAxisID:'y1', borderWidth:2, pointRadius:0, tension:.18},
+      {label:'m(ref)', data:[], yAxisID:'y2', borderWidth:2, pointRadius:0, tension:.18},
       {label:'E_bemf(V)', data:[], yAxisID:'y1', borderWidth:2, pointRadius:0, tension:.18, borderDash:[6,4]}
     ]},options:{animation:false, scales:{x:mkX(), y1:mkY('V'), y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#9fb3cc'}, title:{display:true, text:'m', color:'#cfe4ff'}}}, plugins}});
 
@@ -353,14 +362,13 @@
       running:false, follow:true, t:0,
       // mech
       v:0, yaw:0, pos:new THREE.Vector3(0,0,0),
-      // motor electrical
-      theta_e:0, // electrical angle
-      id:0, iq:0, vd:0, vq:0, va:0, vb:0, vc:0,
-      // control
-      ii_s:0, evInt:0, // speed PI integrator
+      // motor electrical (dq frame currents & voltages)
+      theta_e:0, id:0, iq:0, vd:0, vq:0, va:0, vb:0, vc:0,
+      // control (speed PI)
+      evInt:0,
       // logs
       log:[],
-      // debug/test
+      // test
       disturbT:0, disturbTEnd:0
     };
     let last=performance.now();
@@ -374,112 +382,229 @@
       thr:(+els.throttle?.value||0)/100, brk:(+els.brake?.value||0)/100, keyRate:+els.keyRate?.value||100,
       // motor/inverter
       Vdc:+els.Vdc.value, Imax:+els.Imax.value, ctrlMode:els.ctrlMode.value, mtpa:(els.mtpaOn.value==='1'), Kfw:+els.Kfw.value,
-      pp:+els.pp.value, Rs:+els.Rs.value, Ld:+els.Ld.value, Lq:+els.Lq.value, psif:+els.psif.value, J:+els.J.value, B:+els.B.value
+      pp:+els.pp.value, Rs:+els.Rs.value, Ld:+els.Ld.value, Lq:+els.Lq.value, psif:+els.psif.value, J:+els.J.value, B:+els.B.value,
+      fsw:(+els.fswKhz.value||10)*1000, deadOn:(els.deadOn.value==='1'), Td:+els.deadUs.value*1e-6
     };}
 
-    // ---------- Helpers: transforms ----------
+    // ---------- Transforms ----------
     function dq_to_ab(d,q,th){ const c=Math.cos(th), s=Math.sin(th); return {a:c*d - s*q, b:s*d + c*q}; }
     function ab_to_dq(a,b,th){ const c=Math.cos(th), s=Math.sin(th); return {d:c*a + s*b, q:-s*a + c*b}; }
-    function ab_to_abc(a,b){ // inverse Clarke (alpha-beta -> 3-phase)
+    function ab_to_abc(a,b){
       const va = a;
       const vb = -0.5*a + (Math.sqrt(3)/2)*b;
       const vc = -0.5*a - (Math.sqrt(3)/2)*b;
       return {va,vb,vc};
     }
     function abc_to_ab(va,vb,vc){ const a = (2/3)*(va - 0.5*(vb+vc)); const b=(2/3)*((Math.sqrt(3)/2)*(vb - vc)); return {a,b}; }
-
-    // ---------- MTPA (IPMSM closed-form, edu) ----------
-    // Given stator current magnitude Is, returns (id,iq) maximizing torque per ampere
-    function mtpa_idiq(Is, Ld, Lq, psif){
-      const dlt = Ld - Lq; // negative for IPM
-      if(Math.abs(Is)<1e-9) return {id:0, iq:0};
-      const num = -psif + Math.sqrt(psif*psif + 8*dlt*dlt*Is*Is);
-      const id = num / (4*dlt);          // choose plus-root → negative id for IPM
-      const iq = Math.sqrt(Math.max(0, Is*Is - id*id)); // positive quadrant
-      return {id, iq};
+    function currentsABC_fromDQ(id,iq,th){
+      const ab = dq_to_ab(id,iq,th);
+      const abc = ab_to_abc(ab.a,ab.b);
+      return {ia:abc.va, ib:abc.vb, ic:abc.vc};
     }
 
-    // ---------- Torque, voltage equations ----------
+    // ---------- IPMSM core ----------
     function torque_ipmsm(pp, psif, Ld, Lq, id, iq){
       return 1.5*pp*( psif*iq + (Ld - Lq)*id*iq );
     }
     function voltage_dq(Rs, Ld, Lq, psif, id, iq, we){
-      // desired dq voltages (ideal FOC)
       const vd = Rs*id - we*Lq*iq;
       const vq = Rs*iq + we*(Ld*id + psif);
       return {vd, vq};
     }
 
-    // ---------- Modulation & region ----------
-    const M_HEX = 2/Math.sqrt(3); // 1.154700538...
-    function regionFromM(m){
-      if(m<=1.0) return 'SVPWM';
-      if(m< M_HEX - 1e-9) return 'Overmod';
-      return '6-Step';
+    // ---------- MTPA / MTPV ----------
+    function mtpa_idiq(Is, Ld, Lq, psif){
+      const dlt = Ld - Lq; if(Math.abs(Is)<1e-9) return {id:0, iq:0};
+      const num = -psif + Math.sqrt(psif*psif + 8*dlt*dlt*Is*Is);
+      const id = num / (4*dlt);
+      const iq = Math.sqrt(Math.max(0, Is*Is - id*id));
+      return {id, iq};
     }
-    // Apply modulation: saturate |Vab| to hexagon limit, emulate overmod & six-step; also produce phase voltages
-    function applyModulation(v_alpha, v_beta, Vdc, mode, theta_e){
-      const Vref = Math.hypot(v_alpha, v_beta);
-      const Vmax_lin = Vdc/Math.sqrt(3);
-      const Vmax_hex = 2*Vdc/3;
-      let m = Vref / Vmax_lin;
-      let region = regionFromM(m);
+    function ref_with_MTPA_MTPV(Tm_ref, we, p){
+      const Imax = p.Imax, Vlin=p.Vdc/Math.sqrt(3), Vhex=2*p.Vdc/3;
+      const Vtarget = (p.ctrlMode==='foc')? Vlin : Vhex;
+      let id_ref=0, iq_ref=0;
 
-      // force modes
-      if(mode==='foc'){ // clamp to linear
-        const k = (Vref>Vmax_lin) ? (Vmax_lin/Vref) : 1.0;
-        const va = v_alpha*k, vb=v_beta*k;
-        const ph = ab_to_abc(va,vb);
-        return {va, vb, ph, Vmag:Math.hypot(va,vb), m:Math.min(m,1.0), region:'SVPWM'};
-      }
-      if(mode==='six'){
-        // lock to nearest active vector (6-step)
-        const ang = Math.atan2(v_beta, v_alpha);
-        const sec = Math.floor(((ang<0?ang+2*Math.PI:ang) / (Math.PI/3))) % 6; // 0..5
-        const baseAng = sec * (Math.PI/3) + Math.PI/6; // center of sector
-        const va_m = Vmax_hex * Math.cos(baseAng), vb_m = Vmax_hex * Math.sin(baseAng);
-        const ph = abc_from_six(theta_e, Vdc);
-        return {va:va_m, vb:vb_m, ph, Vmag:Vmax_hex, m:Vmax_hex/Vmax_lin, region:'6-Step'};
+      if(p.mtpa){
+        // find Is on MTPA to meet torque
+        let lo=0, hi=Imax, best={id:0,iq:0,T:0};
+        for(let k=0;k<20;k++){
+          const Is=(lo+hi)/2;
+          let {id,iq}=mtpa_idiq(Is,p.Ld,p.Lq,p.psif);
+          iq=Math.sign(Tm_ref)*Math.abs(iq);
+          const T=torque_ipmsm(p.pp,p.psif,p.Ld,p.Lq,id,iq);
+          if(Math.abs(T)>=Math.abs(Tm_ref)){ best={id,iq,T}; hi=Is; } else { lo=Is; best={id,iq,T}; }
+        }
+        id_ref=best.id; iq_ref=best.iq;
+      }else{
+        iq_ref = clamp(Tm_ref/(1.5*p.pp*p.psif), -Imax, Imax);
+        id_ref = 0;
+        const Is=Math.hypot(id_ref,iq_ref); if(Is>Imax){ const k=Imax/Is; id_ref*=k; iq_ref*=k; }
       }
 
-      // auto: allow overmod up to hex limit
-      let va=v_alpha, vb=v_beta;
-      if(Vref > Vmax_hex){ const k=Vmax_hex/Vref; va*=k; vb*=k; region='6-Step'; m=M_HEX; }
-      else if(Vref > Vmax_lin){ region='Overmod'; } // keep magnitude (conceptual overmod)
+      // Flux-weakening (simple proportional on voltage error)
+      let {vd,vq}=voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,id_ref,iq_ref,we);
+      let V=Math.hypot(vd,vq);
+      if(V>Vtarget && Math.abs(we)>1e-6){
+        const err = V - Vtarget;
+        id_ref -= (p.Kfw * err) / (Math.abs(we)+1e-6);
+        let Is=Math.hypot(id_ref,iq_ref); if(Is>Imax){ const k=Imax/Is; id_ref*=k; iq_ref*=k; }
+        ({vd,vq}=voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,id_ref,iq_ref,we));
+        V=Math.hypot(vd,vq);
+      }
 
-      // create phase voltages: for visualization, blend 3rd-harm injection toward six-step
-      const f = clamp(( (Vref/Vmax_lin) - 1 ) / (M_HEX - 1), 0, 1); // 0 at m=1, 1 at m=1.1547
-      const ph = blend_phase_wave(theta_e, Vdc, f);
-      return {va, vb, ph, Vmag:Math.hypot(va,vb), m:Math.min(M_HEX, Vref/Vmax_lin), region};
+      // MTPV sliding if 여전히 초과 → 전류원(circle) 위에서 -d축으로 슬라이딩
+      if(V>Vtarget && Math.abs(we)>1e-6){
+        const Is=Math.hypot(id_ref,iq_ref);
+        for(let it=0; it<60 && V>Vtarget; it++){
+          id_ref -= 0.005*Is;
+          const sc = Is/Math.max(1e-9,Math.hypot(id_ref,iq_ref));
+          id_ref*=sc; iq_ref*=sc;
+          ({vd,vq}=voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,id_ref,iq_ref,we));
+          V=Math.hypot(vd,vq);
+        }
+      }
+      return {id:id_ref, iq:iq_ref};
     }
 
-    // Third-harmonic injection → six-step blend for phase wave visualization
-    function blend_phase_wave(theta, Vdc, f){
-      // f=0: sinus (SVPWM), f=1: 6-step square; smooth mix
-      const k3 = f*(1/6); // classic ~1/6 at flat-top
-      const sinA = (ang)=> Math.sin(ang) + k3*Math.sin(3*ang);
-      const scale = (Vdc/Math.sqrt(3)); // bring to similar peak scale
-      const vsa = scale*sinA(theta);
-      const vsb = scale*sinA(theta - 2*Math.PI/3);
-      const vsc = scale*sinA(theta + 2*Math.PI/3);
-      if(f>=0.999) return abc_from_six(theta, Vdc);
-      return {va:vsa, vb:vsb, vc:vsc};
+    // ---------- Modulation: SVPWM / Overmod / 6-Step + Deadtime ----------
+    const M_HEX = 2/Math.sqrt(3); // 1.1547...
+    function regionFromM(m){ return (m<=1)?'SVPWM' : (m<M_HEX-1e-9?'Overmod':'6-Step'); }
+
+    function svm_duties(vα, vβ, Vdc, Ts, region){
+      // sector, alpha
+      let θ = Math.atan2(vβ, vα); if(θ<0) θ+=2*Math.PI;
+      const sector = Math.floor(θ/(Math.PI/3)) + 1; // 1..6
+      const base = (sector-1)*(Math.PI/3);
+      const α = θ - base;
+      const Vref = Math.hypot(vα, vβ);
+      const K = (Math.sqrt(3)/Vdc)*Vref; // normalized magnitude
+      let T1 = K*Math.sin(Math.PI/3 - α)*Ts;
+      let T2 = K*Math.sin(α)*Ts;
+      T1=Math.max(0,T1); T2=Math.max(0,T2);
+      let T0 = Ts - T1 - T2;
+
+      if(region==='SVPWM' && T0<0){ // clamp back to linear
+        const s = Ts/(T1+T2+1e-12); T1*=s; T2*=s; T0=0;
+      }
+      if(region==='Overmod'){ // flat-top: force T0=0, scale T1/T2
+        if(T0<0){ const s = Ts/(T1+T2+1e-12); T1*=s; T2*=s; T0=0; }
+        else { T0=0; }
+      }
+      if(region==='6-Step'){ // collapse to active vector (T1+T2=Ts or one-hot)
+        // pick center of sector → two switches high
+        // emulate as T1=Ts, T2=0
+        T1=Ts; T2=0; T0=0;
+      }
+
+      // duties by sector (space-vector symmetrical placement: T0/2 on both ends)
+      let da,db,dc;
+      const halfT0=T0/2;
+      switch(sector){
+        case 1: da=(T1+T2+halfT0)/Ts; db=(T2+halfT0)/Ts; dc=halfT0/Ts; break;
+        case 2: da=(T1+halfT0)/Ts;     db=(T1+T2+halfT0)/Ts; dc=halfT0/Ts; break;
+        case 3: da=halfT0/Ts;          db=(T1+T2+halfT0)/Ts; dc=(T2+halfT0)/Ts; break;
+        case 4: da=halfT0/Ts;          db=(T1+halfT0)/Ts;     dc=(T1+T2+halfT0)/Ts; break;
+        case 5: da=(T2+halfT0)/Ts;     db=halfT0/Ts;          dc=(T1+T2+halfT0)/Ts; break;
+        case 6: da=(T1+T2+halfT0)/Ts;  db=halfT0/Ts;          dc=(T1+halfT0)/Ts; break;
+      }
+      return {da:clamp(da,0,1), db:clamp(db,0,1), dc:clamp(dc,0,1), sector};
     }
 
-    // Ideal 6-step 120° conduction, phase-to-neutral equivalent (centered)
+    // convert duties to line-neutral average voltages
+    function phaseVoltages_fromDuties(da,db,dc,Vdc){
+      // zero-sequence removed (v_a+v_b+v_c=0)
+      const va = (2/3)*Vdc*(da - 0.5*(db+dc));
+      const vb = (2/3)*Vdc*(db - 0.5*(dc+da));
+      const vc = (2/3)*Vdc*(dc - 0.5*(da+db));
+      return {va,vb,vc};
+    }
+
     function abc_from_six(theta, Vdc){
-      // Use switching states to synthesize line-neutral equivalents with zero-sum
       const ang = (theta%(2*Math.PI)+2*Math.PI)%(2*Math.PI);
-      const sec = Math.floor(ang/(Math.PI/3)); // 0..5
-      // Phase polarities for each sector (Top=1, Bottom=0 → phase "polarity")
-      const map = [
-        [1,1,0], [0,1,0], [0,1,1], [0,0,1], [1,0,1], [1,0,0]
-      ][sec];
-      const pola = map[0], polb = map[1], polc = map[2];
-      // Convert pole states to line-neutral equiv: (+Vdc/2 or -Vdc/2), subtract average to center
-      const pa = (pola? +Vdc/2 : -Vdc/2), pb=(polb?+Vdc/2:-Vdc/2), pc=(polc?+Vdc/2:-Vdc/2);
+      const sec = Math.floor(ang/(Math.PI/3));
+      const map = [[1,1,0],[0,1,0],[0,1,1],[0,0,1],[1,0,1],[1,0,0]][sec];
+      const pa = (map[0]? +Vdc/2 : -Vdc/2), pb=(map[1]?+Vdc/2:-Vdc/2), pc=(map[2]?+Vdc/2:-Vdc/2);
       const avg=(pa+pb+pc)/3;
       return {va:pa-avg, vb:pb-avg, vc:pc-avg};
+    }
+
+    function apply_deadtime(va,vb,vc, ia,ib,ic, Vdc, Td, Ts){
+      const Vdead = Vdc*(Td/Math.max(1e-9,Ts));
+      return {
+        va: va - Vdead*Math.sign(ia||0),
+        vb: vb - Vdead*Math.sign(ib||0),
+        vc: vc - Vdead*Math.sign(ic||0)
+      };
+    }
+
+    function applyModulation(vα_ref, vβ_ref, p, theta_e, ia,ib,ic){
+      const Vlin = p.Vdc/Math.sqrt(3);
+      const Vhex = 2*p.Vdc/3;
+      const Vref = Math.hypot(vα_ref, vβ_ref);
+      const m_ref = Vref / Vlin;
+      let region = regionFromM(m_ref);
+      let va,vb,vc, da,db,dc;
+
+      if(p.ctrlMode==='foc'){ region='SVPWM'; }
+      if(p.ctrlMode==='six'){ region='6-Step'; }
+
+      if(region==='6-Step' && p.ctrlMode!=='foc'){
+        ({va,vb,vc} = abc_from_six(theta_e, p.Vdc));
+      }else{
+        // scale for foc to keep inside linear
+        let vα=vα_ref, vβ=vβ_ref;
+        if(p.ctrlMode==='foc' && Vref>Vlin){ const k=Vlin/Vref; vα*=k; vβ*=k; }
+        // SVM duties (with overmod flat-top if needed)
+        ({da,db,dc} = svm_duties(vα, vβ, p.Vdc, 1/Math.max(1,p.fsw), region));
+        ({va,vb,vc} = phaseVoltages_fromDuties(da,db,dc,p.Vdc));
+      }
+
+      // Deadtime
+      if(p.deadOn){
+        ({va,vb,vc} = apply_deadtime(va,vb,vc, ia,ib,ic, p.Vdc, p.Td, 1/Math.max(1,p.fsw)));
+      }
+
+      // Effective alpha-beta for |Vdq,act|
+      const ab = abc_to_ab(va,vb,vc);
+      const Vmag = Math.hypot(ab.a, ab.b);
+      return {va,vb,vc, Vmag, m:Math.min(M_HEX, m_ref), region, duties:{da,db,dc}};
+    }
+
+    // ---------- Phasor canvas ----------
+    const phasor = $('phasor');
+    const pctx = phasor.getContext('2d');
+    function drawCircle(ctx,cx,cy,r){ ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke(); }
+    function drawHex(ctx,cx,cy,r){
+      ctx.beginPath();
+      for(let k=0;k<6;k++){
+        const a = Math.PI/6 + k*Math.PI/3;
+        const x=cx+r*Math.cos(a), y=cy-r*Math.sin(a);
+        if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath(); ctx.stroke();
+    }
+    function drawLine(ctx,x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+    function drawPhasor(Vd,Vq,Vdc){
+      const w=phasor.width, h=phasor.height, cx=w/2, cy=h/2, padding=18;
+      const rHex = Math.min(w,h)/2 - padding;
+      const Vhex = 2*Vdc/3, Vlin = Vdc/Math.sqrt(3);
+      const s = rHex / Vhex; // px per Volt
+      pctx.clearRect(0,0,w,h);
+      pctx.lineWidth=1;
+
+      pctx.strokeStyle='#2e415c'; drawCircle(pctx,cx,cy,Vlin*s);
+      pctx.strokeStyle='#f3b740'; drawHex(pctx,cx,cy,Vhex*s);
+
+      // axes
+      pctx.strokeStyle='rgba(255,255,255,.18)'; drawLine(pctx, padding,cy, w-padding,cy); drawLine(pctx, cx,padding, cx,h-padding);
+
+      // vector
+      pctx.strokeStyle='#e8eef9'; pctx.lineWidth=2;
+      drawLine(pctx, cx,cy, cx+Vd*s, cy- Vq*s);
+
+      // tip dot
+      pctx.fillStyle='#34d5ff'; pctx.beginPath(); pctx.arc(cx+Vd*s, cy- Vq*s, 3, 0, 2*Math.PI); pctx.fill();
     }
 
     // ---------- Input handling ----------
@@ -517,90 +642,67 @@
     function toggleRun(){ state.running=!state.running; down.delete('Space'); if(state.running){ last=performance.now(); requestAnimationFrame(loop);} }
 
     // ---------- Simulation ----------
-    const DT_INT=0.0005; // 2 kHz integ
+    const DT_INT=0.0005; // 2 kHz integ (전기모델 평균화)
     let lastChart=0;
+
+    function roadLoadTorque(p, v){
+      const F_roll = p.m*9.80665*p.cr*sign0(v);
+      const F_aero = 0.5*p.rho*p.CdA*v*v*sign0(v);
+      const F_grade = p.m*9.80665*Math.sin(p.grade);
+      const F = F_roll+F_aero+F_grade;
+      return (F*p.Rw/p.gear)/Math.max(1e-6,p.eta);
+    }
 
     function stepSim(dt){
       const p=P();
 
-      // --- Outer speed PI → torque ref ---
-      let Tref=0;
-      const vref = (p.mode==='cruise') ? clamp(p.targetKmh,0,220)/3.6 : ( (p.thr - 0.9*p.brk)*3.0 ); // throttle small torque if pedal
+      // --- Outer: Speed PI → torque-like demand ---
+      const vref = (p.mode==='cruise') ? clamp(p.targetKmh,0,220)/3.6 : ( (p.thr - 0.9*p.brk)*3.0 );
       const ev = vref - state.v;
-      const iuns = p.Kps*ev + state.evInt*p.Kis;
-      Tref = iuns; // "torque-like" request in vehicle axis; scale to Nm below
+      const torqueCmd = p.Kps*ev + state.evInt*p.Kis;
       const Kaw_s = 1/Math.max(0.1, p.taus);
-      const ir_tr = 0; // no hard torque saturation here
-      state.evInt += ( ev + Kaw_s*ir_tr ) * dt;
+      state.evInt += ( ev + Kaw_s*0 ) * dt;
 
-      // Vehicle loads -> map torque request to wheel/motor Nm
-      // Convert "Tref" m/s error proxy to Nm demand (simple gain)
-      const TreqNm = clamp(Tref*400, -4000, 4000);
-      const load = roadLoadTorque(p, state.v);
-      const Tm_ref = TreqNm + load + state.disturbT; // demand plus load compensation
+      // demand Nm + load comp
+      const TreqNm = clamp(torqueCmd*400, -4000, 4000);
+      const Tload = roadLoadTorque(p, state.v);
+      const Tm_ref = TreqNm + Tload + state.disturbT;
 
-      // --- Electrical references via MTPA + FW ---
-      // Electrical speed
+      // --- Electrical speed and references ---
       const w_mech = state.v / Math.max(1e-9, p.Rw) * p.gear; // rad/s shaft
       const we = p.pp * w_mech; // electrical rad/s
 
-      // Find Is (<=Imax) to meet torque using MTPA if ON, else Id=0 and compute Iq
-      let id_ref=0, iq_ref=0;
-      if(p.mtpa){
-        // binary-like search on Is to meet torque
-        const Imax = p.Imax;
-        let lo=0, hi=Imax, best={id:0,iq:0,tq:0};
-        for(let k=0;k<18;k++){
-          const Is = (lo+hi)*0.5;
-          const {id,iq} = mtpa_idiq(Is, p.Ld, p.Lq, p.psif);
-          const tq = torque_ipmsm(p.pp,p.psif,p.Ld,p.Lq,id,iq);
-          if(Math.abs(tq)>=Math.abs(Tm_ref)){ best={id,iq,tq}; hi=Is; } else { lo=Is; best={id,iq,tq}; }
-        }
-        id_ref = best.id;
-        iq_ref = Math.sign(Tm_ref)*Math.abs(best.iq);
-      }else{
-        // Id=0 control
-        iq_ref = clamp(Tm_ref/(1.5*p.pp*p.psif), -p.Imax, p.Imax);
-        id_ref = 0;
-        const Is=Math.hypot(id_ref,iq_ref); if(Is>p.Imax){ const k=p.Imax/Is; id_ref*=k; iq_ref*=k; }
-      }
+      // (id,iq) via MTPA + FW + MTPV
+      let {id:id_ref, iq:iq_ref} = ref_with_MTPA_MTPV(Tm_ref, we, p);
 
-      // Predict required dq voltage
-      let {vd:vd_pred, vq:vq_pred} = voltage_dq(p.Rs, p.Ld, p.Lq, p.psif, id_ref, iq_ref, we);
-      let Vref = Math.hypot(vd_pred, vq_pred);
-      const Vmax_lin = p.Vdc/Math.sqrt(3);
-      const Vmax_hex = 2*p.Vdc/3;
+      // ideal decoupled voltage to track (id,iq) (education-purpose)
+      let {vd:vd_ref, vq:vq_ref} = voltage_dq(p.Rs,p.Ld,p.Lq,p.psif,id_ref,iq_ref,we);
 
-      // Flux-Weakening if voltage exceeds selected regime
-      let targetV = Vmax_hex; // allow up to hex in auto; in foc mode only Vmax_lin
-      if(p.ctrlMode==='foc') targetV = Vmax_lin;
-      if(Vref>targetV && Math.abs(we)>1e-3){
-        // reduce (Ld*id + psif) term by making id more negative
-        const err = Vref - targetV;
-        id_ref -= (p.Kfw * err) / (Math.abs(we)+1e-6); // simple proportional FW
-        // clip currents
-        const Is=Math.hypot(id_ref,iq_ref); if(Is>p.Imax){ const k=p.Imax/Is; id_ref*=k; iq_ref*=k; }
-        const v2 = voltage_dq(p.Rs, p.Ld, p.Lq, p.psif, id_ref, iq_ref, we);
-        vd_pred=v2.vd; vq_pred=v2.vq; Vref=Math.hypot(vd_pred,vq_pred);
-      }
+      // dq→αβ (reference)
+      const vAB_ref = dq_to_ab(vd_ref, vq_ref, state.theta_e);
 
-      // dq → αβ voltage reference
-      const vab_ref = dq_to_ab(vd_pred, vq_pred, state.theta_e);
-      const modOut = applyModulation(vab_ref.a, vab_ref.b, p.Vdc, p.ctrlMode, state.theta_e);
-      const vdq_act = ab_to_dq(modOut.va, modOut.vb, state.theta_e);
+      // currents for deadtime sign
+      const iabc = currentsABC_fromDQ(state.id, state.iq, state.theta_e);
+
+      // Apply modulation (SVPWM / Overmod / 6-Step) + Deadtime
+      const mod = applyModulation(vAB_ref.a, vAB_ref.b, p, state.theta_e, iabc.ia, iabc.ib, iabc.ic);
+
+      // Actual dq voltage from applied phase voltages
+      const ab_act = abc_to_ab(mod.va, mod.vb, mod.vc);
+      const vdq_act = ab_to_dq(ab_act.a, ab_act.b, state.theta_e);
       state.vd = vdq_act.d; state.vq = vdq_act.q;
 
       // Electrical current dynamics
-      // di/dt = (vd - Rs*id + we*Lq*iq)/Ld , (vq - Rs*iq - we*(Ld*id + psif))/Lq
       const did = (state.vd - p.Rs*state.id + we*p.Lq*state.iq)/p.Ld;
       const diq = (state.vq - p.Rs*state.iq - we*(p.Ld*state.id + p.psif))/p.Lq;
       state.id += did*dt; state.iq += diq*dt;
-      // phase voltage for chart
-      const ph = modOut.ph; state.va=ph.va; state.vb=ph.vb; state.vc=ph.vc;
+
+      // phase voltage (for charts)
+      state.va=mod.va; state.vb=mod.vb; state.vc=mod.vc;
 
       // Torque & mech update
       const Tm = torque_ipmsm(p.pp,p.psif,p.Ld,p.Lq,state.id,state.iq);
-      const Tw = (Tm * p.gear * p.eta) / Math.max(1e-6, p.Rw); // force at tire radius
+      const Tw = (Tm * p.gear * p.eta) / Math.max(1e-6, p.Rw); // tire force
       const F_mu = p.mu * p.m * 9.80665;
       let F_trac = clamp(Tw, -F_mu, F_mu);
       const v=state.v;
@@ -616,29 +718,26 @@
       // sticky stop
       if(Math.abs(state.v)<0.02 && Math.abs(Tm_ref)<2) state.v*=0.985;
 
-      // tiles
+      // tiles + charts
       const dtMs=smoother.dt(); const tau = Math.max(0, +els.smoothMs.value||250);
       const kmhVal= state.v*3.6;
       const rpmVal = w_mech*60/(2*Math.PI);
-      const Vmag = modOut.Vmag;
-      const mIdx = modOut.m;
-      const Ebemf = Math.abs(we)*p.psif; // fundamental magnitude
+      const Ebemf = Math.abs(we)*p.psif;
       els.v_kmh.textContent = `${smoother.run('kmh',kmhVal, tau, dtMs).toFixed(1)} km/h`;
       els.rpm.textContent   = `${smoother.run('rpm', rpmVal, tau, dtMs).toFixed(0)}`;
       els.idq.textContent   = `${smoother.run('id', state.id, tau, dtMs).toFixed(1)} / ${smoother.run('iq', state.iq, tau, dtMs).toFixed(1)} A`;
       els.vdq.textContent   = `${smoother.run('vd', state.vd, tau, dtMs).toFixed(1)} / ${smoother.run('vq', state.vq, tau, dtMs).toFixed(1)} V`;
-      els.Vmag.textContent  = `${smoother.run('vm', Vmag, tau, dtMs).toFixed(1)} / ${smoother.run('m', mIdx, tau, dtMs).toFixed(3)}`;
-      els.region.textContent= modOut.region;
+      els.Vmag.textContent  = `${smoother.run('vm', mod.Vmag, tau, dtMs).toFixed(1)} / ${smoother.run('m', mod.m, tau, dtMs).toFixed(3)}`;
+      els.region.textContent= mod.region;
       els.ebemf.textContent = `${smoother.run('eb', Ebemf, tau, dtMs).toFixed(1)} V`;
       els.tq.textContent    = `${smoother.run('tq', Tm, tau, dtMs).toFixed(1)} N·m`;
 
       updateCar();
 
-      // charts
       const now=performance.now();
       if(now-lastChart>chartIntervalMs()){
         pushXY(cSpeed,   [kmhVal, (p.mode==='cruise'?p.targetKmh:kmhVal)]);
-        pushXY(cMod,     [Vmag, mIdx, Ebemf]);
+        pushXY(cMod,     [mod.Vmag, (Math.hypot(vd_ref, vq_ref)/(p.Vdc/Math.sqrt(3))), Ebemf]);
         pushXY(cDQ,      [state.id, state.iq, state.vd, state.vq]);
         pushXY(cPhase,   [state.va, state.vb, state.vc]);
         const tau_load = roadLoadTorque(p, state.v);
@@ -646,22 +745,15 @@
         lastChart=now;
       }
 
-      // log
-      state.log.push({t:state.t, kmh:kmhVal, ref:(p.mode==='cruise'?p.targetKmh:kmhVal), id:state.id, iq:state.iq, vd:state.vd, vq:state.vq, V:Vmag, m:mIdx, tq:Tm, eb:Ebemf});
-      state.t += dt;
-    }
+      drawPhasor(state.vd, state.vq, p.Vdc);
 
-    function roadLoadTorque(p, v){
-      const F_roll = p.m*9.80665*p.cr*sign0(v);
-      const F_aero = 0.5*p.rho*p.CdA*v*v*sign0(v);
-      const F_grade = p.m*9.80665*Math.sin(p.grade);
-      const F = F_roll+F_aero+F_grade;
-      return (F*p.Rw/p.gear)/Math.max(1e-6,p.eta);
+      // log
+      state.log.push({t:state.t, kmh:kmhVal, ref:(p.mode==='cruise'?p.targetKmh:kmhVal), id:state.id, iq:state.iq, vd:state.vd, vq:state.vq, V:mod.Vmag, m:mod.m, tq:Tm, eb:Ebemf});
+      state.t += dt;
     }
 
     function updateCar(){
       car.position.set(state.pos.x, 0, state.pos.z);
-      // simple kinematic straight driving based on yaw=0 (keep earlier orbit follow)
       const step = state.v*DT_INT;
       state.pos.x += step;
       const {wFL,wFR,wRL,wRR}=car.userData.wheels;
@@ -691,13 +783,13 @@
     els.btnReset.addEventListener('click',()=>{ state.running=false;
       Object.assign(state,{t:0,v:0,yaw:0,pos:new THREE.Vector3(0,0,0), id:0,iq:0,vd:0,vq:0,theta_e:0, log:[], disturbT:0, disturbTEnd:0});
       [cSpeed,cMod,cDQ,cPhase,cTorque].forEach(ch=>{ ch.data.datasets.forEach(ds=>ds.data=[]); ch.update(); });
-      car.position.set(0,0,0); car.rotation.set(0,0,0);
+      car.position.set(0,0,0); car.rotation.set(0,0,0); drawPhasor(0,0, +els.Vdc.value||400);
     });
     els.btnCsv.addEventListener('click',()=>{ if(!state.log.length) return;
       const rows=[["t(s)","speed(km/h)","speed_ref(km/h)","id(A)","iq(A)","vd(V)","vq(V)","|V|(V)","m","torque(Nm)","E_bemf(V)"],
         ...state.log.map(d=>[d.t.toFixed(4),d.kmh.toFixed(3),d.ref.toFixed(3),d.id.toFixed(3),d.iq.toFixed(3),d.vd.toFixed(3),d.vq.toFixed(3),d.V.toFixed(3),d.m.toFixed(5),d.tq.toFixed(3),d.eb.toFixed(3)])];
       const csv=rows.map(r=>r.join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='ipmsm_foc_overmod_6step.csv'; a.click(); URL.revokeObjectURL(url);
+      const a=document.createElement('a'); a.href=url; a.download='ipmsm_foc_overmod_6step_full.csv'; a.click(); URL.revokeObjectURL(url);
     });
     els.btnFollow.addEventListener('click',()=>{ state.follow=!state.follow; els.btnFollow.textContent = state.follow?'🎥 Follow: ON':'🎥 Follow: OFF'; });
     els.btnDisturb.addEventListener('click',()=>{ state.disturbT=300; state.disturbTEnd=state.t+2; setTimeout(()=>state.disturbT=0,2000); });
@@ -708,15 +800,16 @@
       const Kps = 1/Math.max(1e-6, a_gain*tauv); const Kis = 0.5/tauv;
       els.Kps.value=Kps.toFixed(2); els.Kis.value=Kis.toFixed(2);
     });
-    els.btnForceOver.addEventListener('click',()=>{ els.Vdc.value = (+els.Vdc.value||400) * 0.7; }); // drop Vdc to push overmod
+    els.btnForceOver.addEventListener('click',()=>{ els.Vdc.value = Math.max(100,(+els.Vdc.value||400) * 0.7); });
 
     // ---------- Self-test ----------
     (function(){
       const approx=(a,b,e=1e-6)=>Math.abs(a-b)<=e;
-      console.assert(!!THREE.WebGLRenderer,'THREE missing');
-      console.assert(['chartSpeed','chartMod','chartDQ','chartPhase','chartTorque'].every(id=>!!document.getElementById(id)),'Charts missing');
       const Vdc=400; const Vlin=Vdc/Math.sqrt(3), Vhex=2*Vdc/3; console.assert(approx((Vhex/Vlin), 2/Math.sqrt(3), 1e-6),'m_hex mismatch');
     })();
+
+    // initial phasor
+    drawPhasor(0,0,+els.Vdc.value||400);
   </script>
 </body>
 </html>
