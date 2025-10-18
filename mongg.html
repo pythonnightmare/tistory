@@ -1,103 +1,103 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IPMSM — MTPA · Overmodulation · 6-Step EV Drive Simulator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
-  <style>
-    :root{
-      --bg:#0b0f14; --panel:#0f1624; --panel2:#0e1522; --text:#e8eef9; --muted:#8aa0be;
-      --accent:#4cc9f0; --accent2:#a0e9ff; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
-      --shadow:0 12px 32px rgba(0,0,0,.35); --radius:18px;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      background:radial-gradient(1200px 800px at 20% 0%,#0d1421 0%,#0b0f14 60%);
-      color:var(--text); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-    }
-    .wrap{display:grid; grid-template-rows:auto 1fr; height:100vh}
-    header{
-      display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
-      background:linear-gradient(180deg,rgba(76,201,240,.08),rgba(160,233,255,.03));
-      border-bottom:1px solid #1e2738
-    }
-    .brand{display:flex; gap:12px; align-items:center}
-    .badge{
-      display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
-      background:linear-gradient(90deg,rgba(76,201,240,.18),rgba(160,233,255,.12));
-      border:1px solid rgba(160,233,255,.25);
-      box-shadow:0 0 0 2px rgba(160,233,255,.06) inset; font-weight:600; letter-spacing:.2px
-    }
-    .badge small{color:var(--muted); font-weight:600}
-    .brand h1{font-size:18px; margin:0; letter-spacing:.2px}
-    .toolbar{display:flex; gap:10px; align-items:center}
-    .toolbar button{
-      appearance:none; border:1px solid #26304a; background:linear-gradient(180deg,#122033,#0f1a2b);
-      padding:8px 10px; border-radius:10px; color:var(--text); font-weight:700; letter-spacing:.2px; cursor:pointer
-    }
-    .toolbar button.primary{border-color:#2b7490; background:linear-gradient(180deg,#124a63,#0d3b4f)}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IPMSM — MTPA · Overmodulation · 6-Step EV Drive Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#0f1624; --panel2:#0e1522; --text:#e8eef9; --muted:#8aa0be;
+  --accent:#4cc9f0; --accent2:#a0e9ff; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+  --shadow:0 12px 32px rgba(0,0,0,.35); --radius:18px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:radial-gradient(1200px 800px at 20% 0%,#0d1421 0%,#0b0f14 60%);
+  color:var(--text); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+.wrap{display:grid; grid-template-rows:auto 1fr; height:100vh}
+header{
+  display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+  background:linear-gradient(180deg,rgba(76,201,240,.08),rgba(160,233,255,.03));
+  border-bottom:1px solid #1e2738
+}
+.brand{display:flex; gap:12px; align-items:center}
+.badge{
+  display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
+  background:linear-gradient(90deg,rgba(76,201,240,.18),rgba(160,233,255,.12));
+  border:1px solid rgba(160,233,255,.25);
+  box-shadow:0 0 0 2px rgba(160,233,255,.06) inset; font-weight:600; letter-spacing:.2px
+}
+.badge small{color:var(--muted); font-weight:600}
+.brand h1{font-size:18px; margin:0; letter-spacing:.2px}
+.toolbar{display:flex; gap:10px; align-items:center}
+.toolbar button{
+  appearance:none; border:1px solid #26304a; background:linear-gradient(180deg,#122033,#0f1a2b);
+  padding:8px 10px; border-radius:10px; color:var(--text); font-weight:700; letter-spacing:.2px; cursor:pointer
+}
+.toolbar button.primary{border-color:#2b7490; background:linear-gradient(180deg,#124a63,#0d3b4f)}
 
-    /* Main layout: 3D left (2fr), charts right (1fr) */
-    .main{display:grid; grid-template-columns:2fr 1fr; gap:16px; padding:16px; height:calc(100vh - 68px)}
-    .panel{
-      background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%);
-      border:1px solid #1b2334; border-radius:var(--radius); box-shadow:var(--shadow)
-    }
-    .card{position:relative; padding:10px 10px 14px 10px}
-    .card h4{position:absolute; top:10px; left:12px; margin:0; font-size:12px; color:var(--muted); letter-spacing:.3px}
-    canvas{width:100% !important; height:100% !important;}
+/* Main layout: 3D left (2fr), charts right (1fr) */
+.main{display:grid; grid-template-columns:2fr 1fr; gap:16px; padding:16px; height:calc(100vh - 68px)}
+.panel{
+  background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%);
+  border:1px solid #1b2334; border-radius:var(--radius); box-shadow:var(--shadow)
+}
+.card{position:relative; padding:10px 10px 14px 10px}
+.card h4{position:absolute; top:10px; left:12px; margin:0; font-size:12px; color:var(--muted); letter-spacing:.3px}
+canvas{width:100% !important; height:100% !important;}
 
-    /* right column charts stacked with min height */
-    .charts{display:grid; grid-template-rows:1fr 1fr 1fr; gap:16px; height:100%}
-    .charts .card{min-height:220px}
+/* right column charts stacked with min height */
+.charts{display:grid; grid-template-rows:1fr 1fr 1fr; gap:16px; height:100%}
+.charts .card{min-height:220px}
 
-    /* drawer menu for settings */
-    .drawer{position:fixed; inset:0; pointer-events:none}
-    .drawer .sheet{
-      position:absolute; left:0; top:0; bottom:0; width:420px; transform:translateX(-100%);
-      transition:transform .25s ease; background:linear-gradient(180deg,#0f1624,#0e1522);
-      border-right:1px solid #1b2334; padding:16px; overflow:auto
-    }
-    .drawer .overlay{position:absolute; inset:0; background:rgba(0,0,0,.4); opacity:0; transition:opacity .25s ease}
-    .drawer.open{pointer-events:auto}
-    .drawer.open .sheet{transform:none}
-    .drawer.open .overlay{opacity:1}
+/* drawer menu for settings */
+.drawer{position:fixed; inset:0; pointer-events:none}
+.drawer .sheet{
+  position:absolute; left:0; top:0; bottom:0; width:460px; transform:translateX(-100%);
+  transition:transform .25s ease; background:linear-gradient(180deg,#0f1624,#0e1522);
+  border-right:1px solid #1b2334; padding:16px; overflow:auto
+}
+.drawer .overlay{position:absolute; inset:0; background:rgba(0,0,0,.4); opacity:0; transition:opacity .25s ease}
+.drawer.open{pointer-events:auto}
+.drawer.open .sheet{transform:none}
+.drawer.open .overlay{opacity:1}
 
-    .row{display:grid; grid-template-columns:160px 1fr 90px; gap:10px; align-items:center; margin-bottom:8px}
-    .row label{font-weight:600; font-size:13px}
-    .row output{font-variant-numeric:tabular-nums; text-align:right; color:var(--accent2)}
-    input[type=range], input[type=number], select{width:100%}
-    .hint{font-size:12px; color:var(--muted); line-height:1.5}
+.row{display:grid; grid-template-columns:170px 1fr 90px; gap:10px; align-items:center; margin-bottom:8px}
+.row label{font-weight:600; font-size:13px}
+.row output{font-variant-numeric:tabular-nums; text-align:right; color:var(--accent2)}
+input[type=range], input[type=number], select{width:100%}
+.hint{font-size:12px; color:var(--muted); line-height:1.5}
 
-    .pill{
-      display:inline-flex; gap:6px; align-items:center; padding:6px 10px; border-radius:999px;
-      border:1px solid #2a3650; background:linear-gradient(180deg,#121a2a,#0f1624); font-size:12px
-    }
+.pill{
+  display:inline-flex; gap:6px; align-items:center; padding:6px 10px; border-radius:999px;
+  border:1px solid #2a3650; background:linear-gradient(180deg,#121a2a,#0f1624); font-size:12px
+}
 
-    .state{display:flex; gap:8px; align-items:center; justify-content:flex-end}
-    .state .dot{width:10px; height:10px; border-radius:99px}
-    .zone-basic{background:#22c55e}
-    .zone-ovm{background:#f59e0b}
-    .zone-6step{background:#ef4444}
-    .muted{color:var(--muted)}
-    .small{font-size:12px}
+.state{display:flex; gap:8px; align-items:center; justify-content:flex-end}
+.state .dot{width:10px; height:10px; border-radius:99px}
+.zone-basic{background:#22c55e}
+.zone-ovm{background:#f59e0b}
+.zone-6step{background:#ef4444}
+.muted{color:var(--muted)}
+.small{font-size:12px}
 
-    .legend-chip{display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; border:1px solid #2b3650; margin:0 6px 6px 0; font-size:12px}
-    .sw{width:10px; height:10px; border-radius:2px}
-  </style>
+.legend-chip{display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; border:1px solid #2b3650; margin:0 6px 6px 0; font-size:12px}
+.sw{width:10px; height:10px; border-radius:2px}
+</style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="brand">
-      <div class="badge"><span>IPMSM Drive Lab</span> <small>v2.2.0</small></div>
+      <div class="badge"><span>IPMSM Drive Lab</span> <small>v2.4.0</small></div>
       <h1>MTPA→OVM→6-Step 시뮬레이터 (IPMSM)</h1>
     </div>
     <div class="toolbar">
@@ -118,6 +118,7 @@
       <div id="hud" style="position:absolute; right:10px; top:10px; background:rgba(0,0,0,.35); border:1px solid #203047; border-radius:10px; padding:6px 8px; font-size:12px; line-height:1.3">
         <div><b>v</b>: <span id="hudV">0</span> m/s · <b>RPM</b>: <span id="hudRPM">0</span></div>
         <div><b>m</b>: <span id="hudM">0</span> · <b>영역</b>: <span id="hudMode">기본</span></div>
+        <div><b>v_ref</b>: <span id="hudVref">0</span> m/s</div>
       </div>
       <canvas id="car3d"></canvas>
     </section>
@@ -164,14 +165,35 @@
 
     <h4 class="muted" style="margin:6px 0 4px 0">제어</h4>
     <div class="row"><label>제어 방식</label>
-      <select id="ctrlMode"><option value="manual">수동 (m, 모드 직접)</option><option value="auto">Auto: MTPA→OVM→6-Step</option></select><output></output>
+      <select id="ctrlMode">
+        <option value="manual">수동 (m, 모드 직접)</option>
+        <option value="auto" selected>Auto: MTPA→OVM→6-Step</option>
+      </select><output></output>
     </div>
     <div class="row"><label>가속 페달</label><input id="throttle" type="range" min="-1" max="1" step="0.01" value="0" /><output id="throttleVal">0%</output></div>
     <div class="row"><label>모듈레이션 m</label><input id="midx" type="range" min="0" max="1.5" step="0.01" value="0.80" /><output id="mVal">0.80</output></div>
     <div class="row"><label>모드</label>
-      <select id="modeSel"><option value="basic">기본 (3rd harmonic)</option><option value="ovm">과변조 (OVM)</option><option value="six">6-스텝 (구형파)</option></select>
+      <select id="modeSel">
+        <option value="basic">기본 (3rd harmonic)</option>
+        <option value="ovm">과변조 (OVM)</option>
+        <option value="six">6-스텝 (구형파)</option>
+      </select>
       <output></output>
     </div>
+
+    <h4 class="muted" style="margin:10px 0 4px 0">주행 사이클러</h4>
+    <div class="row"><label>프로파일</label>
+      <select id="cycleSel">
+        <option value="manual">수동</option>
+        <option value="urban">도심(시내)</option>
+        <option value="highway">고속</option>
+        <option value="stopgo">정지-출발</option>
+      </select>
+      <output id="cycleInfo">—</output>
+    </div>
+    <div class="row"><label>속도 배율</label><input id="cycleV" type="range" min="0.6" max="1.5" step="0.05" value="1.00" /><output id="cycleVVal">×1.00</output></div>
+    <div class="row"><label>시간 배율</label><input id="cycleT" type="range" min="0.5" max="2.0" step="0.05" value="1.00" /><output id="cycleTVal">×1.00</output></div>
+    <div class="row"><label>재생/일시정지</label><button id="btnCyclePlay">⏸ 일시정지</button><output id="cycleTNow">t=0.0s</output></div>
 
     <h4 class="muted" style="margin:10px 0 4px 0">IPMSM 파라미터</h4>
     <div class="row"><label>R<sub>s</sub> [Ω]</label><input id="rs" type="range" min="0.01" max="0.3" step="0.005" value="0.050" /><output id="rsVal">0.050</output></div>
@@ -226,7 +248,7 @@
 </div>
 
 <script>
-// ===== Safe trig (avoid overrides) =====
+// ===== Safe trig =====
 (function(){ const SIN=Math.sin.bind(Math), COS=Math.cos.bind(Math); Math.sin=SIN; Math.cos=COS; })();
 
 // ===== Helpers =====
@@ -238,8 +260,8 @@ const si  = (n)=>{ n=Number(n); const a=Math.abs(n);
   if(a>=1e6) return (n/1e6).toFixed(2)+'M';
   if(a>=1e3) return (n/1e3).toFixed(2)+'k';
   if(a>=1)   return n.toFixed(2);
-  if(a>=1e-3)return (n*1e3).toFixed(2)+'m';
-  if(a>=1e-6)return (n*1e6).toFixed(2)+'µ';
+  if(a>=1e-3) return (n*1e3).toFixed(2)+'m';
+  if(a>=1e-6) return (n*1e6).toFixed(2)+'µ';
   return n.toExponential(2);
 };
 
@@ -253,7 +275,7 @@ const els = {
   rs: document.getElementById('rs'), rsVal: document.getElementById('rsVal'), ld: document.getElementById('ld'), ldVal: document.getElementById('ldVal'),
   lq: document.getElementById('lq'), lqVal: document.getElementById('lqVal'), lambdaF: document.getElementById('lambdaF'), lfVal: document.getElementById('lfVal'),
   gear: document.getElementById('gear'), gearVal: document.getElementById('gearVal'), wheelR: document.getElementById('wheelR'), wheelRVal: document.getElementById('wheelRVal'),
-  mass: document.getElementById('mass'), massVal: document.getElementById('massVal'), cda: document.getElementById('cda'), cdaVal: document.getElementById('cda'),
+  mass: document.getElementById('mass'), massVal: document.getElementById('massVal'), cda: document.getElementById('cda'), cdaVal: document.getElementById('cdaVal'),
   timeWin: document.getElementById('timeWin'), timeWinVal: document.getElementById('timeWinVal'),
   autoYV: document.getElementById('autoYV'), autoYI: document.getElementById('autoYI'),
   yv: document.getElementById('yv'), yvVal: document.getElementById('yvVal'),
@@ -264,8 +286,13 @@ const els = {
   chk_ia: document.getElementById('chk_ia'), chk_ib: document.getElementById('chk_ib'), chk_ic: document.getElementById('chk_ic'), chk_te: document.getElementById('chk_te'),
   modePill: document.getElementById('modePill'), modeText: document.getElementById('modeText'), zoneText: document.getElementById('zoneText'), zoneDot: document.getElementById('zoneDot'),
   btnCSV: document.getElementById('btnCSV'),
-  hudV: document.getElementById('hudV'), hudRPM: document.getElementById('hudRPM'), hudM: document.getElementById('hudM'), hudMode: document.getElementById('hudMode')
+  hudV: document.getElementById('hudV'), hudRPM: document.getElementById('hudRPM'), hudM: document.getElementById('hudM'), hudMode: document.getElementById('hudMode'), hudVref: document.getElementById('hudVref'),
+  cycleSel: document.getElementById('cycleSel'), cycleInfo: document.getElementById('cycleInfo'),
+  cycleV: document.getElementById('cycleV'), cycleVVal: document.getElementById('cycleVVal'),
+  cycleT: document.getElementById('cycleT'), cycleTVal: document.getElementById('cycleTVal'),
+  btnCyclePlay: document.getElementById('btnCyclePlay'), cycleTNow: document.getElementById('cycleTNow')
 };
+
 function bindRange(range,out,map=(x)=>x){ const f=()=> out.textContent=map(range.value); range.addEventListener('input',f); f(); }
 bindRange(els.throttle, els.throttleVal, v=> (Math.round(v*100))+'%');
 bindRange(els.vdc, els.vdcVal, v=> fmt(v,0)+'V');
@@ -278,27 +305,32 @@ bindRange(els.lambdaF, els.lfVal, v=> fmt(v,3));
 bindRange(els.gear, els.gearVal, v=> fmt(v,1));
 bindRange(els.wheelR, els.wheelRVal, v=> fmt(v,2));
 bindRange(els.mass, els.massVal, v=> fmt(v,0));
+bindRange(els.cda, els.cdaVal, v=> fmt(v,2));
 bindRange(els.timeWin, els.timeWinVal, v=> fmt(v,1)+'s');
+bindRange(els.cycleV, els.cycleVVal, v=> '×'+fmt(v,2));
+bindRange(els.cycleT, els.cycleTVal, v=> '×'+fmt(v,2));
+
 function bindY(el,out){ const f=()=> out.textContent=fmt(el.value,0); el.addEventListener('input',f); f(); }
-bindY(els.yv,els.yvVal); bindY(els.yi,els.yiVal); bindY(els.yT,els.yTVal);
+bindY(els.yv, els.yvVal); bindY(els.yi, els.yiVal); bindY(els.yT, els.yTVal);
+
 els.btnSettings.addEventListener('click', ()=> els.drawer.classList.add('open'));
 els.drawerOverlay.addEventListener('click', ()=> els.drawer.classList.remove('open'));
 
 // ===== Transforms & math =====
 function clarke(va,vb,vc){ const v_alpha=(2/3)*(va-0.5*vb-0.5*vc); const v_beta=(2/3)*((Math.sqrt(3)/2)*(vb-vc)); return {v_alpha,v_beta}; }
 function parkTransform(va,vb,vc,th){ const {v_alpha,v_beta}=clarke(va,vb,vc); const c=Math.cos(th), s=Math.sin(th); return { v_d:c*v_alpha+s*v_beta, v_q:-s*v_alpha+c*v_beta }; }
-function invPark(id,iq,th){ const c=Math.cos(th), s=Math.sin(th); const i_alpha=c*id - s*iq, i_beta=s*id + c*iq;
-  const ia=i_alpha, ib=-0.5*i_alpha + (Math.sqrt(3)/2)*i_beta, ic=-0.5*i_alpha - (Math.sqrt(3)/2)*i_beta; return {ia,ib,ic};
-}
+function invPark(id,iq,th){ const c=Math.cos(th), s=Math.sin(th); const i_alpha=c*id - s*iq, i_beta=s*id + c*iq; const ia=i_alpha, ib=-0.5*i_alpha + (Math.sqrt(3)/2)*i_beta, ic=-0.5*i_alpha - (Math.sqrt(3)/2)*i_beta; return {ia,ib,ic}; }
+
 // robust max of sin(x)+1/6 sin(3x)
 function maxH3(){
   const f=(x)=> Math.sin(x)+(1/6)*Math.sin(3*x);
   let a=0,b=2*Math.PI; const gr=(Math.sqrt(5)-1)/2; let c=b-gr*(b-a), d=a+gr*(b-a); let fc=f(c), fd=f(d);
-  for(let i=0;i<80;i++){ if(fc<fd){ a=c; c=d; fc=fd; d=a+gr*(b-a); fd=f(d);} else { b=d; d=c; fd=fc; c=b-gr*(b-a); fc=f(c);} }
+  for(let i=0;i<120;i++){ if(fc<fd){ a=c; c=d; fc=fd; d=a+gr*(b-a); fd=f(d);} else { b=d; d=c; fd=fc; c=b-gr*(b-a); fc=f(c);} }
   return Math.max(fc,fd);
 }
 const V3H_MAX = maxH3();
 
+// 3rd-harmonic injected sinusoid -> normalized phase voltages
 function synthesizeVoltages(theta,m,Vdc,mode){
   const s1=Math.sin(theta), s2=Math.sin(theta-2*Math.PI/3), s3=Math.sin(theta+2*Math.PI/3);
   let vaN,vbN,vcN; const h=(x)=> Math.sin(x)+(1/6)*Math.sin(3*x);
@@ -378,10 +410,7 @@ function applyYScales(){
   els.yi.addEventListener(ev,applyYScales);
   els.yT.addEventListener(ev,applyYScales);
 });
-els.fftLog.addEventListener('change', ()=>{
-  chFFT.options.scales.y.type = els.fftLog.checked ? 'logarithmic' : 'linear';
-  chFFT.update();
-});
+els.fftLog.addEventListener('change', ()=>{ chFFT.options.scales.y.type = els.fftLog.checked ? 'logarithmic' : 'linear'; chFFT.update(); });
 
 function applyVisibility(){
   const V={va:els.chk_va.checked, vb:els.chk_vb.checked, vc:els.chk_vc.checked, ea:els.chk_ea.checked};
@@ -393,7 +422,7 @@ function applyVisibility(){
   els[id].addEventListener('change',applyVisibility);
 });
 
-// ===== Simulation state =====
+// ===== Simulation / state =====
 let state={ dt:50e-6, substeps:60, t:0, theta:0, id:0, iq:0, timeWindow:3.0, samples:1000, vCycle:[], v:0, rpm:0 };
 let FFT_HARM_MAX=40;
 const log={ t:[], va:[], vb:[], vc:[], ea:[], ia:[], ib:[], ic:[], Te:[], vab:[] };
@@ -425,6 +454,56 @@ function solve_iq_for_torque(Tref,p,lf,Ld,Lq){
   let lo=0, hi=1200; for(let it=0; it<40; it++){ const mid=0.5*(lo+hi); const id=mtpa_id(mid,Ld,Lq,lf); const T=torque_of(id,mid,p,lf,Ld,Lq); if(T<Tref) lo=mid; else hi=mid; }
   const iq=0.5*(lo+hi); return { iq, id: mtpa_id(iq,Ld,Lq,lf) };
 }
+
+// ===== Drive cycle (profiles & PI speed follower) =====
+const cycles = {
+  // times [s], speeds [m/s]
+  urban: { name:'도심', waypoints:[
+    [0,0],[5,5],[15,10],[25,13],[35,0],[45,0],[55,8],[70,15],[90,12],[105,0],[120,0]
+  ]},
+  highway: { name:'고속', waypoints:[
+    [0,0],[10,15],[30,27],[60,33],[90,38],[110,41],[130,38],[150,33],[170,41],[190,38],[210,0]
+  ]},
+  stopgo: { name:'정지-출발', waypoints:[
+    [0,0],[3,9],[8,0],[12,0],[16,9],[21,0],[25,0],[29,9],[34,0],[38,0]
+  ]}
+};
+let cycle = { mode:'manual', play:true, t:0, vref:0 };
+function setCycle(name){
+  cycle.mode=name; cycle.t=0; cycle.play=true;
+  els.btnCyclePlay.textContent='⏸ 일시정지';
+  if(name==='manual'){ els.cycleInfo.textContent='—'; return; }
+  const wp=cycles[name].waypoints; const T=wp[wp.length-1][0];
+  els.cycleInfo.textContent=`${cycles[name].name} · ${fmt(T,0)}s base`;
+}
+els.cycleSel.addEventListener('change',()=> setCycle(els.cycleSel.value));
+els.btnCyclePlay.addEventListener('click',()=>{ cycle.play=!cycle.play; els.btnCyclePlay.textContent=cycle.play?'⏸ 일시정지':'▶️ 재생'; });
+function lerp(a,b,t){ return a+(b-a)*t; }
+function cycleVref(dt){
+  if(cycle.mode==='manual'){ els.hudVref.textContent=fmt(0,1); els.cycleTNow.textContent='t=—'; return 0; }
+  if(!cycle.play){ els.cycleTNow.textContent='⏸'; return cycle.vref; }
+  const base=cycles[cycle.mode].waypoints;
+  // time scaling & advance
+  const tScale=+els.cycleT.value; cycle.t+=dt/tScale;
+  const speedScale=+els.cycleV.value;
+  const Tbase=base[base.length-1][0];
+  const t=cycle.t % Tbase;
+  // find segment
+  let i=0; while(i<base.length-2 && t>=base[i+1][0]) i++;
+  const [t0,v0]=base[i], [t1,v1]=base[i+1];
+  const u=(t-t0)/(t1-t0+1e-9);
+  const v=lerp(v0,v1,u)*speedScale; // m/s
+  cycle.vref=v; els.hudVref.textContent=fmt(v,2); els.cycleTNow.textContent=`t=${fmt(t,1)}s`;
+  return v;
+}
+// simple PI speed follower mapping to throttle
+const spdPI={kp:0.08, ki:0.15, integ:0};
+function throttleFromVref(vref,v,dt){
+  const e=vref-v; spdPI.integ=clamp(spdPI.integ+e*dt,-5,5);
+  return clamp(spdPI.kp*e + spdPI.ki*spdPI.integ, -1, 1);
+}
+
+// ===== Vehicle step =====
 function vehicle_step(P,dt){
   const rho=1.2, Crr=0.012, g=9.81, eta=0.95; const Tmax=280;
   const Tref=P.throttle*Tmax; const omega_w=state.v/P.Rw; const wm=omega_w*P.G; const we=wm*P.p;
@@ -434,11 +513,13 @@ function vehicle_step(P,dt){
     const {vd,vq}=volt_dq(id,iq,we,P.Rs,P.Ld,P.Lq,P.lf); const V1=magnitude(vd,vq); const mreq=required_m_for_v1(V1,P.Vdc);
     m=Math.min(1.5,mreq); mode=choose_mode_from_m(mreq);
   }
+  // electrical current dynamics (Euler)
   const {vd,vq}=volt_dq(id,iq,we,P.Rs,P.Ld,P.Lq,P.lf);
   const did=(vd + we*P.Lq*state.iq - P.Rs*state.id)/P.Ld;
   const diq=(vq - we*P.Ld*state.id - we*P.lf - P.Rs*state.iq)/P.Lq;
   state.id+=did*dt; state.iq+=diq*dt;
   Te=torque_of(state.id,state.iq,P.p,P.lf,P.Ld,P.Lq);
+  // vehicle longitudinal
   const Ftrac=(Te*P.G*eta)/P.Rw, Fdrag=0.5*rho*P.CdA*state.v*state.v*Math.sign(state.v), Froll=Crr*P.mveh*g*Math.sign(state.v||1);
   const dv=(Ftrac-Fdrag-Froll)/P.mveh*dt; state.v+=dv; if(Math.abs(state.v)<0.05 && Math.abs(P.throttle)<0.02) state.v=0;
   state.rpm=wm*60/(2*Math.PI);
@@ -602,8 +683,16 @@ els.btnCSV.addEventListener('click',downloadCSV);
 let running=true;
 function stepOnce(){
   const P=params(); const frameDt=state.dt*state.substeps;
-  let mode=P.mode, m=P.m, we=0, Te=0;
 
+  // drive-cycle → throttle override
+  const vref=cycleVref(frameDt);
+  if(cycle.mode!=='manual'){
+    const thr=throttleFromVref(vref,state.v,frameDt);
+    els.throttle.value=thr; els.throttle.dispatchEvent(new Event('input'));
+    P.throttle=thr;
+  }
+
+  let mode=P.mode, m=P.m, we=0, Te=0;
   for(let k=0;k<state.substeps;k++){
     const res = (P.ctrlMode==='auto') ? vehicle_step(P,state.dt)
                : (function(){ const rpm=state.rpm||3000; we=(rpm*2*Math.PI/60)*P.p; return {mode:P.mode,m:P.m,we,Te:torque_of(state.id,state.iq,P.p,P.lf,P.Ld,P.Lq)}; })();
@@ -625,6 +714,7 @@ function stepOnce(){
       log.t.push(state.t); log.va.push(va); log.vb.push(vb); log.vc.push(vc); log.ea.push(ea);
       log.ia.push(ia); log.ib.push(ib); log.ic.push(ic); log.Te.push(Te); log.vab.push(va-vb);
     }
+    // FFT once per electrical cycle
     if(state.theta<1e-6){ updateFFT(state.vCycle.slice()); state.vCycle.length=0; }
   }
 
@@ -675,6 +765,10 @@ window.addEventListener('keydown',e=>{
   })();
   // T9: Asphalt normal texture created
   (function(){ const t=heightToNormalTex(makeNoiseHeight(64)); okpush(!!t && t.isTexture && t.repeat.x>1,'Normal tex ok'); })();
+  // T10: Drive cycle PI responds (increase v when v_ref>0)
+  (function(){
+    const v0=state.v; const vref=5; const thr=throttleFromVref(vref,0,0.1); okpush(thr>0,'PI throttle positive');
+  })();
 
   const ok=T.every(t=>t.ok);
   const div=document.getElementById('selfTests'); if(div){
@@ -685,13 +779,13 @@ window.addEventListener('keydown',e=>{
 
 // ===== Boot =====
 requestAnimationFrame(()=>{ init3D(); applyYScales(); applyVisibility(); loop(); });
-// info log (safe multiline)
 console.log(
   '%cIPMSM Drive Lab',
   'padding:6px 10px; background:#124a63; color:#e8eef9; border-radius:6px;',
   [
     'Auto 제어: MTPA → OVM → 6-Step 자동 전환',
-    '오실로스코프: 축 Auto/수동, 신호 토글, FFT 로그 스케일',
+    '주행 사이클러: 도심/고속/정지-출발 + 속도/시간 배율 + PI 추종',
+    '오실로스코프: 축 Auto/수동, 신호 토글, FFT 로그 스케일, CSV',
     '3D: 환경맵 + 아스팔트 노멀 + 소프트 섀도우 + 배경',
     `정규화 상수 V3H_MAX = ${V3H_MAX.toFixed(9)}`
   ].join('\n')
